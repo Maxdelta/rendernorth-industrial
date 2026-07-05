@@ -9,6 +9,13 @@ use crate::operation::{
     self,
     models::{OperationDetail, OperationsDashboard},
 };
+use crate::reservation::{
+    self,
+    models::{
+        InventoryCommitment, OperationReservations, ReservationConflict, ReservationDetail,
+        ReservationRecord, ReservationSummary,
+    },
+};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -16,7 +23,7 @@ use tauri::State;
 pub fn health_check(db: State<'_, Db>) -> Result<DbHealth, String> {
     let version = db.schema_version()?;
     Ok(DbHealth {
-        ok: version >= 4,
+        ok: version >= 5,
         schema_version: version,
         db_path: db.path.display().to_string(),
     })
@@ -319,4 +326,52 @@ pub fn get_operation_detail(
 ) -> Result<OperationDetail, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     operation::engine_for(&conn).get_detail(operation_id)
+}
+
+// ---------------------------------------------------------------------------
+// Reservation Engine commands. Thin: every question is answered by
+// `reservation::engine_for(conn)`, never by ad hoc SQL in this file.
+// Mission Control's Inventory Commitment panel and the Operations
+// Workspace's Reservations section both read exclusively through these.
+
+#[tauri::command]
+pub fn get_inventory_commitment(db: State<'_, Db>) -> Result<InventoryCommitment, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    reservation::engine_for(&conn).inventory_commitment()
+}
+
+#[tauri::command]
+pub fn get_reservation_summary(db: State<'_, Db>) -> Result<ReservationSummary, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    reservation::engine_for(&conn).summary()
+}
+
+#[tauri::command]
+pub fn list_active_reservations(db: State<'_, Db>) -> Result<Vec<ReservationRecord>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    reservation::engine_for(&conn).list_active()
+}
+
+#[tauri::command]
+pub fn get_reservation_detail(
+    db: State<'_, Db>,
+    reservation_id: i64,
+) -> Result<ReservationDetail, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    reservation::engine_for(&conn).get_detail(reservation_id)
+}
+
+#[tauri::command]
+pub fn get_reservation_conflicts(db: State<'_, Db>) -> Result<Vec<ReservationConflict>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    reservation::engine_for(&conn).conflicts()
+}
+
+#[tauri::command]
+pub fn get_operation_reservations(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<OperationReservations, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    reservation::engine_for(&conn).operation_reservations(operation_id)
 }

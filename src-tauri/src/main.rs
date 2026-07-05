@@ -10,6 +10,7 @@ mod decision;
 mod inventory;
 mod models;
 mod operation;
+mod reservation;
 
 use tauri::Manager;
 
@@ -36,7 +37,13 @@ fn main() {
             commands::list_inventory_categories,
             commands::list_inventory_items,
             commands::get_operations_dashboard,
-            commands::get_operation_detail
+            commands::get_operation_detail,
+            commands::get_inventory_commitment,
+            commands::get_reservation_summary,
+            commands::list_active_reservations,
+            commands::get_reservation_detail,
+            commands::get_reservation_conflicts,
+            commands::get_operation_reservations
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

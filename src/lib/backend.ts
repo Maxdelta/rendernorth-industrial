@@ -90,6 +90,8 @@ export interface InventoryItem {
   totalValue: number;
   reservedQuantity: number;
   availableQuantity: number;
+  /** Nets out soft allocations too — stricter than availableQuantity. */
+  freeQuantity: number;
   allocatedOperation: string | null;
   reservedOperation: string | null;
   state: string;
@@ -166,6 +168,74 @@ export interface OperationsDashboard {
   priorityQueue: OperationSummary[];
   blocked: OperationSummary[];
   upcomingCompletions: OperationSummary[];
+}
+
+// ---------------------------------------------------------------------------
+// Reservation domain — sits between the Inventory Engine and the Operation
+// Engine. Inventory Engine owns what exists; Reservation Engine owns who
+// owns it, reservation quantities, history, and conflicts. Read-only this
+// sprint — nothing here creates, releases, or transfers a reservation yet.
+
+export interface ReservationRecord {
+  reservationId: number;
+  itemId: number;
+  itemName: string;
+  operationId: number | null;
+  operationGoal: string | null;
+  quantity: number;
+  reason: string;
+  createdAt: string;
+  releasedAt: string | null;
+  isActive: boolean;
+}
+
+export interface ReservationEvent {
+  id: number;
+  reservationId: number;
+  /** reserved / released / transferred / expired */
+  eventType: string;
+  quantity: number;
+  fromOperationId: number | null;
+  toOperationId: number | null;
+  reason: string;
+  createdAt: string;
+}
+
+export interface ReservationDetail {
+  record: ReservationRecord;
+  history: ReservationEvent[];
+}
+
+export interface ReservationConflict {
+  itemId: number;
+  itemName: string;
+  /** overlapping_operations / exceeds_stock / missing_inventory */
+  conflictType: string;
+  description: string;
+}
+
+export interface ReservationSummary {
+  activeReservationCount: number;
+  totalReservedQuantity: number;
+  itemsWithReservations: number;
+  conflictCount: number;
+}
+
+/** Mission Control's Inventory Commitment panel. Every field is derived live — see the Rust doc comment for exact formulas. */
+export interface InventoryCommitment {
+  totalInventory: number;
+  reserved: number;
+  available: number;
+  blocked: number;
+  unallocated: number;
+}
+
+/** The Operations Workspace's Reservations section, scoped to one operation. */
+export interface OperationReservations {
+  reservedMinerals: number;
+  reservedComponents: number;
+  reservedPi: number;
+  missingReservations: number;
 }
 
 function inTauri(): boolean {
@@ -271,6 +341,78 @@ export async function getOperationDetail(operationId: number): Promise<Operation
   }
   const mock = await import("../data/operationMock");
   return mock.getMockOperationDetail(operationId);
+}
+
+export async function getInventoryCommitment(): Promise<InventoryCommitment> {
+  if (inTauri()) {
+    try {
+      return await invoke<InventoryCommitment>("get_inventory_commitment");
+    } catch (err) {
+      console.error("get_inventory_commitment failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/reservationMock");
+  return mock.getMockInventoryCommitment();
+}
+
+export async function getReservationSummary(): Promise<ReservationSummary> {
+  if (inTauri()) {
+    try {
+      return await invoke<ReservationSummary>("get_reservation_summary");
+    } catch (err) {
+      console.error("get_reservation_summary failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/reservationMock");
+  return mock.getMockReservationSummary();
+}
+
+export async function listActiveReservations(): Promise<ReservationRecord[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<ReservationRecord[]>("list_active_reservations");
+    } catch (err) {
+      console.error("list_active_reservations failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/reservationMock");
+  return mock.listMockActiveReservations();
+}
+
+export async function getReservationDetail(reservationId: number): Promise<ReservationDetail> {
+  if (inTauri()) {
+    try {
+      return await invoke<ReservationDetail>("get_reservation_detail", { reservationId });
+    } catch (err) {
+      console.error("get_reservation_detail failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/reservationMock");
+  return mock.getMockReservationDetail(reservationId);
+}
+
+export async function getReservationConflicts(): Promise<ReservationConflict[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<ReservationConflict[]>("get_reservation_conflicts");
+    } catch (err) {
+      console.error("get_reservation_conflicts failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/reservationMock");
+  return mock.getMockReservationConflicts();
+}
+
+export async function getOperationReservations(operationId: number): Promise<OperationReservations> {
+  if (inTauri()) {
+    try {
+      return await invoke<OperationReservations>("get_operation_reservations", { operationId });
+    } catch (err) {
+      console.error("get_operation_reservations failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/reservationMock");
+  return mock.getMockOperationReservations(operationId);
 }
 
 export async function healthCheck(): Promise<DbHealth | null> {

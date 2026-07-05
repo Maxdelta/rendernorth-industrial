@@ -5,6 +5,8 @@ import {
   listBuildTargets,
   selectBuildTarget,
   getOperationsDashboard,
+  getInventoryCommitment,
+  getReservationConflicts,
   healthCheck,
   formatIsk,
   formatQty,
@@ -12,6 +14,8 @@ import {
   type BuildTargetSummary,
   type OperationsDashboard,
   type OperationSummary,
+  type InventoryCommitment,
+  type ReservationConflict,
   type DbHealth,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
@@ -37,6 +41,8 @@ function opStatusTone(op: OperationSummary): "nominal" | "furnace" | "alert" | "
 export function MissionControlPage() {
   const [mission, setMission] = useState<MissionControl | null>(null);
   const [ops, setOps] = useState<OperationsDashboard | null>(null);
+  const [commitment, setCommitment] = useState<InventoryCommitment | null>(null);
+  const [conflicts, setConflicts] = useState<ReservationConflict[] | null>(null);
   const [targets, setTargets] = useState<BuildTargetSummary[]>([]);
   const [health, setHealth] = useState<DbHealth | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -45,6 +51,8 @@ export function MissionControlPage() {
     let live = true;
     getMissionControl().then((m) => live && setMission(m));
     getOperationsDashboard().then((o) => live && setOps(o));
+    getInventoryCommitment().then((c) => live && setCommitment(c));
+    getReservationConflicts().then((c) => live && setConflicts(c));
     listBuildTargets().then((t) => live && setTargets(t));
     healthCheck().then((h) => live && setHealth(h));
     return () => {
@@ -180,6 +188,52 @@ export function MissionControlPage() {
             )}
           </Panel>
         </>
+      )}
+
+      {commitment && (
+        <Panel title="Inventory Commitment" keel={commitment.blocked > 0 ? "alert" : "coolant"} className="dash-hero">
+          <div className="health-grid commitment-grid">
+            <div className="health-cell">
+              <div className="stat-label">Total Inventory</div>
+              <div className="stat-value coolant">{formatQty(commitment.totalInventory)}</div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Reserved</div>
+              <div className="stat-value furnace">{formatQty(commitment.reserved)}</div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Available</div>
+              <div className="stat-value nominal">{formatQty(commitment.available)}</div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Blocked</div>
+              <div className={`stat-value ${commitment.blocked > 0 ? "alert" : "nominal"}`}>
+                {formatQty(commitment.blocked)}
+              </div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Unallocated</div>
+              <div className="stat-value coolant">{formatQty(commitment.unallocated)}</div>
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      {conflicts && (
+        <Panel title="Reservation Conflicts" keel={conflicts.length > 0 ? "alert" : "nominal"} className="dash-hero">
+          {conflicts.length === 0 ? (
+            <p className="ph-mission">No reservation conflicts detected. Detection only — nothing here resolves a conflict automatically.</p>
+          ) : (
+            <div className="conflict-list">
+              {conflicts.map((c, i) => (
+                <div className="conflict-row" key={`${c.itemId}-${c.conflictType}-${i}`}>
+                  <div className="conflict-type">{c.conflictType.replace(/_/g, " ")}</div>
+                  <div className="conflict-desc">{c.description}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
       )}
 
       <Panel title="Factory Health" keel={tone} className="dash-hero">

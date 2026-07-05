@@ -1,6 +1,6 @@
 # RenderNorth Industrial — UI Constitution
 
-Version 1.2 — Sprint 004 (adds reserved-placeholder-card pattern for the Operations Workspace)
+Version 1.3 — Sprint 005 (adds the detected-conflict row pattern)
 Status: Ratified. The design system's law. `src/styles/theme.css` implements it; where code and this document disagree, this document wins and the code is a bug.
 
 ## 1. What the UI should feel like
@@ -107,6 +107,13 @@ Factory status derivation is code + constitution: `blocked_jobs > 0 → Blocked`
 - Label in dim tracked Rajdhani, a single small caption ("reserved") beneath in a muted, low-contrast tone — no icon, no illustration, no "coming soon" badge styling that would compete with real telemetry elsewhere on screen.
 - These cards never carry a keel color — keels mean state, and a placeholder has no state to report.
 - Grouped in a plain grid (2–3 per row), always below the real, working sections of a page, never interleaved with them.
+
+## 10c. Detected conflicts (Reservation Engine pattern, Sprint 005)
+
+- A detected conflict is a plain row, not a modal or a toast — it's standing information on a dashboard, not an interruption. Type label in small tracked mono, always in `--alert` (a conflict is definitionally a critical state — there's no amber "attention" tier for something already double-booked or over-committed).
+- The description sentence does the explaining; no icon glyphs, no severity badges beyond the type label's color.
+- An empty conflict list gets a plain sentence confirming detection ran and found nothing — never hide the panel, since a quiet "we checked" is exactly what makes the panel trustworthy the next time it isn't quiet.
+- Conflict panels never carry a resolve/dismiss button — detection is read-only per the Reservation Engine's scope; a future resolution UI is a different, explicit feature, not a stray button bolted onto this one.
 
 ## 11. Dashboard panel rules
 

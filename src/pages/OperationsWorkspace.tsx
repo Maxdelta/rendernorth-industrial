@@ -3,8 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import {
   getOperationsDashboard,
   getOperationDetail,
+  getOperationReservations,
+  formatQty,
   type OperationSummary,
   type OperationDetail,
+  type OperationReservations,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
 
@@ -21,6 +24,7 @@ export function OperationsWorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [operations, setOperations] = useState<OperationSummary[]>([]);
   const [detail, setDetail] = useState<OperationDetail | null>(null);
+  const [reservations, setReservations] = useState<OperationReservations | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -43,6 +47,7 @@ export function OperationsWorkspacePage() {
     if (!selectedId) return;
     let live = true;
     getOperationDetail(selectedId).then((d) => live && setDetail(d));
+    getOperationReservations(selectedId).then((r) => live && setReservations(r));
     return () => {
       live = false;
     };
@@ -129,6 +134,35 @@ export function OperationsWorkspacePage() {
             </Panel>
 
             <div style={{ height: 14 }} />
+
+            {reservations && (
+              <>
+                <Panel title="Reservations" keel={reservations.missingReservations > 0 ? "furnace" : "nominal"} className="dash-hero">
+                  <div className="res-summary-grid">
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Reserved Minerals</div>
+                      <div className="res-summary-value">{formatQty(reservations.reservedMinerals)}</div>
+                    </div>
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Reserved Components</div>
+                      <div className="res-summary-value">{formatQty(reservations.reservedComponents)}</div>
+                    </div>
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Reserved PI</div>
+                      <div className="res-summary-value">{formatQty(reservations.reservedPi)}</div>
+                    </div>
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Missing Reservations</div>
+                      <div className={`res-summary-value ${reservations.missingReservations > 0 ? "furnace" : "nominal"}`}>
+                        {reservations.missingReservations}
+                      </div>
+                    </div>
+                  </div>
+                </Panel>
+
+                <div style={{ height: 14 }} />
+              </>
+            )}
 
             <Panel title="Reserved for future sprints" keel="coolant">
               <p className="ph-mission">

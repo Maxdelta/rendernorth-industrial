@@ -13,7 +13,7 @@ Version 1.0 — Sprint 001
 | Auth | CCP ESI OAuth 2.0 + PKCE via system browser | Sprint 002+ |
 | Static data | EVE SDE import pipeline | Sprint 003+ |
 
-## 1a. Domain Hierarchy (refined Sprint 003, extended 003.5, Operation Engine live in 004)
+## 1a. Domain Hierarchy (refined 003, extended 003.5, Operation Engine live in 004, Reservation Engine live in 005)
 
 ```
 Mission Control
@@ -55,7 +55,26 @@ are live. Mutations (create/reprioritize/reschedule/annotate, and
 requesting a reservation) are declared on `OperationEngine` but each
 returns an explicit "architecture-only" error — no lifecycle mutation
 exists yet, and an Operation still cannot actually request a hold from the
-Reservation Engine (which is itself still interface-only).
+Reservation Engine.
+
+**The Reservation Engine owns who owns inventory** — reservation
+quantities, reservation history, and reservation conflicts. As of Sprint
+005 it is real: `src-tauri/src/reservation/` (same four-file shape —
+`models.rs`, `repository.rs`, `provider.rs`, `engine.rs`), a sibling
+module to `inventory/` and `operation/`, not nested inside either. It
+extends migration 0003's `inventory_reservations` table additively
+(migration 0005 adds an `operation_id` column, backfilled from the
+existing `project_id`) and adds `reservation_events` (append-only history:
+reserved/released/transferred/expired) and `reservation_conflicts`.
+Reads (summary, detail, history, conflict detection, inventory
+commitment, per-operation reservation totals) are live. Conflict
+detection is always computed fresh from current reservation + inventory
+state — the same "derive, don't trust a stale flag" precedent as
+`is_blocked` and `coverage_for_operation` — never a status a person has to
+remember to update. Mutations (reserve/release/transfer) are declared on
+`ReservationEngine` but each returns an explicit "architecture-only"
+error; `OperationEngine::request_reservation` is the call this engine will
+answer once its own mutations exist.
 
 `build_projects` (migrations 0001–0002) is untouched and remains the live
 backing table for the existing Build Targets / Inventory Coverage flow.
@@ -118,7 +137,7 @@ Select Build Target → Load Blueprint Requirements → Calculate Materials
 |---|---|---|
 | **Inventory Engine** | **The single data core.** Everything owned — ships, modules, minerals, ore, PI, components, blueprints, charges, fuel, structures, deployables — is inventory; categories are views over it, never separate systems. Answers what/where/how much/whose, and (placeholder formula, see below) how covered an operation is. `src-tauri/src/inventory/`. **Live as of Sprint 003.** | 003 |
 | **Operation Engine** | Owns an Operation's identity: goal, deadline, priority, notes, target, timeline, progress, dependencies. Never touches inventory directly — only requests reservations (once the Reservation Engine is real). **Live (reads) as of Sprint 004** — `src-tauri/src/operation/` (models/repository/provider/engine, mirroring Inventory); `OperationEngine` also exposes mutation methods that currently all return "architecture-only" errors. `OperationQuery` (the narrow read-only seam for the Decision Engine) is implemented by `OperationEngine` itself. | 004 (reads), later (mutations) |
-| Reservation Engine | The seam between the Operation Engine and the Inventory Engine: hold/release quantity against an operation. **Architecture-only** — `src-tauri/src/inventory/reservation.rs` defines the trait and the schema (`inventory_reservations`) exists, but nothing calls it yet. | 003 (interface), later (implementation) |
+| **Reservation Engine** | Owns who owns inventory: reservation quantities, reservation history, reservation conflicts (detect only, never resolves). **Live (reads) as of Sprint 005** — `src-tauri/src/reservation/` (a sibling module to `inventory/`/`operation/`, mirroring their shape); mutation methods (reserve/release/transfer) currently all return "architecture-only" errors. | 005 (reads), later (mutations) |
 | Build Target Engine | Pipeline orchestrator: resolve a selected target to its blueprint, drive the stages below, emit a build plan | 004 |
 | Production Engine | Expand any blueprint into its material tree (ME/TE aware, recursive through components/reactions), map jobs to build projects, compute buildable-today | 004 |
 | Shopping Engine | Diff requirements vs inventory vs in-progress jobs → missing-inputs list with acquisition suggestions | 004 |
@@ -186,7 +205,8 @@ rendernorth-industrial/
 1b. **002** — Mission Control rename, generic Build Target foundation with working selection, Factory Health console, UI Constitution. *(done)*
 1c. **003** — Inventory Engine foundation: repository, provider seam, Inventory page, Reservation Engine and Recommendation Engine interfaces (architecture only). *(done)*
 1d. **003.5** — Architecture refinement: Operation Engine introduced as a first-class concept; Recommendation Engine renamed to Decision Engine (`DecisionContext`, `DecisionKind`, `DecisionRule`). Interfaces only — no schema change, no production math, no live reservations. *(done)*
-1e. **004** — Operation Domain Foundation: migration 0004 (`operations`, `operation_timeline`, `operation_dependencies`); real `operation/` module with live reads (list, priority queue, blocked detection — derived from dependencies, not a hand-set flag — upcoming completions, health, detail); Mission Control becomes an Operations Dashboard; new Operations Workspace page. Mutations remain architecture-only; no production math, reservation logic, decision logic, ESI, or blueprint/shopping calculations. *(this sprint)*
+1e. **004** — Operation Domain Foundation: migration 0004 (`operations`, `operation_timeline`, `operation_dependencies`); real `operation/` module with live reads (list, priority queue, blocked detection — derived from dependencies, not a hand-set flag — upcoming completions, health, detail); Mission Control becomes an Operations Dashboard; new Operations Workspace page. Mutations remain architecture-only; no production math, reservation logic, decision logic, ESI, or blueprint/shopping calculations. *(done)*
+1f. **005** — Reservation Engine Foundation: migration 0005 (additive `operation_id` column on `inventory_reservations`, plus `reservation_events` and `reservation_conflicts`); real `reservation/` module with live reads (summary, detail, history, conflict detection, inventory commitment, per-operation reservation totals). Mission Control gains an Inventory Commitment panel and a Reservation Conflicts panel; the Operations Workspace gains a live Reservations section; the Inventory page gains Reserved/Free/Available columns per item. Mutations (reserve/release/transfer) remain architecture-only; no production math, ESI, scheduling, manufacturing, shopping, or Decision Engine rules. *(this sprint)*
 2. **003a/004a** — ESI OAuth (PKCE), character management, token storage.
 3. **003** — SDE import + Asset/Blueprint sync + Inventory Engine.
 4. **004** — Industry jobs sync, Production + Shopping engines, Build Target Engine + Build Tracker on live data.

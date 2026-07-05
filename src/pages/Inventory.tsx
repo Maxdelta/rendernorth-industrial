@@ -100,9 +100,11 @@ export function InventoryPage() {
               <div className="inv-row inv-head">
                 <div>Name</div>
                 <div>Quantity</div>
+                <div>Reserved</div>
+                <div>Free</div>
+                <div>Available</div>
                 <div>Location</div>
                 <div>Owner</div>
-                <div>Reserved</div>
                 <div>Operation</div>
                 <div>Status</div>
               </div>
@@ -113,9 +115,11 @@ export function InventoryPage() {
                   <div className="inv-row" key={item.itemId}>
                     <div className="inv-name">{item.typeName}</div>
                     <div className="inv-qty">{formatQty(item.quantity)}</div>
+                    <div className="inv-reserved">{item.reservedQuantity > 0 ? formatQty(item.reservedQuantity) : "—"}</div>
+                    <div className="inv-qty">{formatQty(item.freeQuantity)}</div>
+                    <div className="inv-qty">{formatQty(item.availableQuantity)}</div>
                     <div className="inv-location">{item.locationName}</div>
                     <div className="inv-owner">{item.ownerName}</div>
-                    <div className="inv-reserved">{item.reservedQuantity > 0 ? formatQty(item.reservedQuantity) : "—"}</div>
                     <div className="inv-operation">{operation ?? "—"}</div>
                     <div className={`inv-status ${tone}`}>{item.status}</div>
                   </div>

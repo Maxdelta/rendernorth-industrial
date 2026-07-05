@@ -38,6 +38,11 @@ pub struct InventoryItem {
     pub total_value: f64,
     pub reserved_quantity: i64,
     pub available_quantity: i64,
+    /// Nets out soft allocations too, not just hard reservations — "has
+    /// nothing at all claimed against it," a stricter bar than
+    /// `available_quantity`. See the computation site in
+    /// `InventoryRepository::items` for the current caveat.
+    pub free_quantity: i64,
     pub allocated_operation: Option<String>,
     pub reserved_operation: Option<String>,
     /// Lifecycle state key from `inventory_states` (available, reserved,

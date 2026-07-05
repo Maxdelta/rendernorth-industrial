@@ -18,6 +18,8 @@ interface RawItem {
   reservedQuantity?: number;
   reservedOperation?: string | null;
   allocatedOperation?: string | null;
+  /** Sprint 005: mirrors inventory_allocations.quantity for this item. */
+  allocatedQuantity?: number;
 }
 
 const CATEGORIES: { key: string; label: string; sortOrder: number }[] = [
@@ -66,9 +68,9 @@ const ITEMS: RawItem[] = [
   { itemId: 9, typeName: "Pyerite", categoryKey: "minerals", quantity: 210_000_000, locationName: "Jita IV - Moon 4 - Caldari Navy Assembly Plant", ownerName: "Demo Forgemaster", unitValue: 9.8 },
   { itemId: 10, typeName: "Mexallon", categoryKey: "minerals", quantity: 38_500_000, locationName: "Jita IV - Moon 4 - Caldari Navy Assembly Plant", ownerName: "Demo Forgemaster", unitValue: 65 },
   { itemId: 11, typeName: "Isogen", categoryKey: "minerals", quantity: 12_100_000, locationName: "Jita IV - Moon 4 - Caldari Navy Assembly Plant", ownerName: "Demo Forgemaster", unitValue: 145 },
-  { itemId: 12, typeName: "Nocxium", categoryKey: "minerals", quantity: 1_620_000, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 850, reservedQuantity: 900_000, reservedOperation: "Navy Revelation" },
+  { itemId: 12, typeName: "Nocxium", categoryKey: "minerals", quantity: 1_620_000, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 850, reservedQuantity: 900_000, reservedOperation: "Navy Revelation", allocatedQuantity: 1_620_000 },
   { itemId: 13, typeName: "Zydrine", categoryKey: "minerals", quantity: 410_000, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 1450 },
-  { itemId: 14, typeName: "Megacyte", categoryKey: "minerals", quantity: 288_000, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 2100, allocatedOperation: "Apostle" },
+  { itemId: 14, typeName: "Megacyte", categoryKey: "minerals", quantity: 288_000, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 2100, allocatedOperation: "Apostle", allocatedQuantity: 288_000 },
   { itemId: 15, typeName: "Morphite", categoryKey: "minerals", quantity: 62_000, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 8200 },
   { itemId: 16, typeName: "Bistot", categoryKey: "ore", quantity: 340_000, locationName: "Rens VI - Moon 8 - Brutor Tribe Treasury", ownerName: "Demo Hauler", unitValue: 950 },
   { itemId: 17, typeName: "Arkonor", categoryKey: "ore", quantity: 210_000, locationName: "Rens VI - Moon 8 - Brutor Tribe Treasury", ownerName: "Demo Hauler", unitValue: 1150 },
@@ -80,7 +82,7 @@ const ITEMS: RawItem[] = [
   { itemId: 23, typeName: "Heavy Water", categoryKey: "ice_products", quantity: 620_000, locationName: "Saatuban - Cyno Beacon Storage (Fortizar)", ownerName: "Demo Hauler", unitValue: 320 },
   { itemId: 24, typeName: "Liquid Ozone", categoryKey: "ice_products", quantity: 480_000, locationName: "Saatuban - Cyno Beacon Storage (Fortizar)", ownerName: "Demo Hauler", unitValue: 410 },
   { itemId: 25, typeName: "Helium Isotopes", categoryKey: "ice_products", quantity: 510_000, locationName: "Saatuban - Cyno Beacon Storage (Fortizar)", ownerName: "Demo Hauler", unitValue: 260 },
-  { itemId: 26, typeName: "Broadcast Node", categoryKey: "pi", quantity: 48, locationName: "Nakugard - Home POS Silo", ownerName: "Demo Hauler", unitValue: 1_450_000, reservedQuantity: 18, reservedOperation: "Avatar", allocatedOperation: "Avatar" },
+  { itemId: 26, typeName: "Broadcast Node", categoryKey: "pi", quantity: 48, locationName: "Nakugard - Home POS Silo", ownerName: "Demo Hauler", unitValue: 1_450_000, reservedQuantity: 18, reservedOperation: "Avatar", allocatedOperation: "Avatar", allocatedQuantity: 48 },
   { itemId: 27, typeName: "Ukomi Superconductors", categoryKey: "pi", quantity: 280, locationName: "Nakugard - Home POS Silo", ownerName: "Demo Hauler", unitValue: 68_000 },
   { itemId: 28, typeName: "Condensates", categoryKey: "pi", quantity: 260, locationName: "Nakugard - Home POS Silo", ownerName: "Demo Hauler", unitValue: 71_000 },
   { itemId: 29, typeName: "High-Tech Transmitters", categoryKey: "pi", quantity: 240, locationName: "Nakugard - Home POS Silo", ownerName: "Demo Hauler", unitValue: 69_500 },
@@ -88,11 +90,11 @@ const ITEMS: RawItem[] = [
   { itemId: 31, typeName: "Hypersynaptic Fibers", categoryKey: "reaction_materials", quantity: 8_200, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 1650 },
   { itemId: 32, typeName: "Construction Blocks", categoryKey: "components", quantity: 14_200, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 3200 },
   { itemId: 33, typeName: "Nanite Compound", categoryKey: "components", quantity: 6_100, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 5100 },
-  { itemId: 34, typeName: "Capital Construction Parts", categoryKey: "capital_components", quantity: 210, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 1_180_000, reservedQuantity: 90, reservedOperation: "Avatar", allocatedOperation: "Avatar" },
-  { itemId: 35, typeName: "Capital Armor Plates", categoryKey: "capital_components", quantity: 68, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 2_450_000, allocatedOperation: "Avatar" },
+  { itemId: 34, typeName: "Capital Construction Parts", categoryKey: "capital_components", quantity: 210, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 1_180_000, reservedQuantity: 140, reservedOperation: "Avatar + Prepare Titan Components", allocatedOperation: "Avatar", allocatedQuantity: 210 },
+  { itemId: 35, typeName: "Capital Armor Plates", categoryKey: "capital_components", quantity: 68, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 2_450_000, allocatedOperation: "Avatar", allocatedQuantity: 68 },
   { itemId: 36, typeName: "Capital Capacitor Batteries", categoryKey: "capital_components", quantity: 42, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 2_980_000 },
   { itemId: 37, typeName: "Capital Jump Drive", categoryKey: "capital_components", quantity: 6, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 8_900_000 },
-  { itemId: 38, typeName: "Auto-Integrity Preservation Seal", categoryKey: "advanced_components", quantity: 57, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 3_650_000 },
+  { itemId: 38, typeName: "Auto-Integrity Preservation Seal", categoryKey: "advanced_components", quantity: 57, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 3_650_000, reservedQuantity: 70, reservedOperation: "Apostle (exceeds stock)" },
   { itemId: 39, typeName: "Life Support Backup Unit", categoryKey: "advanced_components", quantity: 34, locationName: "Egghelende - RenderNorth Forge (Keepstar)", ownerName: "Demo Forgemaster", unitValue: 2_100_000 },
   { itemId: 40, typeName: "Capital Shield Extender II", categoryKey: "modules", quantity: 4, locationName: "1DQ1-A - Sotiyo (corp staging)", ownerName: "Demo Hauler", unitValue: 42_000_000 },
   { itemId: 41, typeName: "Large Armor Repairer II", categoryKey: "modules", quantity: 18, locationName: "1DQ1-A - Sotiyo (corp staging)", ownerName: "Demo Hauler", unitValue: 18_500_000 },
@@ -124,6 +126,8 @@ function toInventoryItem(raw: RawItem): InventoryItem {
     status = "Available";
   }
 
+  const allocatedQuantity = raw.allocatedQuantity ?? 0;
+
   return {
     itemId: raw.itemId,
     typeName: raw.typeName,
@@ -136,6 +140,7 @@ function toInventoryItem(raw: RawItem): InventoryItem {
     totalValue: raw.unitValue * raw.quantity,
     reservedQuantity,
     availableQuantity: Math.max(0, raw.quantity - reservedQuantity),
+    freeQuantity: Math.max(0, raw.quantity - reservedQuantity - allocatedQuantity),
     allocatedOperation: raw.allocatedOperation ?? null,
     reservedOperation: raw.reservedOperation ?? null,
     state,

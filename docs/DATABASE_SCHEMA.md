@@ -1,6 +1,6 @@
 # RenderNorth Industrial — Database Schema
 
-Version 1.3 — Sprint 004 (migration 0004: Operation domain foundation — operations, timeline, dependencies)
+Version 1.4 — Sprint 005 (migration 0005: Reservation domain foundation — additive operation_id on inventory_reservations, reservation_events, reservation_conflicts)
 
 **Sprint 003.5 note:** no migration this sprint. The Operation Engine and
 Decision Engine (renamed from Recommendation Engine) were introduced as
@@ -18,7 +18,7 @@ Engine: SQLite (WAL mode, foreign keys ON). Migrations are numbered `NNNN_name.s
 - ISK amounts are `REAL` for MVP (revisit as integer 1/100 ISK if precision issues appear).
 - `sde_*` tables are rebuilt from the Static Data Export; `esi_*`-sourced tables are replaced per sync; `app_*`/project tables are user data and never bulk-replaced.
 
-## Live tables (migrations 0001–0004)
+## Live tables (migrations 0001–0005)
 
 ### schema_migrations
 | column | type | notes |
@@ -103,7 +103,12 @@ One-row-per-metric snapshot behind the Factory Status dashboard. Later sprints c
 - **inventory_locations**(location_id PK, name, kind, system_name, region_name) — `kind` is free text (station/structure/asset_safety/contract today) so new location kinds never require a schema change.
 - **inventory_items**(item_id PK, type_name, category_key FK, quantity, location_id FK, character_id FK, corporation_id, container_item_id FK self, contract_id, delivery_id, state FK inventory_states, unit_value, source, synced_at) — the single inventory truth. `corporation_id`/`container_item_id`/`contract_id`/`delivery_id` are present and nullable now so future corp ownership, containers, contracts, and deliveries slot in without another migration touching this table's shape.
 - **inventory_allocations**(id PK, item_id FK, project_id FK build_projects, quantity, created_at) — soft, plan-level earmarking of inventory against an operation. Does not reduce availability.
-- **inventory_reservations**(id PK, item_id FK, project_id FK build_projects nullable, quantity, reason, created_at, released_at) — hard hold reducing available quantity while `released_at` is unset. Schema and seed data exist; the engine that creates/releases these rows (`ReservationEngine`) is an interface stub this sprint — no command creates a reservation yet.
+- **inventory_reservations**(id PK, item_id FK, project_id FK build_projects nullable, **operation_id FK operations nullable — added additively by migration 0005**, quantity, reason, created_at, released_at) — hard hold reducing available quantity while `released_at` is unset. `project_id` is left in place for backward compatibility; `operation_id` is the column the Reservation Engine reads and writes going forward (backfilled from `project_id` for existing rows, since operations 1–5 share that id space). The engine that creates/releases these rows (`ReservationEngine`) has live reads as of Sprint 005; mutation methods exist but all return an "architecture-only" error — no command creates or releases a reservation yet.
+
+### Reservation domain (migration 0005, live now)
+
+- **reservation_events**(id PK, reservation_id FK inventory_reservations, event_type, quantity, from_operation_id FK operations nullable, to_operation_id FK operations nullable, reason, created_at) — append-only history. `event_type` is reserved / released / transferred / expired. History only; nothing writes to this table automatically.
+- **reservation_conflicts**(id PK, item_id FK inventory_items, conflict_type, description, detected_at) — `conflict_type` is overlapping_operations / exceeds_stock / missing_inventory. Seeded rows are illustrative snapshots; the live `ReservationEngine::conflicts()` query recomputes all three checks fresh from current reservation + inventory state on every read rather than trusting this table — same "derive, don't trust a stale flag" precedent as `is_blocked` and `coverage_for_operation`. This table exists so a future scan can persist detection history without changing the read shape.
 
 ### Operation domain (migration 0004, live now)
 

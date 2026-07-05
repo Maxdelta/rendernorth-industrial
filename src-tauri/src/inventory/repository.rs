@@ -96,7 +96,8 @@ impl<'a> InventoryRepository<'a> {
                 st.label AS state_label,
                 COALESCE(res.reserved_qty, 0) AS reserved_qty,
                 alloc.project_name AS allocated_operation,
-                res.project_name AS reserved_operation
+                res.project_name AS reserved_operation,
+                COALESCE(alloc.allocated_qty, 0) AS allocated_qty
             FROM inventory_items i
             JOIN inventory_categories c ON c.key = i.category_key
             JOIN inventory_states st ON st.key = i.state
@@ -110,7 +111,7 @@ impl<'a> InventoryRepository<'a> {
                 GROUP BY r.item_id
             ) res ON res.item_id = i.item_id
             LEFT JOIN (
-                SELECT a.item_id, MAX(bp.name) AS project_name
+                SELECT a.item_id, SUM(a.quantity) AS allocated_qty, MAX(bp.name) AS project_name
                 FROM inventory_allocations a
                 JOIN build_projects bp ON bp.project_id = a.project_id
                 GROUP BY a.item_id
@@ -129,6 +130,7 @@ impl<'a> InventoryRepository<'a> {
                 let allocated_operation: Option<String> = row.get(11)?;
                 let reserved_operation: Option<String> = row.get(12)?;
                 let unit_value: f64 = row.get(7)?;
+                let allocated_qty: i64 = row.get(13)?;
 
                 let status = if state != "available" {
                     state_label.clone()
@@ -154,6 +156,16 @@ impl<'a> InventoryRepository<'a> {
                     total_value: unit_value * quantity as f64,
                     reserved_quantity: reserved_qty,
                     available_quantity: (quantity - reserved_qty).max(0),
+                    // First increment beyond reserved/available (Sprint 003):
+                    // Free also nets out soft allocations, so it answers
+                    // "untouched by any operation at all," not just "not
+                    // hard-reserved." Does not yet deduplicate an item that
+                    // carries both an allocation and a reservation from the
+                    // same operation (see reservation::models::InventoryCommitment
+                    // doc comment for the equivalent caveat at the aggregate
+                    // level) — a refinement for when the Reservation Engine's
+                    // mutations are real.
+                    free_quantity: (quantity - reserved_qty - allocated_qty).max(0),
                     allocated_operation,
                     reserved_operation,
                     state,
