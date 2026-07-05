@@ -7,6 +7,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Mission Control" },
+  { to: "/operations", label: "Operations" },
   { to: "/targets", label: "Build Targets" },
   { to: "/inventory", label: "Inventory" },
   { to: "/production", label: "Production" },

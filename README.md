@@ -43,9 +43,9 @@ npm run dev            # http://localhost:1420
 npm run tauri build
 ```
 
-On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0003, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
+On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0004, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
 
-## Status (Sprint 003.5 — architecture refinement)
+## Status (Sprint 004 — Operation Domain Foundation)
 
 **Mission Control** is the landing page: Factory Health console, Current Operation panel with a working build-target selector (five demo targets — Avatar, Navy Revelation, Apostle, Capital Construction Parts, Broadcast Node — all plain data, none special-cased), per-target missing inputs, and deterministic recommendations carrying rule id + inputs. "Inventory Coverage" is now genuinely computed by the Inventory Engine rather than a stored literal.
 
@@ -53,8 +53,10 @@ On first launch the Rust core creates `rendernorth.db` in the app data directory
 
 The domain hierarchy is now: **Mission Control → Operation Engine → Reservation Engine → Inventory Engine → SQLite.**
 
-- **Operation Engine** (new, `src-tauri/src/operation.rs`) is a first-class architecture concept: an Operation owns its goal, deadline, priority, notes, selected build target, timeline, and production plan — and nothing else. It never owns inventory; it only requests reservations. Interface-only — no schema change, `build_projects` remains the live (partial) backing table.
-- **Reservation Engine** (`src-tauri/src/inventory/reservation.rs`) is the seam an Operation calls through to hold inventory. Architecture-only — the trait and schema (`inventory_reservations`) exist, nothing calls it yet.
-- **Decision Engine** (renamed from Recommendation Engine, `src-tauri/src/decision.rs`) answers build/buy/mine/sell/research/copy/react questions from a `DecisionContext` bundling inventory + operation state. Deterministic and rule-based; LLMs may explain a decision later, never produce one. Interface-only — the live Mission Control recommendation panel (seeded `recommendations` rows) is unchanged and is this engine's working ancestor.
+- **Operation Engine** (`src-tauri/src/operation/`) is now real, not just an interface. RenderNorth Industrial revolves around Operations — industrial intent like "Build Avatar" or "Prepare Titan Components" — not inventory or blueprints. Reads are live: list, priority queue, blocked detection (derived from dependencies, never a hand-set flag), upcoming completions, health, and full detail, all backed by migration 0004 (`operations`, `operation_timeline`, `operation_dependencies`). Mutation methods exist on `OperationEngine` but every one currently returns an explicit "architecture-only" error — no lifecycle mutation, and Operations still cannot request a reservation.
+- **Reservation Engine** (`src-tauri/src/inventory/reservation.rs`) remains architecture-only — the trait and schema (`inventory_reservations`) exist, nothing calls it yet.
+- **Decision Engine** (`src-tauri/src/decision.rs`) remains interface-only: `DecisionContext` bundles inventory + operation state for a future deterministic build/buy/mine/sell/research/copy/react rule pipeline. The live Mission Control recommendation panel (seeded `recommendations` rows) is unchanged and is this engine's working ancestor.
 
-Top-level navigation: Mission Control, Build Targets, Inventory (live), Production, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.
+**Mission Control is now an Operations Dashboard.** Alongside the existing Factory Health / Current Operation (Selected Build Target) / Missing Inputs / Next Recommendation panels, it now shows Operation Health, a full Current Operations list, a Priority Queue, Blocked Operations (with blocking genuinely derived from unfinished dependencies — Avatar shows Blocked despite its own status being "active"), and Upcoming Completions. Every row links to the new **Operations Workspace** (`/operations`), where selecting an operation shows its live Overview, Goal, Priority, Status, Progress, Notes, and Dependencies — with Production, Inventory, Blueprints, Shopping, Cost, and Timeline shown only as reserved placeholder cards, no implementation behind them yet.
+
+Top-level navigation: Mission Control, **Operations (live)**, Build Targets, Inventory (live), Production, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.

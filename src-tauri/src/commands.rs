@@ -5,6 +5,10 @@
 use crate::db::Db;
 use crate::inventory::{self, models::{InventoryCategory, InventoryItem, InventorySummary}};
 use crate::models::*;
+use crate::operation::{
+    self,
+    models::{OperationDetail, OperationsDashboard},
+};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -12,7 +16,7 @@ use tauri::State;
 pub fn health_check(db: State<'_, Db>) -> Result<DbHealth, String> {
     let version = db.schema_version()?;
     Ok(DbHealth {
-        ok: version >= 3,
+        ok: version >= 4,
         schema_version: version,
         db_path: db.path.display().to_string(),
     })
@@ -286,4 +290,33 @@ pub fn list_inventory_items(
 ) -> Result<Vec<InventoryItem>, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     inventory::engine_for(&conn).items(category_key.as_deref())
+}
+
+// ---------------------------------------------------------------------------
+// Operation Engine commands. Thin: every question is answered by
+// `operation::engine_for(conn)`, never by ad hoc SQL in this file. Mission
+// Control's Operations Dashboard and the Operations Workspace page both
+// read exclusively through these.
+
+#[tauri::command]
+pub fn get_operations_dashboard(db: State<'_, Db>) -> Result<OperationsDashboard, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    let engine = operation::engine_for(&conn);
+
+    Ok(OperationsDashboard {
+        health: engine.health()?,
+        current_operations: engine.list_summaries()?,
+        priority_queue: engine.priority_queue()?,
+        blocked: engine.blocked()?,
+        upcoming_completions: engine.upcoming_completions(5)?,
+    })
+}
+
+#[tauri::command]
+pub fn get_operation_detail(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<OperationDetail, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    operation::engine_for(&conn).get_detail(operation_id)
 }

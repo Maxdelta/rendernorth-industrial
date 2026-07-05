@@ -4,6 +4,7 @@ import { TopBar } from "./components/TopBar";
 import { MissionControlPage } from "./pages/MissionControl";
 import { BuildTargetsPage } from "./pages/BuildTargets";
 import { InventoryPage } from "./pages/Inventory";
+import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
 import {
   ProductionPage,
   IndustryPage,
@@ -25,6 +26,7 @@ export default function App() {
           <main className="route-outlet">
             <Routes>
               <Route path="/" element={<MissionControlPage />} />
+              <Route path="/operations" element={<OperationsWorkspacePage />} />
               <Route path="/targets" element={<BuildTargetsPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/production" element={<ProductionPage />} />

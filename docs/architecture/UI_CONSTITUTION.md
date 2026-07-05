@@ -1,6 +1,6 @@
 # RenderNorth Industrial — UI Constitution
 
-Version 1.1 — Sprint 003 (adds category-rail + data-table pattern for Inventory)
+Version 1.2 — Sprint 004 (adds reserved-placeholder-card pattern for the Operations Workspace)
 Status: Ratified. The design system's law. `src/styles/theme.css` implements it; where code and this document disagree, this document wins and the code is a bug.
 
 ## 1. What the UI should feel like
@@ -100,6 +100,13 @@ Factory status derivation is code + constitution: `blocked_jobs > 0 → Blocked`
 - Item tables are rows, not `<table>` grids with borders on every cell — a header row in dim tracked Rajdhani, data rows separated by single `--bulkhead` hairlines, no zebra striping (that reads as spreadsheet).
 - Status text in a table is mono, uppercase, tracked, and colored by the same state law as everywhere else (nominal/furnace/alert/coolant) — never a colored pill/badge shape, which would look like a SaaS table.
 - Numeric columns (quantity, reserved) are right-aligned mono; text columns (location, owner) truncate with ellipsis rather than wrap, to keep row height constant.
+
+## 10b. Reserved placeholder cards (Operations Workspace pattern, Sprint 004)
+
+- A section that is architecture-only but not yet implemented gets a dashed `--bulkhead` border card, not a solid plate — the dashed line itself signals "not real yet," distinct from the solid chamfered plate used for live data.
+- Label in dim tracked Rajdhani, a single small caption ("reserved") beneath in a muted, low-contrast tone — no icon, no illustration, no "coming soon" badge styling that would compete with real telemetry elsewhere on screen.
+- These cards never carry a keel color — keels mean state, and a placeholder has no state to report.
+- Grouped in a plain grid (2–3 per row), always below the real, working sections of a page, never interleaved with them.
 
 ## 11. Dashboard panel rules
 

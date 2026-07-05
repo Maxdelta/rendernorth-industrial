@@ -34,6 +34,9 @@ impl<P: InventoryProvider> InventoryEngine<P> {
         self.provider.items(category_key)
     }
 
+    /// Read path for a future Locations breakdown view; no command
+    /// surfaces it yet, hence the allow — this is a reminder, not a mistake.
+    #[allow(dead_code)]
     pub fn locations(&self) -> Result<Vec<InventoryLocation>, String> {
         self.provider.locations()
     }

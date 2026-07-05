@@ -106,6 +106,68 @@ export interface InventorySummary {
   availableValue: number;
 }
 
+// ---------------------------------------------------------------------------
+// Operation domain — the object every other system revolves around. An
+// Operation is industrial intent ("Build Avatar", "Manufacture 500 Capital
+// Construction Parts"); it never owns inventory.
+
+export interface OperationSummary {
+  operationId: number;
+  goal: string;
+  targetTypeName: string | null;
+  priority: number;
+  status: string;
+  progress: number;
+  deadline: string | null;
+  /** Derived from dependencies, never a hand-set literal. */
+  isBlocked: boolean;
+}
+
+export interface OperationTimelineEntry {
+  id: number;
+  label: string;
+  status: string;
+  sortOrder: number;
+  targetDate: string | null;
+}
+
+export interface OperationDependency {
+  dependsOnOperationId: number;
+  dependsOnGoal: string;
+  dependsOnStatus: string;
+  reason: string;
+}
+
+export interface OperationDetail {
+  operationId: number;
+  goal: string;
+  targetTypeName: string | null;
+  priority: number;
+  status: string;
+  progress: number;
+  notes: string;
+  deadline: string | null;
+  isBlocked: boolean;
+  dependencies: OperationDependency[];
+  /** Owned by the Operation Engine; not rendered by the Workspace UI yet. */
+  timeline: OperationTimelineEntry[];
+}
+
+export interface OperationHealth {
+  totalOperations: number;
+  activeOperations: number;
+  blockedOperations: number;
+  healthyFraction: number;
+}
+
+export interface OperationsDashboard {
+  health: OperationHealth;
+  currentOperations: OperationSummary[];
+  priorityQueue: OperationSummary[];
+  blocked: OperationSummary[];
+  upcomingCompletions: OperationSummary[];
+}
+
 function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -185,6 +247,30 @@ export async function listInventoryItems(categoryKey?: string): Promise<Inventor
   }
   const mock = await import("../data/inventoryMock");
   return mock.listMockInventoryItems(categoryKey);
+}
+
+export async function getOperationsDashboard(): Promise<OperationsDashboard> {
+  if (inTauri()) {
+    try {
+      return await invoke<OperationsDashboard>("get_operations_dashboard");
+    } catch (err) {
+      console.error("get_operations_dashboard failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/operationMock");
+  return mock.getMockOperationsDashboard();
+}
+
+export async function getOperationDetail(operationId: number): Promise<OperationDetail> {
+  if (inTauri()) {
+    try {
+      return await invoke<OperationDetail>("get_operation_detail", { operationId });
+    } catch (err) {
+      console.error("get_operation_detail failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/operationMock");
+  return mock.getMockOperationDetail(operationId);
 }
 
 export async function healthCheck(): Promise<DbHealth | null> {

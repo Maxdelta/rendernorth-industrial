@@ -1,6 +1,6 @@
 # RenderNorth Industrial — Database Schema
 
-Version 1.2 — Sprint 003 (migration 0003: Inventory Engine foundation — categories, locations, items, allocations, reservations, lifecycle states)
+Version 1.3 — Sprint 004 (migration 0004: Operation domain foundation — operations, timeline, dependencies)
 
 **Sprint 003.5 note:** no migration this sprint. The Operation Engine and
 Decision Engine (renamed from Recommendation Engine) were introduced as
@@ -18,7 +18,7 @@ Engine: SQLite (WAL mode, foreign keys ON). Migrations are numbered `NNNN_name.s
 - ISK amounts are `REAL` for MVP (revisit as integer 1/100 ISK if precision issues appear).
 - `sde_*` tables are rebuilt from the Static Data Export; `esi_*`-sourced tables are replaced per sync; `app_*`/project tables are user data and never bulk-replaced.
 
-## Live tables (migrations 0001–0003)
+## Live tables (migrations 0001–0004)
 
 ### schema_migrations
 | column | type | notes |
@@ -104,6 +104,12 @@ One-row-per-metric snapshot behind the Factory Status dashboard. Later sprints c
 - **inventory_items**(item_id PK, type_name, category_key FK, quantity, location_id FK, character_id FK, corporation_id, container_item_id FK self, contract_id, delivery_id, state FK inventory_states, unit_value, source, synced_at) — the single inventory truth. `corporation_id`/`container_item_id`/`contract_id`/`delivery_id` are present and nullable now so future corp ownership, containers, contracts, and deliveries slot in without another migration touching this table's shape.
 - **inventory_allocations**(id PK, item_id FK, project_id FK build_projects, quantity, created_at) — soft, plan-level earmarking of inventory against an operation. Does not reduce availability.
 - **inventory_reservations**(id PK, item_id FK, project_id FK build_projects nullable, quantity, reason, created_at, released_at) — hard hold reducing available quantity while `released_at` is unset. Schema and seed data exist; the engine that creates/releases these rows (`ReservationEngine`) is an interface stub this sprint — no command creates a reservation yet.
+
+### Operation domain (migration 0004, live now)
+
+- **operations**(operation_id PK, goal, target_type_name nullable, priority, status, progress, notes, deadline nullable, created_at, updated_at) — an Operation is industrial intent ("Build Avatar", "Prepare Titan Components"); `target_type_name` is nullable because a goal need not name a single build target. Shares its id space with `build_projects.project_id` for operations 1–5 this sprint (see SYSTEM_ARCHITECTURE.md, Domain Hierarchy); operation 6 has no `build_projects` counterpart.
+- **operation_timeline**(id PK, operation_id FK, label, status, sort_order, target_date nullable) — ordered milestones. Repository-complete; the Operations Workspace UI does not render these yet (shown as a reserved placeholder).
+- **operation_dependencies**(id PK, operation_id FK, depends_on_operation_id FK, reason) — one operation can depend on another. `is_blocked` is always derived from this table (an operation's own `status = 'blocked'`, OR anything it depends on isn't `completed`) — never a hand-set literal read directly off a row.
 
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)

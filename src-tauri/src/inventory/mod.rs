@@ -15,4 +15,8 @@ pub mod provider;
 pub mod repository;
 pub mod reservation;
 
+// `InventoryEngine` is re-exported for external callers that need the type
+// name directly (e.g. a future stateful Tauri-managed engine instance);
+// nothing does yet, hence the allow.
+#[allow(unused_imports)]
 pub use engine::{engine_for, InventoryEngine};

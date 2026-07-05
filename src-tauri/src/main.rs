@@ -34,7 +34,9 @@ fn main() {
             commands::select_build_target,
             commands::get_inventory_summary,
             commands::list_inventory_categories,
-            commands::list_inventory_items
+            commands::list_inventory_items,
+            commands::get_operations_dashboard,
+            commands::get_operation_detail
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

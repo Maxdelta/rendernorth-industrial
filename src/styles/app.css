@@ -711,3 +711,227 @@
 .inv-status.furnace { color: var(--furnace); }
 .inv-status.alert { color: var(--alert); }
 .inv-status.coolant { color: var(--coolant); }
+
+/* ---------- Operations Dashboard (Mission Control) ---------- */
+.op-health-grid { grid-template-columns: repeat(4, 1fr); }
+
+.op-list { display: flex; flex-direction: column; font-size: 13px; }
+
+.op-row {
+  display: grid;
+  grid-template-columns: 2fr 1.6fr 0.6fr 0.8fr 0.9fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--bulkhead);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.op-row:last-child { border-bottom: none; }
+
+.op-head {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.op-link:hover { background: var(--plate-hi); }
+
+.op-goal { font-weight: 500; }
+
+.op-target {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-priority, .op-progress {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.op-status {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.op-status.nominal { color: var(--nominal); }
+.op-status.furnace { color: var(--furnace); }
+.op-status.alert { color: var(--alert); }
+.op-status.coolant { color: var(--coolant); }
+
+.op-simple-list { display: flex; flex-direction: column; }
+
+.op-simple-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--bulkhead);
+  text-decoration: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.op-simple-row:last-child { border-bottom: none; }
+.op-simple-row:hover { background: var(--plate-hi); }
+
+.op-simple-priority {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--furnace);
+  min-width: 22px;
+}
+
+.op-simple-goal { flex: 1; }
+
+.op-deadline {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* ---------- Operations Workspace ---------- */
+.ops-workspace-layout {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .ops-workspace-layout { grid-template-columns: 1fr; }
+}
+
+.ops-rail-list { display: flex; flex-direction: column; }
+
+.ops-rail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--bulkhead);
+  border-left: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+
+.ops-rail-row:last-child { border-bottom: none; }
+.ops-rail-row:hover { background: var(--plate-hi); }
+
+.ops-rail-row.active {
+  border-left-color: var(--furnace);
+  background: linear-gradient(90deg, var(--furnace-dim), transparent 75%);
+}
+
+.ops-rail-goal {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.ops-rail-meta {
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.ops-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 1100px) {
+  .ops-overview-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.ops-field-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.ops-field-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+
+.ops-notes {
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.6;
+  max-width: 70ch;
+}
+
+.ops-deps-list { display: flex; flex-direction: column; margin-top: 6px; }
+
+.ops-dep-row {
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--bulkhead);
+}
+
+.ops-dep-row:last-child { border-bottom: none; }
+
+.ops-dep-goal {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ops-dep-reason {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.ops-reserved-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .ops-reserved-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.ops-reserved-card {
+  border: 1px dashed var(--bulkhead);
+  padding: 14px;
+  text-align: center;
+}
+
+.ops-reserved-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.ops-reserved-note {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--bulkhead);
+}

@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   getMissionControl,
   listBuildTargets,
   selectBuildTarget,
+  getOperationsDashboard,
   healthCheck,
   formatIsk,
   formatQty,
   type MissionControl,
   type BuildTargetSummary,
+  type OperationsDashboard,
+  type OperationSummary,
   type DbHealth,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
@@ -23,8 +27,16 @@ function healthTone(status: string): "nominal" | "furnace" | "alert" {
   return "nominal";
 }
 
+function opStatusTone(op: OperationSummary): "nominal" | "furnace" | "alert" | "coolant" {
+  if (op.isBlocked) return "alert";
+  if (op.status === "active") return "nominal";
+  if (op.status === "planned") return "coolant";
+  return "furnace";
+}
+
 export function MissionControlPage() {
   const [mission, setMission] = useState<MissionControl | null>(null);
+  const [ops, setOps] = useState<OperationsDashboard | null>(null);
   const [targets, setTargets] = useState<BuildTargetSummary[]>([]);
   const [health, setHealth] = useState<DbHealth | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -32,6 +44,7 @@ export function MissionControlPage() {
   useEffect(() => {
     let live = true;
     getMissionControl().then((m) => live && setMission(m));
+    getOperationsDashboard().then((o) => live && setOps(o));
     listBuildTargets().then((t) => live && setTargets(t));
     healthCheck().then((h) => live && setHealth(h));
     return () => {
@@ -75,6 +88,99 @@ export function MissionControlPage() {
         />
         <StatCard label="Wallet" value={formatIsk(mission.walletIsk)} tone="nominal" keel="nominal" note="liquid across all characters" />
       </div>
+
+      {ops && (
+        <>
+          <Panel title="Operation Health" keel={ops.health.blockedOperations > 0 ? "alert" : "nominal"} className="dash-hero">
+            <div className="health-grid op-health-grid">
+              <div className="health-cell">
+                <div className="stat-label">Total Operations</div>
+                <div className="stat-value coolant">{ops.health.totalOperations}</div>
+              </div>
+              <div className="health-cell">
+                <div className="stat-label">Active</div>
+                <div className="stat-value nominal">{ops.health.activeOperations}</div>
+              </div>
+              <div className="health-cell">
+                <div className="stat-label">Blocked</div>
+                <div className={`stat-value ${ops.health.blockedOperations > 0 ? "alert" : "nominal"}`}>
+                  {ops.health.blockedOperations}
+                </div>
+              </div>
+              <div className="health-cell">
+                <div className="stat-label">Healthy</div>
+                <div className={`stat-value ${ops.health.healthyFraction >= 0.6 ? "nominal" : "furnace"}`}>
+                  {Math.round(ops.health.healthyFraction * 100)}%
+                </div>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="Current Operations" keel="coolant" className="dash-hero">
+            <div className="op-list">
+              <div className="op-row op-head">
+                <div>Goal</div>
+                <div>Target</div>
+                <div>Priority</div>
+                <div>Progress</div>
+                <div>Status</div>
+              </div>
+              {ops.currentOperations.map((op) => (
+                <Link className="op-row op-link" to={`/operations?op=${op.operationId}`} key={op.operationId}>
+                  <div className="op-goal">{op.goal}</div>
+                  <div className="op-target">{op.targetTypeName ?? "—"}</div>
+                  <div className="op-priority">P{op.priority}</div>
+                  <div className="op-progress">{Math.round(op.progress * 100)}%</div>
+                  <div className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</div>
+                </Link>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel title="Priority Queue" keel="furnace" className="dash-half">
+            <div className="op-simple-list">
+              {ops.priorityQueue.map((op) => (
+                <Link className="op-simple-row" to={`/operations?op=${op.operationId}`} key={op.operationId}>
+                  <span className="op-simple-priority">P{op.priority}</span>
+                  <span className="op-simple-goal">{op.goal}</span>
+                  <span className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</span>
+                </Link>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel title="Blocked Operations" keel={ops.blocked.length > 0 ? "alert" : "nominal"} className="dash-half">
+            {ops.blocked.length === 0 ? (
+              <p className="ph-mission">Nothing is blocked right now.</p>
+            ) : (
+              <div className="op-simple-list">
+                {ops.blocked.map((op) => (
+                  <Link className="op-simple-row" to={`/operations?op=${op.operationId}`} key={op.operationId}>
+                    <span className="op-simple-goal">{op.goal}</span>
+                    <span className="op-status alert">Blocked</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Upcoming Completions" keel="coolant" className="dash-hero">
+            {ops.upcomingCompletions.length === 0 ? (
+              <p className="ph-mission">No deadlines scheduled.</p>
+            ) : (
+              <div className="op-simple-list">
+                {ops.upcomingCompletions.map((op) => (
+                  <Link className="op-simple-row" to={`/operations?op=${op.operationId}`} key={op.operationId}>
+                    <span className="op-simple-goal">{op.goal}</span>
+                    <span className="op-deadline">{op.deadline}</span>
+                    <span className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </>
+      )}
 
       <Panel title="Factory Health" keel={tone} className="dash-hero">
         <div className="health-grid">
