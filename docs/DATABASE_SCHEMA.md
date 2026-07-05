@@ -1,6 +1,14 @@
 # RenderNorth Industrial — Database Schema
 
-Version 1.1 — Sprint 002 (migration 0002: demo build targets, factory health metrics, selected-target pointer)
+Version 1.2 — Sprint 003 (migration 0003: Inventory Engine foundation — categories, locations, items, allocations, reservations, lifecycle states)
+
+**Sprint 003.5 note:** no migration this sprint. The Operation Engine and
+Decision Engine (renamed from Recommendation Engine) were introduced as
+architecture-only interfaces — see SYSTEM_ARCHITECTURE.md. The
+`recommendations` table below is unchanged and remains live; conceptually
+it is the working ancestor of what the Decision Engine will eventually
+produce, not yet renamed or restructured, to avoid touching a working
+feature ahead of the engine that will actually replace it.
 Engine: SQLite (WAL mode, foreign keys ON). Migrations are numbered `NNNN_name.sql`, embedded in the Rust binary, applied in order, tracked in `schema_migrations`.
 
 ## Conventions
@@ -10,7 +18,7 @@ Engine: SQLite (WAL mode, foreign keys ON). Migrations are numbered `NNNN_name.s
 - ISK amounts are `REAL` for MVP (revisit as integer 1/100 ISK if precision issues appear).
 - `sde_*` tables are rebuilt from the Static Data Export; `esi_*`-sourced tables are replaced per sync; `app_*`/project tables are user data and never bulk-replaced.
 
-## Live tables (migrations 0001–0002)
+## Live tables (migrations 0001–0003)
 
 ### schema_migrations
 | column | type | notes |
@@ -75,6 +83,7 @@ One-row-per-metric snapshot behind the Factory Status dashboard. Later sprints c
 | as_of | TEXT NOT NULL | |
 
 ### recommendations
+*(conceptually the seed of the future Decision Engine — see SYSTEM_ARCHITECTURE.md §Domain Hierarchy; table name and shape unchanged this sprint)*
 | column | type | notes |
 |---|---|---|
 | id | INTEGER PK AUTOINCREMENT | |
@@ -87,11 +96,20 @@ One-row-per-metric snapshot behind the Factory Status dashboard. Later sprints c
 
 ## Planned tables (documented now, migrated when their sprint lands)
 
-### Sync layer (Sprint 002–003)
+### Inventory Engine (migration 0003, live now)
+
+- **inventory_states**(key PK, label, sort_order) — controlled vocabulary: available, reserved, allocated, manufacturing, research, reaction, in_transit, asset_safety, contract, delivery, destroyed. Every `inventory_items` row references one; most states are placeholders with no logic yet.
+- **inventory_categories**(key PK, label, sort_order) — 17 categories (ships, blueprints, minerals, ore, compressed_ore, ice, ice_products, pi, reaction_materials, components, capital_components, advanced_components, modules, charges, fuel, structures, deployables). Categories are views over one inventory, never separate stores.
+- **inventory_locations**(location_id PK, name, kind, system_name, region_name) — `kind` is free text (station/structure/asset_safety/contract today) so new location kinds never require a schema change.
+- **inventory_items**(item_id PK, type_name, category_key FK, quantity, location_id FK, character_id FK, corporation_id, container_item_id FK self, contract_id, delivery_id, state FK inventory_states, unit_value, source, synced_at) — the single inventory truth. `corporation_id`/`container_item_id`/`contract_id`/`delivery_id` are present and nullable now so future corp ownership, containers, contracts, and deliveries slot in without another migration touching this table's shape.
+- **inventory_allocations**(id PK, item_id FK, project_id FK build_projects, quantity, created_at) — soft, plan-level earmarking of inventory against an operation. Does not reduce availability.
+- **inventory_reservations**(id PK, item_id FK, project_id FK build_projects nullable, quantity, reason, created_at, released_at) — hard hold reducing available quantity while `released_at` is unset. Schema and seed data exist; the engine that creates/releases these rows (`ReservationEngine`) is an interface stub this sprint — no command creates a reservation yet.
+
+### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)
 - **sync_state**(resource, character_id, etag, last_success_at, next_allowed_at, last_error, PRIMARY KEY(resource, character_id))
 
-### SDE (Sprint 003)
+### SDE (Sprint 004)
 - **sde_types**(type_id PK, name, group_id, category_id, volume, portion_size)
 - **sde_blueprints**(blueprint_type_id PK, product_type_id, activity, time, max_production_limit)
 - **sde_blueprint_materials**(blueprint_type_id, activity, material_type_id, quantity, PK(blueprint_type_id, activity, material_type_id))

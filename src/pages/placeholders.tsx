@@ -1,19 +1,5 @@
 import { PlaceholderPage } from "../components/PlaceholderPage";
 
-export const InventoryPage = () => (
-  <PlaceholderPage
-    title="Inventory"
-    mission="What do I own and where is it — one inventory truth across characters, stations, and structures. Assets stop being a product identity and become views inside this module."
-    planned={[
-      "Asset browser: cross-character tree by region, system, and structure",
-      "Stockpiles: material coverage matched against active build targets",
-      "Locations: where each input class lives, hauling distance to the build site",
-      "Asset safety wraps: last-known contents and recovery candidates",
-    ]}
-    sprint="Sprint 003"
-  />
-);
-
 export const ProductionPage = () => (
   <PlaceholderPage
     title="Production"

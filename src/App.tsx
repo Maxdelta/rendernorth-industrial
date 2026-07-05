@@ -3,8 +3,8 @@ import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { MissionControlPage } from "./pages/MissionControl";
 import { BuildTargetsPage } from "./pages/BuildTargets";
+import { InventoryPage } from "./pages/Inventory";
 import {
-  InventoryPage,
   ProductionPage,
   IndustryPage,
   LogisticsPage,

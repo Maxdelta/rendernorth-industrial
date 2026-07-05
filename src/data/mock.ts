@@ -8,16 +8,21 @@ import type {
   Recommendation,
   TierCoverage,
 } from "../lib/backend";
+import { coverageFromTiers } from "./inventoryMock";
 
 interface MockTarget {
   projectId: number;
   name: string;
   className: string;
   status: string;
-  overallProgress: number;
   tiers: TierCoverage[];
   missingMaterials: MissingMaterial[];
   recommendation: Recommendation;
+}
+
+/** Mirrors InventoryRepository::coverage_for_operation — never a stored literal. */
+function overallProgressOf(t: MockTarget): number {
+  return coverageFromTiers(t.tiers);
 }
 
 const TARGETS: MockTarget[] = [
@@ -26,7 +31,6 @@ const TARGETS: MockTarget[] = [
     name: "Avatar",
     className: "Titan — Amarr capital hull",
     status: "active",
-    overallProgress: 0.61,
     tiers: [
       { label: "Minerals", coverage: 1.0 },
       { label: "Capital Components", coverage: 0.63 },
@@ -51,7 +55,6 @@ const TARGETS: MockTarget[] = [
     name: "Navy Revelation",
     className: "Dreadnought — Amarr faction capital",
     status: "planned",
-    overallProgress: 0.24,
     tiers: [
       { label: "Minerals", coverage: 0.55 },
       { label: "Capital Components", coverage: 0.18 },
@@ -80,7 +83,6 @@ const TARGETS: MockTarget[] = [
     name: "Apostle",
     className: "Force Auxiliary — Amarr capital",
     status: "planned",
-    overallProgress: 0.47,
     tiers: [
       { label: "Minerals", coverage: 0.8 },
       { label: "Capital Components", coverage: 0.4 },
@@ -103,7 +105,6 @@ const TARGETS: MockTarget[] = [
     name: "Capital Construction Parts",
     className: "Capital component",
     status: "planned",
-    overallProgress: 0.72,
     tiers: [
       { label: "Minerals", coverage: 1.0 },
       { label: "Blueprint Research", coverage: 0.9 },
@@ -122,7 +123,6 @@ const TARGETS: MockTarget[] = [
     name: "Broadcast Node",
     className: "PI — P4 advanced commodity",
     status: "planned",
-    overallProgress: 0.35,
     tiers: [
       { label: "P3 Inputs", coverage: 0.35 },
       { label: "Launchpad Capacity", coverage: 1.0 },
@@ -153,6 +153,7 @@ function deriveStatus(health: number, blockedJobs: number): string {
 
 export function getMockMissionControl(): MissionControl {
   const t = TARGETS.find((x) => x.projectId === selectedProjectId) ?? TARGETS[0];
+  const overallProgress = overallProgressOf(t);
   const health = 0.87;
   const blockedJobs = 0;
   return {
@@ -175,7 +176,7 @@ export function getMockMissionControl(): MissionControl {
       projectId: t.projectId,
       name: t.name,
       className: t.className,
-      overallProgress: t.overallProgress,
+      overallProgress,
       tiers: t.tiers,
     },
     missingMaterials: t.missingMaterials,
@@ -189,7 +190,7 @@ export function listMockTargets(): BuildTargetSummary[] {
     name: t.name,
     className: t.className,
     status: t.status,
-    overallProgress: t.overallProgress,
+    overallProgress: overallProgressOf(t),
     isSelected: t.projectId === selectedProjectId,
   }));
 }

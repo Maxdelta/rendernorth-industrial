@@ -1,6 +1,6 @@
 # RenderNorth Industrial — UI Constitution
 
-Version 1.0 — Sprint 002
+Version 1.1 — Sprint 003 (adds category-rail + data-table pattern for Inventory)
 Status: Ratified. The design system's law. `src/styles/theme.css` implements it; where code and this document disagree, this document wins and the code is a bug.
 
 ## 1. What the UI should feel like
@@ -93,6 +93,13 @@ Factory status derivation is code + constitution: `blocked_jobs > 0 → Blocked`
 - Permitted: progress fills easing on mount/update (≤ 700ms, decel curve); hover surface shifts (instant to 150ms); a single slow ambient effect per screen maximum (e.g. the schematic's future scanline, ≥ 8s period, ≤ 10% opacity).
 - Forbidden: looping decorative animation, pulsing text, spinners longer than 300ms without a status message, anything that moves in a user's peripheral vision while they read.
 - `prefers-reduced-motion: reduce` collapses everything to final states. Non-negotiable.
+
+## 10a. Category rail + table (Inventory pattern, Sprint 003)
+
+- The category rail is a vertical list of plain buttons inside a chamfered plate, not a second sidebar — one active state at a time, furnace left-border + wash exactly like the main nav's active state, for visual consistency between navigation levels.
+- Item tables are rows, not `<table>` grids with borders on every cell — a header row in dim tracked Rajdhani, data rows separated by single `--bulkhead` hairlines, no zebra striping (that reads as spreadsheet).
+- Status text in a table is mono, uppercase, tracked, and colored by the same state law as everywhere else (nominal/furnace/alert/coolant) — never a colored pill/badge shape, which would look like a SaaS table.
+- Numeric columns (quantity, reserved) are right-aligned mono; text columns (location, owner) truncate with ellipsis rather than wrap, to keep row height constant.
 
 ## 11. Dashboard panel rules
 

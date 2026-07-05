@@ -43,8 +43,18 @@ npm run dev            # http://localhost:1420
 npm run tauri build
 ```
 
-On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0002, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
+On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0003, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
 
-## Status (Sprint 002)
+## Status (Sprint 003.5 — architecture refinement)
 
-**Mission Control** is the landing page: Factory Health console, Current Operation panel with a working build-target selector (five demo targets — Avatar, Navy Revelation, Apostle, Capital Construction Parts, Broadcast Node — all plain data, none special-cased), per-target missing inputs, and deterministic recommendations carrying rule id + inputs. Selection persists in SQLite (`app_meta`) under Tauri and in memory in browser mode. Top-level navigation: Mission Control, Build Targets, Inventory, Production, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.
+**Mission Control** is the landing page: Factory Health console, Current Operation panel with a working build-target selector (five demo targets — Avatar, Navy Revelation, Apostle, Capital Construction Parts, Broadcast Node — all plain data, none special-cased), per-target missing inputs, and deterministic recommendations carrying rule id + inputs. "Inventory Coverage" is now genuinely computed by the Inventory Engine rather than a stored literal.
+
+**Inventory** is live: a real Inventory Engine (`src-tauri/src/inventory/`) backs a category-rail + table page over 47 seeded demo items across every EVE ownership category — ships, blueprints, minerals, ore, PI, components, modules, fuel, and more. Summary cards show total assets, estimated value, unique types, known locations, and the reserved/available value split.
+
+The domain hierarchy is now: **Mission Control → Operation Engine → Reservation Engine → Inventory Engine → SQLite.**
+
+- **Operation Engine** (new, `src-tauri/src/operation.rs`) is a first-class architecture concept: an Operation owns its goal, deadline, priority, notes, selected build target, timeline, and production plan — and nothing else. It never owns inventory; it only requests reservations. Interface-only — no schema change, `build_projects` remains the live (partial) backing table.
+- **Reservation Engine** (`src-tauri/src/inventory/reservation.rs`) is the seam an Operation calls through to hold inventory. Architecture-only — the trait and schema (`inventory_reservations`) exist, nothing calls it yet.
+- **Decision Engine** (renamed from Recommendation Engine, `src-tauri/src/decision.rs`) answers build/buy/mine/sell/research/copy/react questions from a `DecisionContext` bundling inventory + operation state. Deterministic and rule-based; LLMs may explain a decision later, never produce one. Interface-only — the live Mission Control recommendation panel (seeded `recommendations` rows) is unchanged and is this engine's working ancestor.
+
+Top-level navigation: Mission Control, Build Targets, Inventory (live), Production, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.

@@ -67,6 +67,45 @@ export interface DbHealth {
   dbPath: string;
 }
 
+// ---------------------------------------------------------------------------
+// Inventory Engine — the single data core. Every category is a view over
+// one inventory; nothing here is specific to a ship, structure, or item.
+
+export interface InventoryCategory {
+  key: string;
+  label: string;
+  sortOrder: number;
+  itemCount: number;
+}
+
+export interface InventoryItem {
+  itemId: number;
+  typeName: string;
+  categoryKey: string;
+  categoryLabel: string;
+  quantity: number;
+  locationName: string;
+  ownerName: string;
+  unitValue: number;
+  totalValue: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  allocatedOperation: string | null;
+  reservedOperation: string | null;
+  state: string;
+  stateLabel: string;
+  status: string;
+}
+
+export interface InventorySummary {
+  totalAssets: number;
+  estimatedValue: number;
+  uniqueItemTypes: number;
+  locations: number;
+  reservedValue: number;
+  availableValue: number;
+}
+
 function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -110,6 +149,42 @@ export async function selectBuildTarget(projectId: number): Promise<MissionContr
   }
   const mock = await import("../data/mock");
   return mock.selectMockTarget(projectId);
+}
+
+export async function getInventorySummary(): Promise<InventorySummary> {
+  if (inTauri()) {
+    try {
+      return await invoke<InventorySummary>("get_inventory_summary");
+    } catch (err) {
+      console.error("get_inventory_summary failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/inventoryMock");
+  return mock.getMockInventorySummary();
+}
+
+export async function listInventoryCategories(): Promise<InventoryCategory[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<InventoryCategory[]>("list_inventory_categories");
+    } catch (err) {
+      console.error("list_inventory_categories failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/inventoryMock");
+  return mock.listMockInventoryCategories();
+}
+
+export async function listInventoryItems(categoryKey?: string): Promise<InventoryItem[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<InventoryItem[]>("list_inventory_items", { categoryKey: categoryKey ?? null });
+    } catch (err) {
+      console.error("list_inventory_items failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/inventoryMock");
+  return mock.listMockInventoryItems(categoryKey);
 }
 
 export async function healthCheck(): Promise<DbHealth | null> {

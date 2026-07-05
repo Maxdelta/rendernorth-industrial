@@ -3,6 +3,7 @@
 //! generic over the selected build target — no ship is special-cased.
 
 use crate::db::Db;
+use crate::inventory::{self, models::{InventoryCategory, InventoryItem, InventorySummary}};
 use crate::models::*;
 use rusqlite::Connection;
 use tauri::State;
@@ -11,7 +12,7 @@ use tauri::State;
 pub fn health_check(db: State<'_, Db>) -> Result<DbHealth, String> {
     let version = db.schema_version()?;
     Ok(DbHealth {
-        ok: version >= 2,
+        ok: version >= 3,
         schema_version: version,
         db_path: db.path.display().to_string(),
     })
@@ -132,14 +133,19 @@ fn mission_control(conn: &Connection) -> Result<MissionControl, String> {
     let idle_bpos = metric(conn, "idle_bpos")? as i64;
     let wallet_isk = metric(conn, "wallet_isk")?;
 
-    let (name, target_type_name, overall_progress): (String, String, f64) = conn
+    let (name, target_type_name): (String, String) = conn
         .query_row(
-            "SELECT name, target_type_name, overall_progress
-             FROM build_projects WHERE project_id = ?1",
+            "SELECT name, target_type_name FROM build_projects WHERE project_id = ?1",
             [project_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| format!("selected build target missing: {e}"))?;
+
+    // Operations do not own inventory or a hardcoded percentage — Mission
+    // Control asks the Inventory Engine how covered the selected target is,
+    // every time. See InventoryRepository::coverage_for_operation for the
+    // current (tier-average) formula and its Sprint 004 successor.
+    let overall_progress = inventory::engine_for(conn).coverage_for_operation(project_id)?;
 
     let mut tiers = Vec::new();
     {
@@ -255,4 +261,29 @@ fn metric(conn: &Connection, key: &str) -> Result<f64, String> {
         |row| row.get(0),
     )
     .map_err(|e| format!("missing factory metric '{key}': {e}"))
+}
+
+// ---------------------------------------------------------------------------
+// Inventory Engine commands. Thin: every question is answered by
+// `inventory::engine_for(conn)`, never by ad hoc SQL in this file.
+
+#[tauri::command]
+pub fn get_inventory_summary(db: State<'_, Db>) -> Result<InventorySummary, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).summary()
+}
+
+#[tauri::command]
+pub fn list_inventory_categories(db: State<'_, Db>) -> Result<Vec<InventoryCategory>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).categories()
+}
+
+#[tauri::command]
+pub fn list_inventory_items(
+    db: State<'_, Db>,
+    category_key: Option<String>,
+) -> Result<Vec<InventoryItem>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).items(category_key.as_deref())
 }

@@ -6,7 +6,10 @@
 
 mod commands;
 mod db;
+mod decision;
+mod inventory;
 mod models;
+mod operation;
 
 use tauri::Manager;
 
@@ -28,7 +31,10 @@ fn main() {
             commands::health_check,
             commands::get_mission_control,
             commands::list_build_targets,
-            commands::select_build_target
+            commands::select_build_target,
+            commands::get_inventory_summary,
+            commands::list_inventory_categories,
+            commands::list_inventory_items
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

@@ -131,7 +131,10 @@ export function MissionControlPage() {
             <div className="titan-class">{target.className}</div>
             <div className="overall-row">
               <div className="overall-pct">{overallPct}%</div>
-              <div className="overall-label">Overall progress</div>
+              <div className="overall-label">
+                Inventory Coverage
+                <div className="overall-source">via Inventory Engine</div>
+              </div>
             </div>
             <SegGauge progress={target.overallProgress} />
             <div className="tiers">

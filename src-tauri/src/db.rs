@@ -10,6 +10,7 @@ use std::sync::Mutex;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_init.sql")),
     (2, include_str!("../migrations/0002_build_targets.sql")),
+    (3, include_str!("../migrations/0003_inventory_foundation.sql")),
 ];
 
 pub struct Db {
