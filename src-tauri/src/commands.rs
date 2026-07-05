@@ -1,0 +1,258 @@
+//! Tauri IPC commands. Thin layer: read from the data layer, shape DTOs.
+//! No business math lives here once real engines exist. All queries are
+//! generic over the selected build target — no ship is special-cased.
+
+use crate::db::Db;
+use crate::models::*;
+use rusqlite::Connection;
+use tauri::State;
+
+#[tauri::command]
+pub fn health_check(db: State<'_, Db>) -> Result<DbHealth, String> {
+    let version = db.schema_version()?;
+    Ok(DbHealth {
+        ok: version >= 2,
+        schema_version: version,
+        db_path: db.path.display().to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn get_mission_control(db: State<'_, Db>) -> Result<MissionControl, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    mission_control(&conn)
+}
+
+#[tauri::command]
+pub fn list_build_targets(db: State<'_, Db>) -> Result<Vec<BuildTargetSummary>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    let selected = selected_project_id(&conn)?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT project_id, name, target_type_name, status, overall_progress
+             FROM build_projects ORDER BY project_id",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            let project_id: i64 = row.get(0)?;
+            let target_type_name: String = row.get(2)?;
+            Ok(BuildTargetSummary {
+                project_id,
+                name: row.get(1)?,
+                class_name: class_from_type_name(&target_type_name),
+                status: row.get(3)?,
+                overall_progress: row.get(4)?,
+                is_selected: project_id == selected,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+/// Point Mission Control at a different build target, then return the fresh
+/// Mission Control state in one round trip.
+#[tauri::command]
+pub fn select_build_target(db: State<'_, Db>, project_id: i64) -> Result<MissionControl, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM build_projects WHERE project_id = ?1",
+            [project_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if exists == 0 {
+        return Err(format!("unknown build target: {project_id}"));
+    }
+
+    conn.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('selected_project_id', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [project_id.to_string()],
+    )
+    .map_err(|e| e.to_string())?;
+
+    mission_control(&conn)
+}
+
+// ---------------------------------------------------------------------------
+
+fn selected_project_id(conn: &Connection) -> Result<i64, String> {
+    let stored: Option<String> = conn
+        .query_row(
+            "SELECT value FROM app_meta WHERE key = 'selected_project_id'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+    if let Some(id) = stored.and_then(|v| v.parse::<i64>().ok()) {
+        return Ok(id);
+    }
+    conn.query_row(
+        "SELECT project_id FROM build_projects ORDER BY project_id LIMIT 1",
+        [],
+        |row| row.get(0),
+    )
+    .map_err(|e| format!("no build projects exist: {e}"))
+}
+
+/// Seed rows label targets as "Name (Class description)". Derive the class
+/// generically; no per-hull logic.
+fn class_from_type_name(target_type_name: &str) -> String {
+    target_type_name
+        .split_once('(')
+        .map(|(_, rest)| rest.trim_end_matches(')').trim().to_string())
+        .unwrap_or_else(|| target_type_name.to_string())
+}
+
+/// Deterministic health status derivation — documented in UI_CONSTITUTION.md.
+fn derive_status(health: f64, blocked_jobs: i64) -> &'static str {
+    if blocked_jobs > 0 {
+        "Blocked"
+    } else if health < 0.6 {
+        "Degraded"
+    } else {
+        "Operational"
+    }
+}
+
+fn mission_control(conn: &Connection) -> Result<MissionControl, String> {
+    let project_id = selected_project_id(conn)?;
+
+    let running_jobs = metric(conn, "running_jobs")? as i64;
+    let idle_characters = metric(conn, "idle_characters")? as i64;
+    let idle_bpos = metric(conn, "idle_bpos")? as i64;
+    let wallet_isk = metric(conn, "wallet_isk")?;
+
+    let (name, target_type_name, overall_progress): (String, String, f64) = conn
+        .query_row(
+            "SELECT name, target_type_name, overall_progress
+             FROM build_projects WHERE project_id = ?1",
+            [project_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|e| format!("selected build target missing: {e}"))?;
+
+    let mut tiers = Vec::new();
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT label, coverage FROM build_requirement_groups
+                 WHERE project_id = ?1 ORDER BY sort_order",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([project_id], |row| {
+                Ok(TierCoverage {
+                    label: row.get(0)?,
+                    coverage: row.get(1)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            tiers.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+
+    let mut missing_materials = Vec::new();
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT type_name, quantity, category FROM missing_materials
+                 WHERE project_id = ?1 ORDER BY quantity DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([project_id], |row| {
+                Ok(MissingMaterial {
+                    name: row.get(0)?,
+                    quantity: row.get(1)?,
+                    category: row.get(2)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            missing_materials.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+
+    // Top active recommendation for the selected target. `reason` is stored
+    // as JSON per the Determinism Doctrine: rule_id, summary, inputs.
+    let (title, reason_json): (String, String) = conn
+        .query_row(
+            "SELECT title, reason FROM recommendations
+             WHERE project_id = ?1 AND dismissed_at IS NULL
+             ORDER BY priority LIMIT 1",
+            [project_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("no recommendation for target {project_id}: {e}"))?;
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&reason_json).unwrap_or(serde_json::Value::Null);
+    let recommendation = Recommendation {
+        title,
+        reason: parsed
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&reason_json)
+            .to_string(),
+        rule_id: parsed
+            .get("rule_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unspecified")
+            .to_string(),
+        inputs: parsed
+            .get("inputs")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    };
+
+    let health = metric(conn, "factory_health")?;
+    let blocked_jobs = metric(conn, "blocked_jobs")? as i64;
+    let factory_health = FactoryHealth {
+        health,
+        status: derive_status(health, blocked_jobs).to_string(),
+        idle_slots: metric(conn, "idle_slots")? as i64,
+        blocked_jobs,
+        missing_inputs: missing_materials.len() as i64,
+        isk_locked_in_jobs: metric(conn, "isk_locked_in_jobs")?,
+        projected_finish_days: metric(conn, "projected_finish_days")? as i64,
+    };
+
+    Ok(MissionControl {
+        source: "sqlite".into(),
+        as_of: chrono::Utc::now().to_rfc3339(),
+        running_jobs,
+        idle_characters,
+        idle_bpos,
+        wallet_isk,
+        factory_health,
+        selected_target: SelectedTarget {
+            project_id,
+            name,
+            class_name: class_from_type_name(&target_type_name),
+            overall_progress,
+            tiers,
+        },
+        missing_materials,
+        recommendation,
+    })
+}
+
+fn metric(conn: &Connection, key: &str) -> Result<f64, String> {
+    conn.query_row(
+        "SELECT value FROM factory_snapshot WHERE metric = ?1",
+        [key],
+        |row| row.get(0),
+    )
+    .map_err(|e| format!("missing factory metric '{key}': {e}"))
+}

@@ -1,0 +1,53 @@
+/* RenderNorth Industrial — design tokens (see docs/UI_ARCHITECTURE.md) */
+@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+:root {
+  --void: #07090d;
+  --deck: #0d141d;
+  --plate: #121b27;
+  --plate-hi: #182434;
+  --bulkhead: #24354a;
+  --furnace: #f2a33c;
+  --furnace-dim: rgba(242, 163, 60, 0.14);
+  --coolant: #4ec6dc;
+  --coolant-dim: rgba(78, 198, 220, 0.14);
+  --nominal: #62c97f;
+  --nominal-dim: rgba(98, 201, 127, 0.14);
+  --alert: #e2554f;
+  --alert-dim: rgba(226, 85, 79, 0.16);
+  --text: #d9e1ea;
+  --text-dim: #7e8fa3;
+
+  --font-display: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Consolas", ui-monospace, monospace;
+  --font-body: system-ui, "Segoe UI", sans-serif;
+
+  --chamfer: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--void);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--furnace-dim); }
+
+:focus-visible {
+  outline: 2px solid var(--furnace);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001s !important;
+    transition-duration: 0.001s !important;
+  }
+}
