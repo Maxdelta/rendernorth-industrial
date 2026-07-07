@@ -16,6 +16,13 @@ use crate::operation::{
     self,
     models::{OperationDetail, OperationsDashboard},
 };
+use crate::production::{
+    self,
+    models::{
+        CriticalBottleneck, OperationRequirementBreakdown, RequirementCategory, RequirementDetail,
+        RequirementLine, RequirementShortage, RequirementSummary,
+    },
+};
 use crate::reservation::{
     self,
     models::{
@@ -30,7 +37,7 @@ use tauri::State;
 pub fn health_check(db: State<'_, Db>) -> Result<DbHealth, String> {
     let version = db.schema_version()?;
     Ok(DbHealth {
-        ok: version >= 6,
+        ok: version >= 7,
         schema_version: version,
         db_path: db.path.display().to_string(),
     })
@@ -432,4 +439,72 @@ pub fn get_blueprint_readiness_for_operation(
 ) -> Result<BlueprintReadiness, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     blueprint::engine_for(&conn).readiness_for_operation(operation_id)
+}
+
+// ---------------------------------------------------------------------------
+// Production Requirement Engine commands. Thin: every question is
+// answered by `production::engine_for(conn)`, never by ad hoc SQL in this
+// file. Mission Control's Production Readiness panel, the Operations
+// Workspace's Production Requirements section, and the Production page
+// all read exclusively through these.
+
+#[tauri::command]
+pub fn get_requirement_summary(db: State<'_, Db>) -> Result<RequirementSummary, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).summary()
+}
+
+#[tauri::command]
+pub fn list_requirement_lines(
+    db: State<'_, Db>,
+    operation_id: Option<i64>,
+    category_key: Option<String>,
+) -> Result<Vec<RequirementLine>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).lines(operation_id, category_key.as_deref())
+}
+
+#[tauri::command]
+pub fn get_requirement_detail(
+    db: State<'_, Db>,
+    requirement_id: i64,
+) -> Result<RequirementDetail, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).get_detail(requirement_id)
+}
+
+#[tauri::command]
+pub fn list_requirement_categories(db: State<'_, Db>) -> Result<Vec<RequirementCategory>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).categories()
+}
+
+#[tauri::command]
+pub fn get_requirement_shortages(db: State<'_, Db>) -> Result<Vec<RequirementShortage>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).shortages()
+}
+
+#[tauri::command]
+pub fn get_critical_bottlenecks(db: State<'_, Db>) -> Result<Vec<CriticalBottleneck>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).critical_bottlenecks()
+}
+
+#[tauri::command]
+pub fn get_operation_requirement_breakdown(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<OperationRequirementBreakdown, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).breakdown_for_operation(operation_id)
+}
+
+#[tauri::command]
+pub fn get_build_target_requirement_breakdown(
+    db: State<'_, Db>,
+    project_id: i64,
+) -> Result<OperationRequirementBreakdown, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).requirements_for_build_target(project_id)
 }

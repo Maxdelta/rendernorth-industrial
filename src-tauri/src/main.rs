@@ -11,6 +11,7 @@ mod decision;
 mod inventory;
 mod models;
 mod operation;
+mod production;
 mod reservation;
 
 use tauri::Manager;
@@ -50,7 +51,15 @@ fn main() {
             commands::get_blueprint_detail,
             commands::get_missing_blueprint_report,
             commands::get_blueprint_readiness_all,
-            commands::get_blueprint_readiness_for_operation
+            commands::get_blueprint_readiness_for_operation,
+            commands::get_requirement_summary,
+            commands::list_requirement_lines,
+            commands::get_requirement_detail,
+            commands::list_requirement_categories,
+            commands::get_requirement_shortages,
+            commands::get_critical_bottlenecks,
+            commands::get_operation_requirement_breakdown,
+            commands::get_build_target_requirement_breakdown
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

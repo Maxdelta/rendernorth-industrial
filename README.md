@@ -43,9 +43,9 @@ npm run dev            # http://localhost:1420
 npm run tauri build
 ```
 
-On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0006, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
+On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0007, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
 
-## Status (Sprint 006 — Blueprint Domain Foundation)
+## Status (Sprint 007 — Production Requirement Engine Foundation)
 
 **Mission Control** is the landing page: Factory Health console, Current Operation panel with a working build-target selector (five demo targets — Avatar, Navy Revelation, Apostle, Capital Construction Parts, Broadcast Node — all plain data, none special-cased), per-target missing inputs, and deterministic recommendations carrying rule id + inputs. "Inventory Coverage" is now genuinely computed by the Inventory Engine rather than a stored literal.
 
@@ -75,4 +75,12 @@ The Blueprint Engine now sits live as a sibling to Inventory, Operation, and Res
 
 Blueprint mutations (start research, start copy, acquire) are declared on `BlueprintEngine` but every one returns an explicit "architecture-only" error — nothing starts a research job, starts a copy, or acquires a blueprint yet.
 
-Top-level navigation: Mission Control, **Operations (live)**, Build Targets, Inventory (live), **Blueprints (live)**, Production, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.
+The Production Requirement Engine now sits live as a sibling to Inventory, Operation, Reservation, and Blueprint: `src-tauri/src/production/` (same four-file shape) answers "what does this operation actually require to complete?" Migration 0007 adds `production_requirements` (a material, a quantity, an operation), `production_requirement_groups` (structural category scope), and `production_requirement_sources` (provenance). Coverage, shortage, and cross-operation bottleneck detection are computed fresh every time — never a stored flag.
+
+- The **Production** page is now live (previously a placeholder): five summary cards (Total Requirements, Satisfied, Missing, Coverage %, Critical Bottlenecks), a filterable category rail + requirement tree, a Critical Bottlenecks panel, and a Shortage Report.
+- **Mission Control** gains a **Production Readiness** panel with the same five figures.
+- The **Operations Workspace** gains a live **Production Requirements** section: per-category coverage bars (Minerals, Components, Advanced Components, PI, Reaction Materials) plus overall coverage % and missing count for the selected operation.
+
+Production Requirement mutations (declare a requirement, adjust a required quantity) are declared on `ProductionEngine` but every one returns an explicit "architecture-only" error — nothing here does production math, shopping, manufacturing job logic, or scheduling.
+
+Top-level navigation: Mission Control, **Operations (live)**, Build Targets, Inventory (live), **Blueprints (live)**, **Production (live)**, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.

@@ -1,6 +1,6 @@
 # RenderNorth Industrial — Database Schema
 
-Version 1.5 — Sprint 006 (migration 0006: Blueprint domain foundation — blueprints, operation_blueprint_requirements)
+Version 1.6 — Sprint 007 (migration 0007: Production Requirement domain foundation — production_requirements, production_requirement_groups, production_requirement_sources)
 
 **Sprint 003.5 note:** no migration this sprint. The Operation Engine and
 Decision Engine (renamed from Recommendation Engine) were introduced as
@@ -18,7 +18,7 @@ Engine: SQLite (WAL mode, foreign keys ON). Migrations are numbered `NNNN_name.s
 - ISK amounts are `REAL` for MVP (revisit as integer 1/100 ISK if precision issues appear).
 - `sde_*` tables are rebuilt from the Static Data Export; `esi_*`-sourced tables are replaced per sync; `app_*`/project tables are user data and never bulk-replaced.
 
-## Live tables (migrations 0001–0006)
+## Live tables (migrations 0001–0007)
 
 ### schema_migrations
 | column | type | notes |
@@ -120,6 +120,14 @@ One-row-per-metric snapshot behind the Factory Status dashboard. Later sprints c
 
 - **blueprints**(blueprint_id PK, type_name, is_copy, me_level, te_level, runs_remaining nullable, character_id FK characters, location_id FK inventory_locations, status, inventory_item_id FK inventory_items nullable, created_at, updated_at) — a blueprint as an industrial capability record, not just an inventory item. `is_copy` distinguishes BPO (0, infinite runs, `runs_remaining` NULL) from BPC (1, finite `runs_remaining`). `status` is idle / researching / copying / in_use. `inventory_item_id` links back to the coexisting simple row in `inventory_items` where one naturally exists (migration 0003's "blueprints" category) — nullable, since several Sprint 006 blueprints (e.g. the Navy Revelation Blueprint) are new records with no such counterpart.
 - **operation_blueprint_requirements**(id PK, operation_id FK operations, type_name, required_me nullable, required_te nullable, reason) — what an operation needs, independent of whether it's owned. Missing-blueprint detection and research/copy warnings are always a live comparison against this table and `blueprints`, never a stored flag — same "derive, don't trust a stale flag" precedent as `is_blocked` and `ReservationEngine::conflicts`.
+
+### Production Requirement domain (migration 0007, live now)
+
+- **production_requirements**(id PK, operation_id FK operations, category_key FK inventory_categories, type_name, required_quantity, created_at) — the concrete ledger: what quantity of a specific material an operation requires. `type_name` matches `inventory_items.type_name` the same way `missing_materials` and `operation_blueprint_requirements` already do; owned/shortage/coverage are computed by joining on it live, never stored here.
+- **production_requirement_groups**(id PK, operation_id FK operations, category_key FK inventory_categories) — structural scope only: which categories are declared relevant to an operation. Never a source of coverage numbers — an operation can declare it needs Reaction Materials before a single line item is itemized.
+- **production_requirement_sources**(id PK, requirement_id FK production_requirements, source_kind, contributed_quantity, note) — provenance: why a requirement's quantity was justified. A requirement can in principle have more than one contributing source (a blueprint material line plus a manual buffer); this sprint seeds exactly one per requirement.
+
+Coverage, shortage, and cross-operation "critical bottleneck" detection (a material required by 2+ operations, unmet in at least one) are always computed fresh — same "derive, don't trust a stale flag" precedent as `is_blocked`, `ReservationEngine::conflicts`, and the Blueprint Engine's missing-blueprint report.
 
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)

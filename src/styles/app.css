@@ -1070,3 +1070,43 @@
 .bp-req-row:last-child { border-bottom: none; }
 
 .bp-req-reason { color: var(--text-dim); font-size: 12px; }
+
+/* ---------- Production page requirement table ---------- */
+.req-row {
+  grid-template-columns: 1.5fr 1.4fr 1fr 0.6fr 0.6fr 0.6fr 0.6fr 0.7fr;
+}
+
+/* ---------- Production Readiness (Mission Control) ---------- */
+.production-readiness-grid { grid-template-columns: repeat(5, 1fr); }
+
+@media (max-width: 1200px) {
+  .production-readiness-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- Production Requirements (Operations Workspace) ---------- */
+.category-coverage-list { display: flex; flex-direction: column; margin-top: 6px; }
+
+.category-coverage-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.7fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--bulkhead);
+  font-size: 13px;
+}
+
+.category-coverage-row:last-child { border-bottom: none; }
+
+.category-coverage-bar {
+  height: 8px;
+  background: var(--deck);
+  border: 1px solid var(--bulkhead);
+  position: relative;
+  overflow: hidden;
+}
+
+.category-coverage-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+}

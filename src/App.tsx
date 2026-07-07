@@ -6,8 +6,8 @@ import { BuildTargetsPage } from "./pages/BuildTargets";
 import { InventoryPage } from "./pages/Inventory";
 import { BlueprintsPage } from "./pages/Blueprints";
 import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
+import { ProductionPage } from "./pages/Production";
 import {
-  ProductionPage,
   IndustryPage,
   LogisticsPage,
   MarketIntelligencePage,

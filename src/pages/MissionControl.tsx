@@ -8,6 +8,7 @@ import {
   getInventoryCommitment,
   getReservationConflicts,
   getBlueprintReadinessAll,
+  getRequirementSummary,
   healthCheck,
   formatIsk,
   formatQty,
@@ -18,6 +19,7 @@ import {
   type InventoryCommitment,
   type ReservationConflict,
   type BlueprintReadiness,
+  type RequirementSummary,
   type DbHealth,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
@@ -46,6 +48,7 @@ export function MissionControlPage() {
   const [commitment, setCommitment] = useState<InventoryCommitment | null>(null);
   const [conflicts, setConflicts] = useState<ReservationConflict[] | null>(null);
   const [readiness, setReadiness] = useState<BlueprintReadiness[] | null>(null);
+  const [requirementSummary, setRequirementSummary] = useState<RequirementSummary | null>(null);
   const [targets, setTargets] = useState<BuildTargetSummary[]>([]);
   const [health, setHealth] = useState<DbHealth | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -57,6 +60,7 @@ export function MissionControlPage() {
     getInventoryCommitment().then((c) => live && setCommitment(c));
     getReservationConflicts().then((c) => live && setConflicts(c));
     getBlueprintReadinessAll().then((r) => live && setReadiness(r));
+    getRequirementSummary().then((r) => live && setRequirementSummary(r));
     listBuildTargets().then((t) => live && setTargets(t));
     healthCheck().then((h) => live && setHealth(h));
     return () => {
@@ -257,6 +261,35 @@ export function MissionControlPage() {
                 <div className={`readiness-metric ${r.warningCount > 0 ? "furnace" : "nominal"}`}>{r.warningCount}</div>
               </Link>
             ))}
+          </div>
+        </Panel>
+      )}
+
+      {requirementSummary && (
+        <Panel title="Production Readiness" keel={requirementSummary.criticalBottleneckCount > 0 ? "alert" : "nominal"} className="dash-hero">
+          <div className="health-grid production-readiness-grid">
+            <div className="health-cell">
+              <div className="stat-label">Total Requirements</div>
+              <div className="stat-value coolant">{requirementSummary.totalRequirements}</div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Satisfied</div>
+              <div className="stat-value nominal">{requirementSummary.satisfied}</div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Missing</div>
+              <div className={`stat-value ${requirementSummary.missing > 0 ? "alert" : "nominal"}`}>{requirementSummary.missing}</div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Coverage %</div>
+              <div className="stat-value coolant">{Math.round(requirementSummary.coveragePercent)}%</div>
+            </div>
+            <div className="health-cell">
+              <div className="stat-label">Critical Bottlenecks</div>
+              <div className={`stat-value ${requirementSummary.criticalBottleneckCount > 0 ? "alert" : "nominal"}`}>
+                {requirementSummary.criticalBottleneckCount}
+              </div>
+            </div>
           </div>
         </Panel>
       )}

@@ -1,18 +1,5 @@
 import { PlaceholderPage } from "../components/PlaceholderPage";
 
-export const ProductionPage = () => (
-  <PlaceholderPage
-    title="Production"
-    mission="Everything that turns materials into hulls: run planning and buildable-today. Blueprint ownership and readiness now live on their own Blueprints page (Sprint 006) — this module covers turning owned blueprints into scheduled production."
-    planned={[
-      "Manufacturing planner: ME/TE-aware run proposals per character and facility",
-      "Buildable-today calculator from live inventory",
-      "Component line balancing for the selected build target",
-    ]}
-    sprint="Sprint 003–004"
-  />
-);
-
 export const IndustryPage = () => (
   <PlaceholderPage
     title="Industry"

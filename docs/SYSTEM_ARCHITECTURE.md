@@ -13,7 +13,7 @@ Version 1.0 — Sprint 001
 | Auth | CCP ESI OAuth 2.0 + PKCE via system browser | Sprint 002+ |
 | Static data | EVE SDE import pipeline | Sprint 003+ |
 
-## 1a. Domain Hierarchy (refined 003, extended 003.5, Operation Engine live in 004, Reservation Engine live in 005, Blueprint Engine live in 006)
+## 1a. Domain Hierarchy (refined 003, extended 003.5, Operation Engine live in 004, Reservation Engine live in 005, Blueprint Engine live in 006, Production Requirement Engine live in 007)
 
 ```
 Mission Control
@@ -34,13 +34,19 @@ Inventory Engine            (the single source of truth for everything owned)
 Blueprint Engine             (sibling to the above — owns industrial capability:
                               BPO/BPC, ME/TE, runs, research/copy status,
                               blueprint readiness by operation)
+
+Production Requirement Engine (sibling to the above — owns required inputs:
+                              what quantity of what material an operation
+                              needs, coverage/shortage always derived live
+                              against Inventory Engine data)
 ```
 
-Blueprint Engine sits alongside Inventory, Operation, and Reservation
-rather than inside the vertical chain above — an Operation's blueprint
-readiness is a question answered independently of whether its inventory
-is reserved, the same way its reservation state is independent of its own
-lifecycle fields.
+Blueprint Engine and Production Requirement Engine sit alongside
+Inventory, Operation, and Reservation rather than inside the vertical
+chain above — an Operation's blueprint readiness and requirement coverage
+are questions answered independently of each other and of whether its
+inventory is reserved, the same way its reservation state is independent
+of its own lifecycle fields.
 
 **Operations do not own inventory.** An Operation (tracked today as a row
 in `build_projects`; conceptually owned by the Operation Engine) never has
@@ -114,20 +120,40 @@ a stored flag. Mutations (start research, start copy, acquire) are
 declared on `BlueprintEngine` but each returns an explicit
 "architecture-only" error.
 
+**The Production Requirement Engine owns required inputs** — "what does
+this operation actually require to complete?" As of Sprint 007 it is
+real: `src-tauri/src/production/` (the same four-file shape), a sibling
+module to `inventory/`, `operation/`, `reservation/`, and `blueprint/`.
+Migration 0007 adds `production_requirements` (a material, a quantity, an
+operation), `production_requirement_groups` (structural category scope
+per operation — never a source of computed numbers), and
+`production_requirement_sources` (provenance: why a requirement's
+quantity was justified). Coverage, shortage, and cross-operation
+"critical bottleneck" detection are computed in Rust over rows fetched
+from SQLite rather than in increasingly complex nested queries — always
+derived fresh, never a stored flag. `requirements_for_build_target`
+forwards to the same operation-scoped breakdown query rather than
+duplicating it, since operations 1–5 share id space with
+`build_projects.project_id`. Mutations (declare a requirement, adjust a
+required quantity) are declared on `ProductionEngine` but each returns an
+explicit "architecture-only" error.
+
 ## 2. Layer Model
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ PRESENTATION (React/TS)                                     │
 │ Mission Control · Operations · Build Targets · Inventory ·  │
-│ Blueprints · Production · Industry · Logistics · Market     │
-│ Intelligence · Planning · Intelligence · Reports · Settings │
+│ Blueprints · Production (live) · Industry · Logistics ·     │
+│ Market Intelligence · Planning · Intelligence · Reports ·   │
+│ Settings                                                     │
 └──────────────▲──────────────────────────────────────────────┘
                │ Tauri IPC (invoke) — typed DTOs only
 ┌──────────────┴──────────────────────────────────────────────┐
 │ BUSINESS LOGIC (Rust)                                       │
-│ Production Engine · Inventory Engine · Blueprint Engine ·   │
-│ Shopping Engine · Cost Engine · Decision Engine              │
+│ Production Requirement Engine · Inventory Engine ·          │
+│ Blueprint Engine · Shopping Engine · Cost Engine ·           │
+│ Decision Engine                                              │
 └──────────────▲──────────────────────────────────────────────┘
                │ Repository traits
 ┌──────────────┴──────────────────────────────────────────────┐
@@ -167,6 +193,7 @@ Select Build Target → Load Blueprint Requirements → Calculate Materials
 | **Operation Engine** | Owns an Operation's identity: goal, deadline, priority, notes, target, timeline, progress, dependencies. Never touches inventory directly — only requests reservations (once the Reservation Engine is real). **Live (reads) as of Sprint 004** — `src-tauri/src/operation/` (models/repository/provider/engine, mirroring Inventory); `OperationEngine` also exposes mutation methods that currently all return "architecture-only" errors. `OperationQuery` (the narrow read-only seam for the Decision Engine) is implemented by `OperationEngine` itself. | 004 (reads), later (mutations) |
 | **Reservation Engine** | Owns who owns inventory: reservation quantities, reservation history, reservation conflicts (detect only, never resolves). **Live (reads) as of Sprint 005** — `src-tauri/src/reservation/` (a sibling module to `inventory/`/`operation/`, mirroring their shape); mutation methods (reserve/release/transfer) currently all return "architecture-only" errors. | 005 (reads), later (mutations) |
 | **Blueprint Engine** | Owns industrial capability: BPO vs BPC, ME/TE level, runs remaining, research/copy status, blueprint readiness (owned/missing/warnings) by operation. Never touches inventory, reservation, or operation-lifecycle tables. **Live (reads) as of Sprint 006** — `src-tauri/src/blueprint/` (a sibling module, same four-file shape); mutation methods (start research, start copy, acquire) currently all return "architecture-only" errors. | 006 (reads), later (mutations) |
+| **Production Requirement Engine** | Owns required inputs: what quantity of what material an operation needs, coverage/shortage/critical-bottleneck detection, always derived live against Inventory Engine data. Never touches inventory, reservation, operation-lifecycle, or blueprint tables directly. **Live (reads) as of Sprint 007** — `src-tauri/src/production/` (a sibling module, same four-file shape); mutation methods (declare requirement, adjust quantity) currently all return "architecture-only" errors. | 007 (reads), later (mutations) |
 | Build Target Engine | Pipeline orchestrator: resolve a selected target to its blueprint, drive the stages below, emit a build plan | 004 |
 | Production Engine | Expand any blueprint into its material tree (ME/TE aware, recursive through components/reactions), map jobs to build projects, compute buildable-today | 004 |
 | Shopping Engine | Diff requirements vs inventory vs in-progress jobs → missing-inputs list with acquisition suggestions | 004 |
@@ -236,7 +263,8 @@ rendernorth-industrial/
 1d. **003.5** — Architecture refinement: Operation Engine introduced as a first-class concept; Recommendation Engine renamed to Decision Engine (`DecisionContext`, `DecisionKind`, `DecisionRule`). Interfaces only — no schema change, no production math, no live reservations. *(done)*
 1e. **004** — Operation Domain Foundation: migration 0004 (`operations`, `operation_timeline`, `operation_dependencies`); real `operation/` module with live reads (list, priority queue, blocked detection — derived from dependencies, not a hand-set flag — upcoming completions, health, detail); Mission Control becomes an Operations Dashboard; new Operations Workspace page. Mutations remain architecture-only; no production math, reservation logic, decision logic, ESI, or blueprint/shopping calculations. *(done)*
 1f. **005** — Reservation Engine Foundation: migration 0005 (additive `operation_id` column on `inventory_reservations`, plus `reservation_events` and `reservation_conflicts`); real `reservation/` module with live reads (summary, detail, history, conflict detection, inventory commitment, per-operation reservation totals). Mission Control gains an Inventory Commitment panel and a Reservation Conflicts panel; the Operations Workspace gains a live Reservations section; the Inventory page gains Reserved/Free/Available columns per item. Mutations (reserve/release/transfer) remain architecture-only; no production math, ESI, scheduling, manufacturing, shopping, or Decision Engine rules. *(done)*
-1g. **006** — Blueprint Domain Foundation: migration 0006 (`blueprints`, `operation_blueprint_requirements`); real `blueprint/` module with live reads (list, detail, summary, missing-blueprint report, per-operation and cross-operation readiness). New top-level Blueprints page; Mission Control gains a Blueprint Readiness panel; the Operations Workspace gains a live Blueprints section (required/owned/missing/research-copy warnings). Mutations (research, copy, acquire) remain architecture-only; no ESI, SDE import, production math, full build trees, manufacturing job logic, shopping logic, or decision rules. *(this sprint)*
+1g. **006** — Blueprint Domain Foundation: migration 0006 (`blueprints`, `operation_blueprint_requirements`); real `blueprint/` module with live reads (list, detail, summary, missing-blueprint report, per-operation and cross-operation readiness). New top-level Blueprints page; Mission Control gains a Blueprint Readiness panel; the Operations Workspace gains a live Blueprints section (required/owned/missing/research-copy warnings). Mutations (research, copy, acquire) remain architecture-only; no ESI, SDE import, production math, full build trees, manufacturing job logic, shopping logic, or decision rules. *(done)*
+1h. **007** — Production Requirement Engine Foundation: migration 0007 (`production_requirements`, `production_requirement_groups`, `production_requirement_sources`); real `production/` module with live reads (lines, detail, categories, summary, shortages, cross-operation critical bottlenecks, per-operation and build-target breakdown). Production page becomes live (requirement tree, category filters, shortage report, critical bottlenecks); Mission Control gains a Production Readiness panel; the Operations Workspace gains a live Production Requirements section (per-category coverage bars). Mutations (declare requirement, adjust quantity) remain architecture-only; no ESI, SDE import, shopping logic, manufacturing jobs, production scheduling, or Decision Engine rules. *(this sprint)*
 2. **003a/004a** — ESI OAuth (PKCE), character management, token storage.
 3. **003** — SDE import + Asset/Blueprint sync + Inventory Engine.
 4. **004** — Industry jobs sync, Production + Shopping engines, Build Target Engine + Build Tracker on live data.

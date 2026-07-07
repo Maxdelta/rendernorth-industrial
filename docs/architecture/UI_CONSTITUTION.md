@@ -1,6 +1,6 @@
 # RenderNorth Industrial — UI Constitution
 
-Version 1.4 — Sprint 006 (adds the linkable summary row pattern)
+Version 1.5 — Sprint 007 (adds the inline coverage bar pattern)
 Status: Ratified. The design system's law. `src/styles/theme.css` implements it; where code and this document disagree, this document wins and the code is a bug.
 
 ## 1. What the UI should feel like
@@ -120,6 +120,13 @@ Factory status derivation is code + constitution: `blocked_jobs > 0 → Blocked`
 - A row that navigates elsewhere (e.g. Mission Control's Blueprint Readiness rows to the Operations Workspace) keeps the exact visual rhythm of a static data row — same padding, same hairline divider, same mono metric columns — and adds only a hover surface shift (`--plate-hi`), never an underline, arrow glyph, or "view" label bolted on.
 - Text stays default color (`--text`), not `--coolant`, so a linkable row doesn't visually compete with genuine telemetry links elsewhere on the same screen; the hover state alone communicates interactivity.
 - Never mix linkable and non-linkable rows in the same list without a clear reason — a list is either "click any row to go somewhere" or it isn't.
+
+## 10e. Inline coverage bars (Production Requirement pattern, Sprint 007)
+
+- A coverage bar embedded inside a data row (as opposed to `TierGauge`, which anchors a whole panel) stays compact: an 8px flat track on `--deck`, no border-radius, same as every other gauge in the app.
+- Fill color follows the same three-tier threshold as `TierGauge` — ≥100% `--nominal`, ≥60% `--furnace`, below `--alert` — so a person never has to learn a second color meaning for "coverage" depending on where it appears.
+- The percentage label sits to the right of the bar in mono, colored to match the fill, with a short qualifier ("N short") appended only when relevant — never a separate badge or icon.
+- Inline bars never animate on data change within the same session; they render at their final width immediately, since they typically appear already-populated in a list rather than growing from zero like a hero progress gauge does on first paint.
 
 ## 11. Dashboard panel rules
 

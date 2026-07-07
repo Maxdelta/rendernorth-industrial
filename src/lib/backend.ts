@@ -294,6 +294,86 @@ export interface MissingBlueprintReport {
   requiredByOperations: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Production Requirement domain — a sibling to Inventory, Operation,
+// Reservation, and Blueprint. Production Requirement Engine owns required
+// inputs: what an operation actually needs to complete. Coverage and
+// shortage are always derived live against inventory — read-only this
+// sprint, nothing here declares or adjusts a requirement.
+
+export interface RequirementLine {
+  requirementId: number;
+  operationId: number;
+  operationGoal: string;
+  categoryKey: string;
+  categoryLabel: string;
+  typeName: string;
+  requiredQuantity: number;
+  ownedQuantity: number;
+  reservedForOperation: number;
+  shortage: number;
+  coverageFraction: number;
+  isSatisfied: boolean;
+}
+
+export interface RequirementSource {
+  sourceKind: string;
+  contributedQuantity: number;
+  note: string;
+}
+
+export interface RequirementDetail {
+  line: RequirementLine;
+  sources: RequirementSource[];
+}
+
+export interface RequirementCategory {
+  categoryKey: string;
+  categoryLabel: string;
+  sortOrder: number;
+}
+
+export interface RequirementShortage {
+  typeName: string;
+  operationGoal: string;
+  requiredQuantity: number;
+  ownedQuantity: number;
+  shortage: number;
+}
+
+export interface CriticalBottleneck {
+  typeName: string;
+  operationsRequiring: string[];
+  ownedQuantity: number;
+}
+
+export interface RequirementSummary {
+  totalRequirements: number;
+  satisfied: number;
+  missing: number;
+  coveragePercent: number;
+  criticalBottleneckCount: number;
+}
+
+export interface CategoryCoverage {
+  categoryKey: string;
+  categoryLabel: string;
+  requiredTotal: number;
+  ownedTotal: number;
+  coverageFraction: number;
+  missingCount: number;
+}
+
+export interface OperationRequirementBreakdown {
+  operationId: number;
+  operationGoal: string;
+  categories: CategoryCoverage[];
+  lines: RequirementLine[];
+  totalRequirements: number;
+  missingCount: number;
+  coveragePercent: number;
+}
+
 function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -541,6 +621,93 @@ export async function getBlueprintReadinessForOperation(operationId: number): Pr
   }
   const mock = await import("../data/blueprintMock");
   return mock.getMockBlueprintReadinessForOperation(operationId);
+}
+
+export async function getRequirementSummary(): Promise<RequirementSummary> {
+  if (inTauri()) {
+    try {
+      return await invoke<RequirementSummary>("get_requirement_summary");
+    } catch (err) {
+      console.error("get_requirement_summary failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/productionMock");
+  return mock.getMockRequirementSummary();
+}
+
+export async function listRequirementLines(operationId?: number, categoryKey?: string): Promise<RequirementLine[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<RequirementLine[]>("list_requirement_lines", {
+        operationId: operationId ?? null,
+        categoryKey: categoryKey ?? null,
+      });
+    } catch (err) {
+      console.error("list_requirement_lines failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/productionMock");
+  return mock.listMockRequirementLines(operationId, categoryKey);
+}
+
+export async function getRequirementDetail(requirementId: number): Promise<RequirementDetail> {
+  if (inTauri()) {
+    try {
+      return await invoke<RequirementDetail>("get_requirement_detail", { requirementId });
+    } catch (err) {
+      console.error("get_requirement_detail failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/productionMock");
+  return mock.getMockRequirementDetail(requirementId);
+}
+
+export async function listRequirementCategories(): Promise<RequirementCategory[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<RequirementCategory[]>("list_requirement_categories");
+    } catch (err) {
+      console.error("list_requirement_categories failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/productionMock");
+  return mock.listMockRequirementCategories();
+}
+
+export async function getRequirementShortages(): Promise<RequirementShortage[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<RequirementShortage[]>("get_requirement_shortages");
+    } catch (err) {
+      console.error("get_requirement_shortages failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/productionMock");
+  return mock.getMockRequirementShortages();
+}
+
+export async function getCriticalBottlenecks(): Promise<CriticalBottleneck[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<CriticalBottleneck[]>("get_critical_bottlenecks");
+    } catch (err) {
+      console.error("get_critical_bottlenecks failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/productionMock");
+  return mock.getMockCriticalBottlenecks();
+}
+
+export async function getOperationRequirementBreakdown(operationId: number): Promise<OperationRequirementBreakdown> {
+  if (inTauri()) {
+    try {
+      return await invoke<OperationRequirementBreakdown>("get_operation_requirement_breakdown", { operationId });
+    } catch (err) {
+      console.error("get_operation_requirement_breakdown failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/productionMock");
+  return mock.getMockOperationRequirementBreakdown(operationId);
 }
 
 export async function healthCheck(): Promise<DbHealth | null> {

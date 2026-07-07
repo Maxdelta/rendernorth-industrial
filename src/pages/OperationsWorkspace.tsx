@@ -5,11 +5,13 @@ import {
   getOperationDetail,
   getOperationReservations,
   getBlueprintReadinessForOperation,
+  getOperationRequirementBreakdown,
   formatQty,
   type OperationSummary,
   type OperationDetail,
   type OperationReservations,
   type BlueprintReadiness,
+  type OperationRequirementBreakdown,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
 
@@ -20,7 +22,7 @@ function statusTone(status: string, isBlocked: boolean): "nominal" | "furnace" |
   return "furnace";
 }
 
-const RESERVED_SECTIONS = ["Production", "Inventory", "Shopping", "Cost", "Timeline"];
+const RESERVED_SECTIONS = ["Inventory", "Shopping", "Cost", "Timeline"];
 
 export function OperationsWorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -28,6 +30,7 @@ export function OperationsWorkspacePage() {
   const [detail, setDetail] = useState<OperationDetail | null>(null);
   const [reservations, setReservations] = useState<OperationReservations | null>(null);
   const [blueprintReadiness, setBlueprintReadiness] = useState<BlueprintReadiness | null>(null);
+  const [requirementBreakdown, setRequirementBreakdown] = useState<OperationRequirementBreakdown | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -52,6 +55,7 @@ export function OperationsWorkspacePage() {
     getOperationDetail(selectedId).then((d) => live && setDetail(d));
     getOperationReservations(selectedId).then((r) => live && setReservations(r));
     getBlueprintReadinessForOperation(selectedId).then((r) => live && setBlueprintReadiness(r));
+    getOperationRequirementBreakdown(selectedId).then((r) => live && setRequirementBreakdown(r));
     return () => {
       live = false;
     };
@@ -224,11 +228,62 @@ export function OperationsWorkspacePage() {
               </>
             )}
 
+            {requirementBreakdown && (
+              <>
+                <Panel
+                  title="Production Requirements"
+                  keel={requirementBreakdown.missingCount > 0 ? "alert" : "nominal"}
+                  className="dash-hero"
+                >
+                  {requirementBreakdown.categories.length === 0 ? (
+                    <p className="ph-mission">No production requirements recorded for this operation.</p>
+                  ) : (
+                    <>
+                      <div className="res-summary-grid" style={{ marginBottom: 14 }}>
+                        <div className="res-summary-cell">
+                          <div className="res-summary-label">Coverage</div>
+                          <div className="res-summary-value">{Math.round(requirementBreakdown.coveragePercent)}%</div>
+                        </div>
+                        <div className="res-summary-cell">
+                          <div className="res-summary-label">Missing</div>
+                          <div className={`res-summary-value ${requirementBreakdown.missingCount > 0 ? "alert" : "nominal"}`}>
+                            {requirementBreakdown.missingCount}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="category-coverage-list">
+                        {requirementBreakdown.categories.map((c) => {
+                          const pct = Math.round(c.coverageFraction * 100);
+                          const tone = pct >= 100 ? "var(--nominal)" : pct >= 60 ? "var(--furnace)" : "var(--alert)";
+                          return (
+                            <div className="category-coverage-row" key={c.categoryKey}>
+                              <div>{c.categoryLabel}</div>
+                              <div className="category-coverage-bar">
+                                <div
+                                  className="category-coverage-fill"
+                                  style={{ width: `${Math.min(pct, 100)}%`, background: tone }}
+                                />
+                              </div>
+                              <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", color: tone }}>
+                                {pct}%{c.missingCount > 0 ? ` (${c.missingCount} short)` : ""}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </Panel>
+
+                <div style={{ height: 14 }} />
+              </>
+            )}
+
             <Panel title="Reserved for future sprints" keel="coolant">
               <p className="ph-mission">
-                Every operation will eventually carry a production plan, an inventory view scoped to what it has
-                reserved, a generated shopping list, and running cost tracking. These sections exist as
-                architectural placeholders only — no implementation yet.
+                Every operation will eventually carry an inventory view scoped to what it has reserved, a generated
+                shopping list, and running cost tracking. These sections exist as architectural placeholders
+                only — no implementation yet.
               </p>
               <div className="ops-reserved-grid">
                 {RESERVED_SECTIONS.map((s) => (
