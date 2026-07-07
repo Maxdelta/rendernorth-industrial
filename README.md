@@ -43,9 +43,9 @@ npm run dev            # http://localhost:1420
 npm run tauri build
 ```
 
-On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0005, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
+On first launch the Rust core creates `rendernorth.db` in the app data directory (`%APPDATA%\com.rendernorth.industrial\` on Windows), applies migrations 0001–0006, and seeds the demo dataset. The dashboard footer shows the live data source (`sqlite` under Tauri, `mock` in a plain browser) plus the schema version from `health_check`.
 
-## Status (Sprint 005 — Reservation Engine Foundation)
+## Status (Sprint 006 — Blueprint Domain Foundation)
 
 **Mission Control** is the landing page: Factory Health console, Current Operation panel with a working build-target selector (five demo targets — Avatar, Navy Revelation, Apostle, Capital Construction Parts, Broadcast Node — all plain data, none special-cased), per-target missing inputs, and deterministic recommendations carrying rule id + inputs. "Inventory Coverage" is now genuinely computed by the Inventory Engine rather than a stored literal.
 
@@ -67,4 +67,12 @@ The Reservation Engine now sits live between Inventory and Operations: `src-taur
 
 Reservation mutations (reserve/release/transfer) are declared on `ReservationEngine` but every one returns an explicit "architecture-only" error — nothing creates, releases, or transfers a reservation yet.
 
-Top-level navigation: Mission Control, **Operations (live)**, Build Targets, Inventory (live), Production, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.
+The Blueprint Engine now sits live as a sibling to Inventory, Operation, and Reservation: `src-tauri/src/blueprint/` (same four-file shape) reads blueprint records, summary counts, a global missing-blueprint report, and per-operation/cross-operation readiness — blueprints are industrial capability records (BPO vs BPC, ME/TE, runs remaining, research/copy status), not just inventory items. Migration 0006 adds `blueprints` and `operation_blueprint_requirements`; the existing "blueprints" category rows in `inventory_items` (migration 0003) are untouched, with a handful of new `blueprints` rows linking back to them where a natural match exists.
+
+- A new **Blueprints** page (top-level nav) shows Total Blueprints, BPO/BPC counts, Research Complete, Copies (total remaining BPC runs), and Missing For Operations, plus the full blueprint library table and a Missing Blueprint Report.
+- **Mission Control** gains a **Blueprint Readiness** panel: owned/missing/warning counts per operation, linking through to the Operations Workspace.
+- The **Operations Workspace** gains a live **Blueprints** section: required blueprints, owned count, missing count, and research/copy warnings (an owned blueprint that's currently mid-research or mid-copy — a softer signal than missing).
+
+Blueprint mutations (start research, start copy, acquire) are declared on `BlueprintEngine` but every one returns an explicit "architecture-only" error — nothing starts a research job, starts a copy, or acquires a blueprint yet.
+
+Top-level navigation: Mission Control, **Operations (live)**, Build Targets, Inventory (live), **Blueprints (live)**, Production, Industry, Logistics, Market Intelligence, Planning, Intelligence, Reports, Settings. No ESI integration yet — by design.

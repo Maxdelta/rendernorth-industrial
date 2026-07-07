@@ -4,10 +4,12 @@ import {
   getOperationsDashboard,
   getOperationDetail,
   getOperationReservations,
+  getBlueprintReadinessForOperation,
   formatQty,
   type OperationSummary,
   type OperationDetail,
   type OperationReservations,
+  type BlueprintReadiness,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
 
@@ -18,13 +20,14 @@ function statusTone(status: string, isBlocked: boolean): "nominal" | "furnace" |
   return "furnace";
 }
 
-const RESERVED_SECTIONS = ["Production", "Inventory", "Blueprints", "Shopping", "Cost", "Timeline"];
+const RESERVED_SECTIONS = ["Production", "Inventory", "Shopping", "Cost", "Timeline"];
 
 export function OperationsWorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [operations, setOperations] = useState<OperationSummary[]>([]);
   const [detail, setDetail] = useState<OperationDetail | null>(null);
   const [reservations, setReservations] = useState<OperationReservations | null>(null);
+  const [blueprintReadiness, setBlueprintReadiness] = useState<BlueprintReadiness | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -48,6 +51,7 @@ export function OperationsWorkspacePage() {
     let live = true;
     getOperationDetail(selectedId).then((d) => live && setDetail(d));
     getOperationReservations(selectedId).then((r) => live && setReservations(r));
+    getBlueprintReadinessForOperation(selectedId).then((r) => live && setBlueprintReadiness(r));
     return () => {
       live = false;
     };
@@ -164,11 +168,67 @@ export function OperationsWorkspacePage() {
               </>
             )}
 
+            {blueprintReadiness && (
+              <>
+                <Panel
+                  title="Blueprints"
+                  keel={blueprintReadiness.missingCount > 0 ? "alert" : blueprintReadiness.warningCount > 0 ? "furnace" : "nominal"}
+                  className="dash-hero"
+                >
+                  {blueprintReadiness.required.length === 0 ? (
+                    <p className="ph-mission">No blueprint requirements recorded for this operation.</p>
+                  ) : (
+                    <>
+                      <div className="res-summary-grid" style={{ marginBottom: 14 }}>
+                        <div className="res-summary-cell">
+                          <div className="res-summary-label">Required</div>
+                          <div className="res-summary-value">{blueprintReadiness.required.length}</div>
+                        </div>
+                        <div className="res-summary-cell">
+                          <div className="res-summary-label">Owned</div>
+                          <div className="res-summary-value nominal">{blueprintReadiness.ownedCount}</div>
+                        </div>
+                        <div className="res-summary-cell">
+                          <div className="res-summary-label">Missing</div>
+                          <div className={`res-summary-value ${blueprintReadiness.missingCount > 0 ? "alert" : "nominal"}`}>
+                            {blueprintReadiness.missingCount}
+                          </div>
+                        </div>
+                        <div className="res-summary-cell">
+                          <div className="res-summary-label">Research/Copy Warnings</div>
+                          <div className={`res-summary-value ${blueprintReadiness.warningCount > 0 ? "furnace" : "nominal"}`}>
+                            {blueprintReadiness.warningCount}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bp-req-list">
+                        {blueprintReadiness.required.map((req) => (
+                          <div className="bp-req-row" key={req.typeName}>
+                            <div>{req.typeName}</div>
+                            <div className="bp-req-reason">{req.reason}</div>
+                            <div
+                              className={`op-status ${
+                                !req.isOwned ? "alert" : req.warningStatus ? "furnace" : "nominal"
+                              }`}
+                            >
+                              {!req.isOwned ? "Missing" : req.warningStatus ? req.warningStatus.replace(/_/g, " ") : "Owned"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </Panel>
+
+                <div style={{ height: 14 }} />
+              </>
+            )}
+
             <Panel title="Reserved for future sprints" keel="coolant">
               <p className="ph-mission">
                 Every operation will eventually carry a production plan, an inventory view scoped to what it has
-                reserved, its blueprint chain, a generated shopping list, running cost tracking, and a real
-                timeline. These sections exist as architectural placeholders only — no implementation yet.
+                reserved, a generated shopping list, and running cost tracking. These sections exist as
+                architectural placeholders only — no implementation yet.
               </p>
               <div className="ops-reserved-grid">
                 {RESERVED_SECTIONS.map((s) => (

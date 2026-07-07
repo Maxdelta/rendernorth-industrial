@@ -4,6 +4,7 @@ import { TopBar } from "./components/TopBar";
 import { MissionControlPage } from "./pages/MissionControl";
 import { BuildTargetsPage } from "./pages/BuildTargets";
 import { InventoryPage } from "./pages/Inventory";
+import { BlueprintsPage } from "./pages/Blueprints";
 import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
 import {
   ProductionPage,
@@ -29,6 +30,7 @@ export default function App() {
               <Route path="/operations" element={<OperationsWorkspacePage />} />
               <Route path="/targets" element={<BuildTargetsPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
+              <Route path="/blueprints" element={<BlueprintsPage />} />
               <Route path="/production" element={<ProductionPage />} />
               <Route path="/industry" element={<IndustryPage />} />
               <Route path="/logistics" element={<LogisticsPage />} />

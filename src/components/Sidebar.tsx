@@ -10,6 +10,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/operations", label: "Operations" },
   { to: "/targets", label: "Build Targets" },
   { to: "/inventory", label: "Inventory" },
+  { to: "/blueprints", label: "Blueprints" },
   { to: "/production", label: "Production" },
   { to: "/industry", label: "Industry" },
   { to: "/logistics", label: "Logistics" },

@@ -2,6 +2,13 @@
 //! No business math lives here once real engines exist. All queries are
 //! generic over the selected build target — no ship is special-cased.
 
+use crate::blueprint::{
+    self,
+    models::{
+        BlueprintDetail, BlueprintReadiness, BlueprintRecord, BlueprintSummary,
+        MissingBlueprintReport,
+    },
+};
 use crate::db::Db;
 use crate::inventory::{self, models::{InventoryCategory, InventoryItem, InventorySummary}};
 use crate::models::*;
@@ -23,7 +30,7 @@ use tauri::State;
 pub fn health_check(db: State<'_, Db>) -> Result<DbHealth, String> {
     let version = db.schema_version()?;
     Ok(DbHealth {
-        ok: version >= 5,
+        ok: version >= 6,
         schema_version: version,
         db_path: db.path.display().to_string(),
     })
@@ -374,4 +381,55 @@ pub fn get_operation_reservations(
 ) -> Result<OperationReservations, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     reservation::engine_for(&conn).operation_reservations(operation_id)
+}
+
+// ---------------------------------------------------------------------------
+// Blueprint Engine commands. Thin: every question is answered by
+// `blueprint::engine_for(conn)`, never by ad hoc SQL in this file. The
+// Blueprints page, Mission Control's Blueprint Readiness panel, and the
+// Operations Workspace's Blueprints section all read exclusively through
+// these.
+
+#[tauri::command]
+pub fn get_blueprint_summary(db: State<'_, Db>) -> Result<BlueprintSummary, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::engine_for(&conn).summary()
+}
+
+#[tauri::command]
+pub fn list_blueprints(db: State<'_, Db>) -> Result<Vec<BlueprintRecord>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::engine_for(&conn).list()
+}
+
+#[tauri::command]
+pub fn get_blueprint_detail(
+    db: State<'_, Db>,
+    blueprint_id: i64,
+) -> Result<BlueprintDetail, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::engine_for(&conn).get_detail(blueprint_id)
+}
+
+#[tauri::command]
+pub fn get_missing_blueprint_report(
+    db: State<'_, Db>,
+) -> Result<Vec<MissingBlueprintReport>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::engine_for(&conn).missing_report()
+}
+
+#[tauri::command]
+pub fn get_blueprint_readiness_all(db: State<'_, Db>) -> Result<Vec<BlueprintReadiness>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::engine_for(&conn).readiness_all()
+}
+
+#[tauri::command]
+pub fn get_blueprint_readiness_for_operation(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<BlueprintReadiness, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::engine_for(&conn).readiness_for_operation(operation_id)
 }

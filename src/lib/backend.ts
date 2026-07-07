@@ -238,6 +238,62 @@ export interface OperationReservations {
   missingReservations: number;
 }
 
+// ---------------------------------------------------------------------------
+// Blueprint domain — a sibling to Inventory, Operation, and Reservation.
+// Blueprint Engine owns industrial capability: what blueprints exist,
+// BPO/BPC, ME/TE, runs remaining, research/copy status, and whether an
+// operation's required blueprints are actually on hand. Read-only this
+// sprint — nothing here starts research, starts a copy, or acquires one.
+
+export interface BlueprintRecord {
+  blueprintId: number;
+  typeName: string;
+  isCopy: boolean;
+  meLevel: number;
+  teLevel: number;
+  runsRemaining: number | null;
+  ownerName: string;
+  locationName: string;
+  /** idle / researching / copying / in_use */
+  status: string;
+  linkedOperation: string | null;
+}
+
+export interface BlueprintDetail {
+  record: BlueprintRecord;
+  requiredBy: string[];
+}
+
+export interface BlueprintSummary {
+  totalBlueprints: number;
+  bpoCount: number;
+  bpcCount: number;
+  researchComplete: number;
+  copies: number;
+  missingForOperations: number;
+}
+
+export interface BlueprintRequirement {
+  typeName: string;
+  reason: string;
+  isOwned: boolean;
+  warningStatus: string | null;
+}
+
+export interface BlueprintReadiness {
+  operationId: number;
+  operationGoal: string;
+  required: BlueprintRequirement[];
+  ownedCount: number;
+  missingCount: number;
+  warningCount: number;
+}
+
+export interface MissingBlueprintReport {
+  typeName: string;
+  requiredByOperations: string[];
+}
+
 function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -413,6 +469,78 @@ export async function getOperationReservations(operationId: number): Promise<Ope
   }
   const mock = await import("../data/reservationMock");
   return mock.getMockOperationReservations(operationId);
+}
+
+export async function getBlueprintSummary(): Promise<BlueprintSummary> {
+  if (inTauri()) {
+    try {
+      return await invoke<BlueprintSummary>("get_blueprint_summary");
+    } catch (err) {
+      console.error("get_blueprint_summary failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/blueprintMock");
+  return mock.getMockBlueprintSummary();
+}
+
+export async function listBlueprints(): Promise<BlueprintRecord[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<BlueprintRecord[]>("list_blueprints");
+    } catch (err) {
+      console.error("list_blueprints failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/blueprintMock");
+  return mock.listMockBlueprints();
+}
+
+export async function getBlueprintDetail(blueprintId: number): Promise<BlueprintDetail> {
+  if (inTauri()) {
+    try {
+      return await invoke<BlueprintDetail>("get_blueprint_detail", { blueprintId });
+    } catch (err) {
+      console.error("get_blueprint_detail failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/blueprintMock");
+  return mock.getMockBlueprintDetail(blueprintId);
+}
+
+export async function getMissingBlueprintReport(): Promise<MissingBlueprintReport[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<MissingBlueprintReport[]>("get_missing_blueprint_report");
+    } catch (err) {
+      console.error("get_missing_blueprint_report failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/blueprintMock");
+  return mock.getMockMissingBlueprintReport();
+}
+
+export async function getBlueprintReadinessAll(): Promise<BlueprintReadiness[]> {
+  if (inTauri()) {
+    try {
+      return await invoke<BlueprintReadiness[]>("get_blueprint_readiness_all");
+    } catch (err) {
+      console.error("get_blueprint_readiness_all failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/blueprintMock");
+  return mock.getMockBlueprintReadinessAll();
+}
+
+export async function getBlueprintReadinessForOperation(operationId: number): Promise<BlueprintReadiness> {
+  if (inTauri()) {
+    try {
+      return await invoke<BlueprintReadiness>("get_blueprint_readiness_for_operation", { operationId });
+    } catch (err) {
+      console.error("get_blueprint_readiness_for_operation failed, falling back to mock:", err);
+    }
+  }
+  const mock = await import("../data/blueprintMock");
+  return mock.getMockBlueprintReadinessForOperation(operationId);
 }
 
 export async function healthCheck(): Promise<DbHealth | null> {

@@ -1,6 +1,6 @@
 # RenderNorth Industrial — UI Constitution
 
-Version 1.3 — Sprint 005 (adds the detected-conflict row pattern)
+Version 1.4 — Sprint 006 (adds the linkable summary row pattern)
 Status: Ratified. The design system's law. `src/styles/theme.css` implements it; where code and this document disagree, this document wins and the code is a bug.
 
 ## 1. What the UI should feel like
@@ -114,6 +114,12 @@ Factory status derivation is code + constitution: `blocked_jobs > 0 → Blocked`
 - The description sentence does the explaining; no icon glyphs, no severity badges beyond the type label's color.
 - An empty conflict list gets a plain sentence confirming detection ran and found nothing — never hide the panel, since a quiet "we checked" is exactly what makes the panel trustworthy the next time it isn't quiet.
 - Conflict panels never carry a resolve/dismiss button — detection is read-only per the Reservation Engine's scope; a future resolution UI is a different, explicit feature, not a stray button bolted onto this one.
+
+## 10d. Linkable summary rows (Blueprint Readiness pattern, Sprint 006)
+
+- A row that navigates elsewhere (e.g. Mission Control's Blueprint Readiness rows to the Operations Workspace) keeps the exact visual rhythm of a static data row — same padding, same hairline divider, same mono metric columns — and adds only a hover surface shift (`--plate-hi`), never an underline, arrow glyph, or "view" label bolted on.
+- Text stays default color (`--text`), not `--coolant`, so a linkable row doesn't visually compete with genuine telemetry links elsewhere on the same screen; the hover state alone communicates interactivity.
+- Never mix linkable and non-linkable rows in the same list without a clear reason — a list is either "click any row to go somewhere" or it isn't.
 
 ## 11. Dashboard panel rules
 

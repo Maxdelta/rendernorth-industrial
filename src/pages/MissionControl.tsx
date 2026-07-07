@@ -7,6 +7,7 @@ import {
   getOperationsDashboard,
   getInventoryCommitment,
   getReservationConflicts,
+  getBlueprintReadinessAll,
   healthCheck,
   formatIsk,
   formatQty,
@@ -16,6 +17,7 @@ import {
   type OperationSummary,
   type InventoryCommitment,
   type ReservationConflict,
+  type BlueprintReadiness,
   type DbHealth,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
@@ -43,6 +45,7 @@ export function MissionControlPage() {
   const [ops, setOps] = useState<OperationsDashboard | null>(null);
   const [commitment, setCommitment] = useState<InventoryCommitment | null>(null);
   const [conflicts, setConflicts] = useState<ReservationConflict[] | null>(null);
+  const [readiness, setReadiness] = useState<BlueprintReadiness[] | null>(null);
   const [targets, setTargets] = useState<BuildTargetSummary[]>([]);
   const [health, setHealth] = useState<DbHealth | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -53,6 +56,7 @@ export function MissionControlPage() {
     getOperationsDashboard().then((o) => live && setOps(o));
     getInventoryCommitment().then((c) => live && setCommitment(c));
     getReservationConflicts().then((c) => live && setConflicts(c));
+    getBlueprintReadinessAll().then((r) => live && setReadiness(r));
     listBuildTargets().then((t) => live && setTargets(t));
     healthCheck().then((h) => live && setHealth(h));
     return () => {
@@ -233,6 +237,27 @@ export function MissionControlPage() {
               ))}
             </div>
           )}
+        </Panel>
+      )}
+
+      {readiness && (
+        <Panel title="Blueprint Readiness" keel={readiness.some((r) => r.missingCount > 0) ? "alert" : "nominal"} className="dash-hero">
+          <div className="readiness-list">
+            <div className="readiness-row">
+              <div className="ops-field-label">Operation</div>
+              <div className="ops-field-label">Owned</div>
+              <div className="ops-field-label">Missing</div>
+              <div className="ops-field-label">Warnings</div>
+            </div>
+            {readiness.map((r) => (
+              <Link className="readiness-row readiness-link" to={`/operations?op=${r.operationId}`} key={r.operationId}>
+                <div className="readiness-goal">{r.operationGoal}</div>
+                <div className="readiness-metric nominal">{r.ownedCount}</div>
+                <div className={`readiness-metric ${r.missingCount > 0 ? "alert" : "nominal"}`}>{r.missingCount}</div>
+                <div className={`readiness-metric ${r.warningCount > 0 ? "furnace" : "nominal"}`}>{r.warningCount}</div>
+              </Link>
+            ))}
+          </div>
         </Panel>
       )}
 

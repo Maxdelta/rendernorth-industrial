@@ -4,6 +4,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod blueprint;
 mod commands;
 mod db;
 mod decision;
@@ -43,7 +44,13 @@ fn main() {
             commands::list_active_reservations,
             commands::get_reservation_detail,
             commands::get_reservation_conflicts,
-            commands::get_operation_reservations
+            commands::get_operation_reservations,
+            commands::get_blueprint_summary,
+            commands::list_blueprints,
+            commands::get_blueprint_detail,
+            commands::get_missing_blueprint_report,
+            commands::get_blueprint_readiness_all,
+            commands::get_blueprint_readiness_for_operation
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

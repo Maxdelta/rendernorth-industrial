@@ -1,6 +1,6 @@
 # RenderNorth Industrial — Database Schema
 
-Version 1.4 — Sprint 005 (migration 0005: Reservation domain foundation — additive operation_id on inventory_reservations, reservation_events, reservation_conflicts)
+Version 1.5 — Sprint 006 (migration 0006: Blueprint domain foundation — blueprints, operation_blueprint_requirements)
 
 **Sprint 003.5 note:** no migration this sprint. The Operation Engine and
 Decision Engine (renamed from Recommendation Engine) were introduced as
@@ -18,7 +18,7 @@ Engine: SQLite (WAL mode, foreign keys ON). Migrations are numbered `NNNN_name.s
 - ISK amounts are `REAL` for MVP (revisit as integer 1/100 ISK if precision issues appear).
 - `sde_*` tables are rebuilt from the Static Data Export; `esi_*`-sourced tables are replaced per sync; `app_*`/project tables are user data and never bulk-replaced.
 
-## Live tables (migrations 0001–0005)
+## Live tables (migrations 0001–0006)
 
 ### schema_migrations
 | column | type | notes |
@@ -115,6 +115,11 @@ One-row-per-metric snapshot behind the Factory Status dashboard. Later sprints c
 - **operations**(operation_id PK, goal, target_type_name nullable, priority, status, progress, notes, deadline nullable, created_at, updated_at) — an Operation is industrial intent ("Build Avatar", "Prepare Titan Components"); `target_type_name` is nullable because a goal need not name a single build target. Shares its id space with `build_projects.project_id` for operations 1–5 this sprint (see SYSTEM_ARCHITECTURE.md, Domain Hierarchy); operation 6 has no `build_projects` counterpart.
 - **operation_timeline**(id PK, operation_id FK, label, status, sort_order, target_date nullable) — ordered milestones. Repository-complete; the Operations Workspace UI does not render these yet (shown as a reserved placeholder).
 - **operation_dependencies**(id PK, operation_id FK, depends_on_operation_id FK, reason) — one operation can depend on another. `is_blocked` is always derived from this table (an operation's own `status = 'blocked'`, OR anything it depends on isn't `completed`) — never a hand-set literal read directly off a row.
+
+### Blueprint domain (migration 0006, live now)
+
+- **blueprints**(blueprint_id PK, type_name, is_copy, me_level, te_level, runs_remaining nullable, character_id FK characters, location_id FK inventory_locations, status, inventory_item_id FK inventory_items nullable, created_at, updated_at) — a blueprint as an industrial capability record, not just an inventory item. `is_copy` distinguishes BPO (0, infinite runs, `runs_remaining` NULL) from BPC (1, finite `runs_remaining`). `status` is idle / researching / copying / in_use. `inventory_item_id` links back to the coexisting simple row in `inventory_items` where one naturally exists (migration 0003's "blueprints" category) — nullable, since several Sprint 006 blueprints (e.g. the Navy Revelation Blueprint) are new records with no such counterpart.
+- **operation_blueprint_requirements**(id PK, operation_id FK operations, type_name, required_me nullable, required_te nullable, reason) — what an operation needs, independent of whether it's owned. Missing-blueprint detection and research/copy warnings are always a live comparison against this table and `blueprints`, never a stored flag — same "derive, don't trust a stale flag" precedent as `is_blocked` and `ReservationEngine::conflicts`.
 
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)
