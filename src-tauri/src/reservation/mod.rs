@@ -20,4 +20,8 @@ pub mod models;
 pub mod provider;
 pub mod repository;
 
+// `ReservationEngine` is re-exported for external callers that need the
+// type name directly; nothing does yet, hence the allow — same pattern as
+// `InventoryEngine` (inventory/mod.rs) and `OperationEngine` (operation/mod.rs).
+#[allow(unused_imports)]
 pub use engine::{engine_for, ReservationEngine};
