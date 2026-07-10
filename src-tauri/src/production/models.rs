@@ -7,6 +7,77 @@
 
 use serde::Serialize;
 
+/// One node of a real, blueprint-derived requirement tree (Sprint 008).
+/// Distinct from `RequirementLine` (Sprint 007's flat, demo-seeded
+/// ledger) — this is computed recursively from imported static data, not
+/// read from a stored `production_requirements` row.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RequirementTreeNode {
+    pub type_id: i64,
+    pub type_name: String,
+    pub is_leaf: bool,
+    pub runs: i64,
+    pub produced_quantity: i64,
+    pub needed_quantity: i64,
+    pub per_run_quantity: i64,
+    pub owned_quantity: i64,
+    pub reserved_quantity: i64,
+    pub available_quantity: i64,
+    pub missing_quantity: i64,
+    pub coverage_fraction: f64,
+    pub is_satisfied: bool,
+    pub me_applied: i64,
+    /// "owned" (from a Blueprint Engine record) or "assumed" (ME0 default
+    /// for sub-components with no owned blueprint, or the operation's own
+    /// assumption at the root).
+    pub me_source: String,
+    pub children: Vec<RequirementTreeNode>,
+}
+
+/// A leaf material's totals, summed across every path that requires it
+/// (shared subcomponents included) — the flattened shape the shortage
+/// export and the Production page's leaf-material list read from.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LeafTotal {
+    pub type_id: i64,
+    pub type_name: String,
+    /// Added Sprint 008.2 for export — looked up separately from
+    /// `eve_groups`/`eve_categories` after the recursive expansion
+    /// finishes; never touches the expansion/ME/run-rounding logic itself.
+    pub group_name: Option<String>,
+    pub category_name: Option<String>,
+    pub required_quantity: i64,
+    pub owned_quantity: i64,
+    pub reserved_quantity: i64,
+    pub available_quantity: i64,
+    pub missing_quantity: i64,
+    pub coverage_fraction: f64,
+    pub is_satisfied: bool,
+}
+
+/// A fully calculated production plan for one operation's real build
+/// target. Always recomputed live — never read back from
+/// `production_plan_snapshots`, which exists purely for audit history.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionPlan {
+    pub operation_id: i64,
+    pub operation_goal: String,
+    pub build_target_type_id: i64,
+    pub build_target_name: String,
+    pub requested_quantity: i64,
+    pub blueprint_mode: String,
+    pub me: i64,
+    pub te: i64,
+    pub total_runs: i64,
+    pub produced_quantity: i64,
+    pub tree: RequirementTreeNode,
+    pub leaf_totals: Vec<LeafTotal>,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RequirementLine {

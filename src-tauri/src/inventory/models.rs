@@ -3,7 +3,32 @@
 //! `category_key` and `state` are always data, never a Rust type variant per
 //! item kind.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+/// Real, user-entered inventory (Sprint 008) — kept in its own table
+/// (`manual_inventory_entries`) rather than mixed into the demo-seeded
+/// `inventory_items`, so the two can never be confused. Always tied to an
+/// imported `eve_types` row, since a manual entry only makes sense once
+/// static data names the type.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualInventoryEntry {
+    pub id: i64,
+    pub type_id: i64,
+    pub type_name: String,
+    pub quantity: i64,
+    pub location_name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewManualInventoryEntry {
+    pub type_id: i64,
+    pub quantity: i64,
+    pub location_name: Option<String>,
+}
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

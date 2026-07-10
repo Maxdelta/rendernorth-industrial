@@ -6,14 +6,19 @@ import {
   getOperationReservations,
   getBlueprintReadinessForOperation,
   getOperationRequirementBreakdown,
+  calculateProductionPlan,
   formatQty,
   type OperationSummary,
   type OperationDetail,
   type OperationReservations,
   type BlueprintReadiness,
   type OperationRequirementBreakdown,
+  type CreatedOperation,
+  type ProductionPlan,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
+import { NewBuildForm } from "../components/NewBuildForm";
+import { useShowDemoData } from "../lib/demoDataPreference";
 
 function statusTone(status: string, isBlocked: boolean): "nominal" | "furnace" | "alert" | "coolant" {
   if (isBlocked) return "alert";
@@ -31,6 +36,20 @@ export function OperationsWorkspacePage() {
   const [reservations, setReservations] = useState<OperationReservations | null>(null);
   const [blueprintReadiness, setBlueprintReadiness] = useState<BlueprintReadiness | null>(null);
   const [requirementBreakdown, setRequirementBreakdown] = useState<OperationRequirementBreakdown | null>(null);
+  const [plan, setPlan] = useState<ProductionPlan | null>(null);
+  const [showNewBuildForm, setShowNewBuildForm] = useState(false);
+  const [showDemoData] = useShowDemoData();
+
+  async function refreshOperationsAndSelect(operationId?: number) {
+    const dashboard = await getOperationsDashboard();
+    setOperations(dashboard.currentOperations);
+    if (operationId) setSearchParams({ op: String(operationId) });
+  }
+
+  function handleBuildCreated(result: CreatedOperation) {
+    setShowNewBuildForm(false);
+    refreshOperationsAndSelect(result.operationId);
+  }
 
   useEffect(() => {
     let live = true;
@@ -56,6 +75,10 @@ export function OperationsWorkspacePage() {
     getOperationReservations(selectedId).then((r) => live && setReservations(r));
     getBlueprintReadinessForOperation(selectedId).then((r) => live && setBlueprintReadiness(r));
     getOperationRequirementBreakdown(selectedId).then((r) => live && setRequirementBreakdown(r));
+    setPlan(null);
+    calculateProductionPlan(selectedId)
+      .then((p) => live && setPlan(p))
+      .catch(() => live && setPlan(null)); // no real build target on this operation — expected for most demo operations
     return () => {
       live = false;
     };
@@ -63,33 +86,67 @@ export function OperationsWorkspacePage() {
 
   return (
     <div className="dash">
-      <div className="ops-workspace-layout">
-        <Panel title="Operations" keel="coolant">
-          <div className="ops-rail-list">
-            {operations.map((op) => (
-              <button
-                key={op.operationId}
-                className={op.operationId === selectedId ? "ops-rail-row active" : "ops-rail-row"}
-                onClick={() => setSearchParams({ op: String(op.operationId) })}
-              >
-                <span className="ops-rail-goal">{op.goal}</span>
-                <span className="ops-rail-meta">
-                  <span>P{op.priority}</span>
-                  <span className={op.isBlocked ? "alert" : ""}>{op.isBlocked ? "Blocked" : op.status}</span>
-                  <span>{Math.round(op.progress * 100)}%</span>
-                </span>
+      {showNewBuildForm ? (
+        <NewBuildForm onCreated={handleBuildCreated} onCancel={() => setShowNewBuildForm(false)} />
+      ) : (
+        <div className="ops-workspace-layout">
+          <Panel
+            title="Operations"
+            keel="coolant"
+            headerRight={
+              <button className="target-select enabled" onClick={() => setShowNewBuildForm(true)}>
+                New Build
               </button>
-            ))}
-          </div>
-        </Panel>
-
-        {!detail ? (
-          <Panel title="Overview" keel="furnace">
-            <div className="data-source">Loading operation…</div>
+            }
+          >
+            <div className="ops-rail-list">
+              {operations
+                .filter((op) => showDemoData || !op.isDemo)
+                .map((op) => (
+                  <button
+                    key={op.operationId}
+                    className={op.operationId === selectedId ? "ops-rail-row active" : "ops-rail-row"}
+                    onClick={() => setSearchParams({ op: String(op.operationId) })}
+                  >
+                    <span className="ops-rail-goal">
+                      {op.goal}
+                      {op.isDemo && <span className="demo-badge">DEMO</span>}
+                    </span>
+                    <span className="ops-rail-meta">
+                      <span>P{op.priority}</span>
+                      <span className={op.isBlocked ? "alert" : ""}>{op.isBlocked ? "Blocked" : op.status}</span>
+                      <span>{Math.round(op.progress * 100)}%</span>
+                    </span>
+                  </button>
+                ))}
+              {operations.length > 0 && !showDemoData && operations.every((op) => op.isDemo) && (
+                <p className="ph-mission" style={{ padding: 10 }}>
+                  All operations are demo data, currently hidden. Turn "Show Demo Data" back on in Settings, or create a
+                  New Build.
+                </p>
+              )}
+            </div>
           </Panel>
-        ) : (
-          <div>
-            <Panel title="Overview" keel={statusTone(detail.status, detail.isBlocked)} className="dash-hero">
+
+          {!detail ? (
+            <Panel title="Overview" keel="furnace">
+              <div className="data-source">Loading operation…</div>
+            </Panel>
+          ) : (
+            <div>
+            <Panel
+              title="Overview"
+              keel={statusTone(detail.status, detail.isBlocked)}
+              className="dash-hero"
+              headerRight={
+                <>
+                  {detail.isDemo && <span className="demo-badge">DEMO</span>}
+                  <a className="target-select enabled" href={`#/production?op=${detail.operationId}`} style={{ marginLeft: 8 }}>
+                    View Production Plan
+                  </a>
+                </>
+              }
+            >
               <div className="ops-overview-grid">
                 <div>
                   <div className="ops-field-label">Goal</div>
@@ -123,6 +180,42 @@ export function OperationsWorkspacePage() {
             </Panel>
 
             <div style={{ height: 14 }} />
+
+            {plan && (
+              <>
+                <Panel title="Build Summary" keel={plan.warnings.length > 0 ? "furnace" : "nominal"} className="dash-hero">
+                  <div className="res-summary-grid">
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Build Target</div>
+                      <div className="ops-field-value" style={{ fontSize: 14 }}>
+                        {plan.buildTargetName} × {plan.requestedQuantity}
+                      </div>
+                    </div>
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Blueprint</div>
+                      <div className="ops-field-value" style={{ fontSize: 13 }}>
+                        {plan.blueprintMode} · ME {plan.me} · TE {plan.te}
+                      </div>
+                    </div>
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Total Runs</div>
+                      <div className="res-summary-value">{plan.totalRuns}</div>
+                    </div>
+                    <div className="res-summary-cell">
+                      <div className="res-summary-label">Missing Lines</div>
+                      <div className={`res-summary-value ${plan.leafTotals.some((l) => !l.isSatisfied) ? "alert" : "nominal"}`}>
+                        {plan.leafTotals.filter((l) => !l.isSatisfied).length}
+                      </div>
+                    </div>
+                  </div>
+                  <a className="target-select enabled" href={`#/production?op=${detail.operationId}`} style={{ marginTop: 14, display: "inline-block" }}>
+                    View Production Plan
+                  </a>
+                </Panel>
+
+                <div style={{ height: 14 }} />
+              </>
+            )}
 
             <Panel title="Dependencies" keel={detail.dependencies.length > 0 ? "furnace" : "nominal"} className="dash-hero">
               {detail.dependencies.length === 0 ? (
@@ -296,7 +389,8 @@ export function OperationsWorkspacePage() {
             </Panel>
           </div>
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

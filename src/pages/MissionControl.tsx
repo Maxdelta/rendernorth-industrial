@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useShowDemoData } from "../lib/demoDataPreference";
 import {
   getMissionControl,
   listBuildTargets,
@@ -9,6 +10,8 @@ import {
   getReservationConflicts,
   getBlueprintReadinessAll,
   getRequirementSummary,
+  getLatestImport,
+  type ImportSummary,
   healthCheck,
   formatIsk,
   formatQty,
@@ -43,12 +46,14 @@ function opStatusTone(op: OperationSummary): "nominal" | "furnace" | "alert" | "
 }
 
 export function MissionControlPage() {
+  const [showDemoData] = useShowDemoData();
   const [mission, setMission] = useState<MissionControl | null>(null);
   const [ops, setOps] = useState<OperationsDashboard | null>(null);
   const [commitment, setCommitment] = useState<InventoryCommitment | null>(null);
   const [conflicts, setConflicts] = useState<ReservationConflict[] | null>(null);
   const [readiness, setReadiness] = useState<BlueprintReadiness[] | null>(null);
   const [requirementSummary, setRequirementSummary] = useState<RequirementSummary | null>(null);
+  const [importStatus, setImportStatus] = useState<ImportSummary | null>(null);
   const [targets, setTargets] = useState<BuildTargetSummary[]>([]);
   const [health, setHealth] = useState<DbHealth | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -61,6 +66,7 @@ export function MissionControlPage() {
     getReservationConflicts().then((c) => live && setConflicts(c));
     getBlueprintReadinessAll().then((r) => live && setReadiness(r));
     getRequirementSummary().then((r) => live && setRequirementSummary(r));
+    getLatestImport().then((s) => live && setImportStatus(s));
     listBuildTargets().then((t) => live && setTargets(t));
     healthCheck().then((h) => live && setHealth(h));
     return () => {
@@ -105,6 +111,55 @@ export function MissionControlPage() {
         <StatCard label="Wallet" value={formatIsk(mission.walletIsk)} tone="nominal" keel="nominal" note="liquid across all characters" />
       </div>
 
+      <Panel title="Real Operations Readiness" keel={importStatus ? "coolant" : "furnace"} className="dash-hero">
+        <div className="res-summary-grid">
+          <div className="res-summary-cell">
+            <div className="res-summary-label">Static Data</div>
+            <div className={`res-summary-value ${importStatus ? "nominal" : "furnace"}`}>
+              {importStatus ? `${importStatus.typeCount} types` : "Not imported"}
+            </div>
+          </div>
+          {ops && (
+            <div className="res-summary-cell">
+              <div className="res-summary-label">Real Operations</div>
+              <div className="res-summary-value">{ops.currentOperations.filter((o) => !o.isDemo).length}</div>
+            </div>
+          )}
+          {requirementSummary && (
+            <>
+              <div className="res-summary-cell">
+                <div className="res-summary-label">Coverage % (demo ledger)</div>
+                <div className="res-summary-value">{Math.round(requirementSummary.coveragePercent)}%</div>
+              </div>
+              <div className="res-summary-cell">
+                <div className="res-summary-label">Bottlenecks (demo ledger)</div>
+                <div className={`res-summary-value ${requirementSummary.criticalBottleneckCount > 0 ? "alert" : "nominal"}`}>
+                  {requirementSummary.criticalBottleneckCount}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {!importStatus && (
+          <p className="ph-mission" style={{ marginTop: 12 }}>
+            Import static data in Settings to unlock the Build Target Selector and real, blueprint-derived production
+            plans. Until then, real operations without a build target can still be created and tracked.
+          </p>
+        )}
+        {ops && ops.currentOperations.some((o) => !o.isDemo) && (
+          <div className="op-simple-list" style={{ marginTop: 12 }}>
+            {ops.currentOperations
+              .filter((o) => !o.isDemo)
+              .map((o) => (
+                <Link className="op-simple-row" to={`/operations?op=${o.operationId}`} key={o.operationId}>
+                  <span className="op-simple-goal">{o.goal}</span>
+                  <span className="op-status coolant">real</span>
+                </Link>
+              ))}
+          </div>
+        )}
+      </Panel>
+
       {ops && (
         <>
           <Panel title="Operation Health" keel={ops.health.blockedOperations > 0 ? "alert" : "nominal"} className="dash-hero">
@@ -141,15 +196,20 @@ export function MissionControlPage() {
                 <div>Progress</div>
                 <div>Status</div>
               </div>
-              {ops.currentOperations.map((op) => (
-                <Link className="op-row op-link" to={`/operations?op=${op.operationId}`} key={op.operationId}>
-                  <div className="op-goal">{op.goal}</div>
-                  <div className="op-target">{op.targetTypeName ?? "—"}</div>
-                  <div className="op-priority">P{op.priority}</div>
-                  <div className="op-progress">{Math.round(op.progress * 100)}%</div>
-                  <div className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</div>
-                </Link>
-              ))}
+              {ops.currentOperations
+                .filter((op) => showDemoData || !op.isDemo)
+                .map((op) => (
+                  <Link className="op-row op-link" to={`/operations?op=${op.operationId}`} key={op.operationId}>
+                    <div className="op-goal">
+                      {op.goal}
+                      {op.isDemo && <span className="demo-badge">DEMO</span>}
+                    </div>
+                    <div className="op-target">{op.targetTypeName ?? "—"}</div>
+                    <div className="op-priority">P{op.priority}</div>
+                    <div className="op-progress">{Math.round(op.progress * 100)}%</div>
+                    <div className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</div>
+                  </Link>
+                ))}
             </div>
           </Panel>
 

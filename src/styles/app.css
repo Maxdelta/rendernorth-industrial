@@ -1110,3 +1110,210 @@
   position: absolute;
   inset: 0 auto 0 0;
 }
+
+/* ---------- Settings: Static Data Import ---------- */
+.sd-import-row {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.sd-path-input {
+  flex: 1;
+  background: var(--deck);
+  border: 1px solid var(--bulkhead);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.sd-path-input:focus { outline: none; border-color: var(--furnace); }
+
+.sd-error {
+  margin: 10px 0;
+  padding: 9px 2px;
+  border-top: 1px solid var(--bulkhead);
+  border-bottom: 1px solid var(--bulkhead);
+}
+
+.sd-error-detail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--alert);
+  white-space: pre-wrap;
+  margin: 4px 0 0;
+}
+
+.sd-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 1100px) {
+  .sd-summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---------- demo badge (used throughout) ---------- */
+.demo-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  border: 1px solid var(--bulkhead);
+  padding: 1px 5px;
+  margin-left: 6px;
+}
+
+/* ---------- New Build form ---------- */
+.new-op-form { display: flex; flex-direction: column; gap: 14px; }
+.new-op-field { display: flex; flex-direction: column; gap: 5px; }
+.new-op-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.new-op-mode-toggle { display: flex; gap: 8px; }
+.target-select.active { background: var(--furnace-dim); }
+.new-op-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 0;
+}
+.new-op-actions { display: flex; gap: 10px; margin-top: 6px; }
+
+/* ---------- Build Target Search ---------- */
+.bts-wrap { position: relative; }
+.bts-results {
+  margin-top: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--bulkhead);
+  background: var(--deck);
+}
+.bts-result-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 0.8fr;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--bulkhead);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.bts-result-row:last-child { border-bottom: none; }
+.bts-result-row:hover:not(:disabled) { background: var(--plate-hi); }
+.bts-result-row:disabled { cursor: not-allowed; opacity: 0.6; }
+.bts-result-name { font-weight: 500; }
+.bts-result-meta { color: var(--text-dim); font-size: 11.5px; }
+.bts-selected {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--furnace);
+  background: var(--furnace-dim);
+  padding: 10px 12px;
+}
+.bts-selected-name { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+.bts-selected-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* ---------- Real Requirement Tree (Production page) ---------- */
+.tree-node { margin-left: 0; }
+.tree-node-row {
+  display: grid;
+  grid-template-columns: auto 1.6fr 0.6fr 0.6fr 0.6fr 0.6fr 0.7fr 0.6fr;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--bulkhead);
+  font-size: 12.5px;
+}
+.tree-toggle {
+  background: transparent;
+  border: none;
+  color: var(--furnace);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  width: 16px;
+}
+.tree-children { margin-left: 20px; border-left: 1px solid var(--bulkhead); }
+.tree-warning-list { margin-top: 10px; }
+
+/* ---------- Manual Inventory ---------- */
+.manual-inv-form { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 14px; flex-wrap: wrap; }
+.manual-inv-form .new-op-field { min-width: 160px; }
+
+/* ---------- Build Target Search: empty states ---------- */
+.bts-empty-state {
+  border: 1px dashed var(--bulkhead);
+  padding: 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.bts-empty-state strong { color: var(--furnace); font-weight: 600; }
+
+/* ---------- New Build form: advanced section, preview ---------- */
+.new-op-preview {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 8px 0;
+}
+.new-op-preview strong { color: var(--text); font-weight: 600; }
+
+.advanced-toggle {
+  background: transparent;
+  border: none;
+  color: var(--coolant);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  text-align: left;
+  padding: 6px 0;
+}
+
+.advanced-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--bulkhead);
+  padding-top: 14px;
+}
+
+/* ---------- Demo Data toggle (Settings) ---------- */
+.demo-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+/* ---------- Settings: import mode detail ---------- */
+.sd-mode-detail { margin-bottom: 4px; }
+.sd-mode-detail code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--coolant);
+  background: var(--deck);
+  padding: 1px 4px;
+}
+
+/* ---------- Paste Inventory ---------- */
+.paste-inv-textarea {
+  width: 100%;
+  background: var(--deck);
+  border: 1px solid var(--bulkhead);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 10px;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+.paste-inv-textarea:focus { outline: none; border-color: var(--furnace); }

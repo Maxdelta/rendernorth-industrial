@@ -10,17 +10,23 @@ use crate::blueprint::{
     },
 };
 use crate::db::Db;
-use crate::inventory::{self, models::{InventoryCategory, InventoryItem, InventorySummary}};
+use crate::inventory::{
+    self,
+    models::{
+        InventoryCategory, InventoryItem, InventorySummary, ManualInventoryEntry,
+        NewManualInventoryEntry,
+    },
+};
 use crate::models::*;
 use crate::operation::{
     self,
-    models::{OperationDetail, OperationsDashboard},
+    models::{CreatedOperation, NewOperationInput, OperationDetail, OperationsDashboard},
 };
 use crate::production::{
     self,
     models::{
-        CriticalBottleneck, OperationRequirementBreakdown, RequirementCategory, RequirementDetail,
-        RequirementLine, RequirementShortage, RequirementSummary,
+        CriticalBottleneck, OperationRequirementBreakdown, ProductionPlan, RequirementCategory,
+        RequirementDetail, RequirementLine, RequirementShortage, RequirementSummary,
     },
 };
 use crate::reservation::{
@@ -30,6 +36,7 @@ use crate::reservation::{
         ReservationRecord, ReservationSummary,
     },
 };
+use crate::staticdata::{self, models::{ImportSummary, TypeSearchResult}};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -37,7 +44,7 @@ use tauri::State;
 pub fn health_check(db: State<'_, Db>) -> Result<DbHealth, String> {
     let version = db.schema_version()?;
     Ok(DbHealth {
-        ok: version >= 7,
+        ok: version >= 8,
         schema_version: version,
         db_path: db.path.display().to_string(),
     })
@@ -507,4 +514,152 @@ pub fn get_build_target_requirement_breakdown(
 ) -> Result<OperationRequirementBreakdown, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     production::engine_for(&conn).requirements_for_build_target(project_id)
+}
+
+// ---------------------------------------------------------------------------
+// Static Data Import commands (Sprint 008). Owns official reference-data
+// ingestion only — never touches operations, inventory, reservations, or
+// settings. No network access; the user supplies a local directory path.
+
+#[tauri::command]
+pub fn import_static_data(db: State<'_, Db>, dir_path: String) -> Result<ImportSummary, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    staticdata::import_from_directory(&conn, &dir_path)
+}
+
+/// Official CCP JSON Lines SDE import (Sprint 008.2) — a separate entry
+/// point from `import_static_data`; the sample CSV fixture path above is
+/// untouched. See `staticdata::jsonl` for the field-mapping disclosure.
+#[tauri::command]
+pub fn import_official_sde(db: State<'_, Db>, dir_path: String) -> Result<ImportSummary, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    staticdata::import_official_sde(&conn, &dir_path)
+}
+
+/// Returns `None` rather than an error when no import has ever run, so the
+/// frontend can show a clean "no static data yet" state instead of an
+/// alarming failure.
+#[tauri::command]
+pub fn get_latest_import(db: State<'_, Db>) -> Result<Option<ImportSummary>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    match staticdata::latest_import(&conn) {
+        Ok(summary) => Ok(Some(summary)),
+        Err(_) => Ok(None),
+    }
+}
+
+#[tauri::command]
+pub fn search_eve_types(
+    db: State<'_, Db>,
+    query: String,
+    limit: i64,
+) -> Result<Vec<TypeSearchResult>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    staticdata::search_types(&conn, &query, limit)
+}
+
+// ---------------------------------------------------------------------------
+// Real operation creation (Sprint 008). The one Operation Engine mutation
+// upgraded from an architecture-only stub to a genuine implementation —
+// every other mutation on OperationEngine remains a stub.
+
+#[tauri::command]
+pub fn create_real_operation(
+    db: State<'_, Db>,
+    input: NewOperationInput,
+) -> Result<CreatedOperation, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    let operation_id = operation::engine_for(&conn).create_operation(&input)?;
+    Ok(CreatedOperation { operation_id })
+}
+
+// ---------------------------------------------------------------------------
+// Real production plan calculation (Sprint 008). Recursive, deterministic,
+// derived live from imported static data + owned/assumed blueprint state +
+// inventory — never a stored flag.
+
+#[tauri::command]
+pub fn calculate_production_plan(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<ProductionPlan, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    production::engine_for(&conn).calculate_plan(operation_id)
+}
+
+// ---------------------------------------------------------------------------
+// Manual inventory commands (Sprint 008). Real, user-entered stock, kept
+// entirely separate from the demo-seeded inventory_items table.
+
+#[tauri::command]
+pub fn list_manual_inventory(db: State<'_, Db>) -> Result<Vec<ManualInventoryEntry>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).list_manual_entries()
+}
+
+#[tauri::command]
+pub fn add_manual_inventory_entry(
+    db: State<'_, Db>,
+    input: NewManualInventoryEntry,
+) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).add_manual_entry(&input)
+}
+
+/// Paste Inventory bulk add (Sprint 008.2). The frontend has already
+/// parsed, validated, matched, and merged duplicate rows by the time this
+/// is called — this command only persists the confirmed result, in one
+/// transaction.
+#[tauri::command]
+pub fn add_manual_inventory_bulk(
+    db: State<'_, Db>,
+    entries: Vec<NewManualInventoryEntry>,
+) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).add_manual_entries_bulk(&entries)
+}
+
+#[tauri::command]
+pub fn update_manual_inventory_quantity(
+    db: State<'_, Db>,
+    id: i64,
+    quantity: i64,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).update_manual_entry_quantity(id, quantity)
+}
+
+#[tauri::command]
+pub fn remove_manual_inventory_entry(db: State<'_, Db>, id: i64) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::engine_for(&conn).remove_manual_entry(id)
+}
+
+// ---------------------------------------------------------------------------
+// Generic app settings (Sprint 008.1). Reuses the existing `app_meta`
+// key/value table (migration 0001, already used for `selected_project_id`
+// since Sprint 002) rather than adding a new table or engine. Intentionally
+// generic — any future UI preference can reuse these two commands.
+
+#[tauri::command]
+pub fn get_app_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    conn.query_row("SELECT value FROM app_meta WHERE key = ?1", [key], |row| row.get(0))
+        .map(Some)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(format!("failed to read app setting: {other}")),
+        })
+}
+
+#[tauri::command]
+pub fn set_app_setting(db: State<'_, Db>, key: String, value: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    conn.execute(
+        "INSERT INTO app_meta (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [key, value],
+    )
+    .map_err(|e| format!("failed to write app setting: {e}"))?;
+    Ok(())
 }

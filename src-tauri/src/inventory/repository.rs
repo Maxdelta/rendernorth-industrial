@@ -5,7 +5,7 @@
 
 use super::models::{
     InventoryAllocation, InventoryCategory, InventoryItem, InventoryLocation, InventoryReservation,
-    InventorySummary,
+    InventorySummary, ManualInventoryEntry, NewManualInventoryEntry,
 };
 use rusqlite::Connection;
 
@@ -263,5 +263,122 @@ impl<'a> InventoryRepository<'a> {
             })
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
+
+    // ------------------------------------------------------------------
+    // Manual inventory (Sprint 008) — real, user-entered stock, always
+    // tied to an imported `eve_types` row. Entirely separate storage from
+    // `inventory_items` above; nothing here touches that table.
+    // ------------------------------------------------------------------
+
+    pub fn list_manual_entries(&self) -> Result<Vec<ManualInventoryEntry>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT m.id, m.type_id, t.name, m.quantity, m.location_name, m.created_at, m.updated_at
+                 FROM manual_inventory_entries m
+                 JOIN eve_types t ON t.type_id = m.type_id
+                 ORDER BY m.updated_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(ManualInventoryEntry {
+                    id: row.get(0)?,
+                    type_id: row.get(1)?,
+                    type_name: row.get(2)?,
+                    quantity: row.get(3)?,
+                    location_name: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
+
+    pub fn add_manual_entry(&self, input: &NewManualInventoryEntry) -> Result<i64, String> {
+        self.conn
+            .execute(
+                "INSERT INTO manual_inventory_entries (type_id, quantity, location_name)
+                 VALUES (?1, ?2, ?3)",
+                (
+                    input.type_id,
+                    input.quantity,
+                    input.location_name.as_deref().unwrap_or("Unspecified"),
+                ),
+            )
+            .map_err(|e| format!("failed to add manual inventory entry: {e}"))?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Bulk insert for Paste Inventory (Sprint 008.2) — one transaction,
+    /// so a large pasted list either all lands or none of it does.
+    /// Callers merge duplicate type names before calling this; each entry
+    /// here becomes its own row (matching the existing single-entry
+    /// behavior — merging is a UI-preview concern, not a storage rule).
+    pub fn add_manual_entries_bulk(&self, entries: &[NewManualInventoryEntry]) -> Result<i64, String> {
+        self.conn
+            .execute_batch("BEGIN;")
+            .map_err(|e| format!("failed to begin bulk insert transaction: {e}"))?;
+
+        let result: Result<i64, String> = (|| {
+            let mut inserted = 0i64;
+            for input in entries {
+                self.conn
+                    .execute(
+                        "INSERT INTO manual_inventory_entries (type_id, quantity, location_name)
+                         VALUES (?1, ?2, ?3)",
+                        (
+                            input.type_id,
+                            input.quantity,
+                            input.location_name.as_deref().unwrap_or("Unspecified"),
+                        ),
+                    )
+                    .map_err(|e| format!("failed to insert entry for type {}: {e}", input.type_id))?;
+                inserted += 1;
+            }
+            Ok(inserted)
+        })();
+
+        match result {
+            Ok(count) => {
+                self.conn
+                    .execute_batch("COMMIT;")
+                    .map_err(|e| format!("failed to commit bulk insert: {e}"))?;
+                Ok(count)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK;");
+                Err(e)
+            }
+        }
+    }
+
+    pub fn update_manual_entry_quantity(&self, id: i64, quantity: i64) -> Result<(), String> {
+        let changed = self
+            .conn
+            .execute(
+                "UPDATE manual_inventory_entries
+                 SET quantity = ?1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+                 WHERE id = ?2",
+                (quantity, id),
+            )
+            .map_err(|e| format!("failed to update manual inventory entry {id}: {e}"))?;
+        if changed == 0 {
+            return Err(format!("manual inventory entry {id} not found"));
+        }
+        Ok(())
+    }
+
+    pub fn remove_manual_entry(&self, id: i64) -> Result<(), String> {
+        let changed = self
+            .conn
+            .execute("DELETE FROM manual_inventory_entries WHERE id = ?1", [id])
+            .map_err(|e| format!("failed to remove manual inventory entry {id}: {e}"))?;
+        if changed == 0 {
+            return Err(format!("manual inventory entry {id} not found"));
+        }
+        Ok(())
     }
 }

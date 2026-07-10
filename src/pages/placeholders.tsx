@@ -83,16 +83,4 @@ export const ReportsPage = () => (
   />
 );
 
-export const SettingsPage = () => (
-  <PlaceholderPage
-    title="Settings"
-    mission="Local-first control of the install: characters, data, and appearance. No cloud sync, no accounts, no billing — ever."
-    planned={[
-      "Character management: add via official CCP ESI OAuth (PKCE) browser flow",
-      "Scope review: every ESI scope listed with why it is needed",
-      "Data management: sync freshness, SDE version, wipe-all-local-data",
-      "Notification preferences",
-    ]}
-    sprint="Sprint 002–003 (ESI auth), ongoing"
-  />
-);
+

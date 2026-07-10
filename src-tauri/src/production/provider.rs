@@ -6,8 +6,8 @@
 //! is the intended extension point — not implemented this sprint.
 
 use super::models::{
-    CriticalBottleneck, OperationRequirementBreakdown, RequirementCategory, RequirementDetail,
-    RequirementLine, RequirementShortage, RequirementSummary,
+    CriticalBottleneck, OperationRequirementBreakdown, ProductionPlan, RequirementCategory,
+    RequirementDetail, RequirementLine, RequirementShortage, RequirementSummary,
 };
 use super::repository::ProductionRepository;
 use rusqlite::Connection;
@@ -20,6 +20,7 @@ pub trait ProductionProvider {
     fn shortages(&self) -> Result<Vec<RequirementShortage>, String>;
     fn critical_bottlenecks(&self) -> Result<Vec<CriticalBottleneck>, String>;
     fn breakdown_for_operation(&self, operation_id: i64) -> Result<OperationRequirementBreakdown, String>;
+    fn calculate_plan(&self, operation_id: i64) -> Result<ProductionPlan, String>;
 }
 
 /// The live provider, backed by the demo-seeded rows from migration 0007.
@@ -64,5 +65,9 @@ impl<'a> ProductionProvider for MockProductionProvider<'a> {
 
     fn breakdown_for_operation(&self, operation_id: i64) -> Result<OperationRequirementBreakdown, String> {
         self.repo.breakdown_for_operation(operation_id)
+    }
+
+    fn calculate_plan(&self, operation_id: i64) -> Result<ProductionPlan, String> {
+        self.repo.calculate_plan(operation_id)
     }
 }

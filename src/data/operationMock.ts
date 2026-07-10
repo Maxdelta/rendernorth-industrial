@@ -79,6 +79,7 @@ function toSummary(op: RawOperation): OperationSummary {
     progress: op.progress,
     deadline: op.deadline,
     isBlocked: isBlocked(op),
+    isDemo: true,
   };
 }
 
@@ -139,6 +140,7 @@ export function getMockOperationDetail(operationId: number): OperationDetail {
     notes: op.notes,
     deadline: op.deadline,
     isBlocked: isBlocked(op),
+    isDemo: true,
     dependencies,
     timeline,
   };

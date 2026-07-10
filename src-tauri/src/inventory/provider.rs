@@ -5,7 +5,10 @@
 //! source later means adding a struct here, not touching the engine or any
 //! command.
 
-use super::models::{InventoryCategory, InventoryItem, InventoryLocation, InventorySummary};
+use super::models::{
+    InventoryCategory, InventoryItem, InventoryLocation, InventorySummary, ManualInventoryEntry,
+    NewManualInventoryEntry,
+};
 use super::repository::InventoryRepository;
 use rusqlite::Connection;
 
@@ -21,6 +24,13 @@ pub trait InventoryProvider {
     #[allow(dead_code)]
     fn locations(&self) -> Result<Vec<InventoryLocation>, String>;
     fn coverage_for_operation(&self, project_id: i64) -> Result<f64, String>;
+
+    // ---- manual inventory (Sprint 008): real, always available ----
+    fn list_manual_entries(&self) -> Result<Vec<ManualInventoryEntry>, String>;
+    fn add_manual_entry(&self, input: &NewManualInventoryEntry) -> Result<i64, String>;
+    fn add_manual_entries_bulk(&self, entries: &[NewManualInventoryEntry]) -> Result<i64, String>;
+    fn update_manual_entry_quantity(&self, id: i64, quantity: i64) -> Result<(), String>;
+    fn remove_manual_entry(&self, id: i64) -> Result<(), String>;
 }
 
 /// Demo data, seeded straight into SQLite by migration 0003. Despite the
@@ -60,6 +70,26 @@ impl<'a> InventoryProvider for MockInventoryProvider<'a> {
     fn coverage_for_operation(&self, project_id: i64) -> Result<f64, String> {
         self.repo.coverage_for_operation(project_id)
     }
+
+    fn list_manual_entries(&self) -> Result<Vec<ManualInventoryEntry>, String> {
+        self.repo.list_manual_entries()
+    }
+
+    fn add_manual_entry(&self, input: &NewManualInventoryEntry) -> Result<i64, String> {
+        self.repo.add_manual_entry(input)
+    }
+
+    fn add_manual_entries_bulk(&self, entries: &[NewManualInventoryEntry]) -> Result<i64, String> {
+        self.repo.add_manual_entries_bulk(entries)
+    }
+
+    fn update_manual_entry_quantity(&self, id: i64, quantity: i64) -> Result<(), String> {
+        self.repo.update_manual_entry_quantity(id, quantity)
+    }
+
+    fn remove_manual_entry(&self, id: i64) -> Result<(), String> {
+        self.repo.remove_manual_entry(id)
+    }
 }
 
 /// Not implemented this sprint. Exists so `InventoryEngine` can be built
@@ -86,6 +116,21 @@ impl InventoryProvider for EsiInventoryProvider {
         Err("ESI inventory sync is not implemented yet".into())
     }
     fn coverage_for_operation(&self, project_id: i64) -> Result<f64, String> {
+        Err("ESI inventory sync is not implemented yet".into())
+    }
+    fn list_manual_entries(&self) -> Result<Vec<ManualInventoryEntry>, String> {
+        Err("ESI inventory sync is not implemented yet".into())
+    }
+    fn add_manual_entry(&self, input: &NewManualInventoryEntry) -> Result<i64, String> {
+        Err("ESI inventory sync is not implemented yet".into())
+    }
+    fn add_manual_entries_bulk(&self, entries: &[NewManualInventoryEntry]) -> Result<i64, String> {
+        Err("ESI inventory sync is not implemented yet".into())
+    }
+    fn update_manual_entry_quantity(&self, id: i64, quantity: i64) -> Result<(), String> {
+        Err("ESI inventory sync is not implemented yet".into())
+    }
+    fn remove_manual_entry(&self, id: i64) -> Result<(), String> {
         Err("ESI inventory sync is not implemented yet".into())
     }
 }

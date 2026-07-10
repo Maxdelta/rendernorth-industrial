@@ -2,7 +2,38 @@
 //! together. An Operation represents industrial intent; nothing here
 //! assumes it maps to exactly one ship or structure.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+/// Input for the real Sprint 008 create-operation workflow. Bundled into
+/// one struct because the vertical slice needs considerably more fields
+/// than the earlier architecture-only stub declared (goal, target only).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewOperationInput {
+    pub goal: String,
+    pub priority: i64,
+    pub deadline: Option<String>,
+    pub notes: Option<String>,
+    /// Real build target from imported static data (`eve_types.type_id`).
+    /// `None` keeps the operation goal-only, same as "Prepare Titan
+    /// Components" in the Sprint 004 demo seed.
+    pub type_id: Option<i64>,
+    pub quantity_requested: Option<i64>,
+    /// "owned" or "assumed" — meaningful only when `type_id` is set;
+    /// defaults to "assumed" otherwise.
+    pub blueprint_mode: Option<String>,
+    pub owned_blueprint_id: Option<i64>,
+    pub assumed_me: Option<i64>,
+    pub assumed_te: Option<i64>,
+    pub assumed_is_bpc: Option<bool>,
+    pub assumed_runs: Option<i64>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedOperation {
+    pub operation_id: i64,
+}
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +49,9 @@ pub struct OperationSummary {
     /// true if the operation's own status is "blocked", or if anything it
     /// depends on isn't complete yet.
     pub is_blocked: bool,
+    /// True for the Sprint 001–007 seeded scenario operations; false for
+    /// anything created through the real Sprint 008 workflow.
+    pub is_demo: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -51,6 +85,7 @@ pub struct OperationDetail {
     pub notes: String,
     pub deadline: Option<String>,
     pub is_blocked: bool,
+    pub is_demo: bool,
     pub dependencies: Vec<OperationDependency>,
     /// Owned by the Operation Engine, not rendered by the Workspace UI yet
     /// — Timeline is a reserved placeholder section this sprint.

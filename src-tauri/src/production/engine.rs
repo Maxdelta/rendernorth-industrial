@@ -11,8 +11,8 @@
 //! logic, scheduling, or shopping runs through this engine.
 
 use super::models::{
-    CriticalBottleneck, OperationRequirementBreakdown, RequirementCategory, RequirementDetail,
-    RequirementLine, RequirementShortage, RequirementSummary,
+    CriticalBottleneck, OperationRequirementBreakdown, ProductionPlan, RequirementCategory,
+    RequirementDetail, RequirementLine, RequirementShortage, RequirementSummary,
 };
 use super::provider::{MockProductionProvider, ProductionProvider};
 use rusqlite::Connection;
@@ -56,6 +56,13 @@ impl<P: ProductionProvider> ProductionEngine<P> {
 
     pub fn breakdown_for_operation(&self, operation_id: i64) -> Result<OperationRequirementBreakdown, String> {
         self.provider.breakdown_for_operation(operation_id)
+    }
+
+    /// The real, blueprint-derived plan for one operation's build target
+    /// (Sprint 008). Deterministic; always recomputed from current
+    /// imported data, owned/assumed blueprint state, and inventory.
+    pub fn calculate_plan(&self, operation_id: i64) -> Result<ProductionPlan, String> {
+        self.provider.calculate_plan(operation_id)
     }
 
     /// Same underlying data as `breakdown_for_operation`, exposed under a

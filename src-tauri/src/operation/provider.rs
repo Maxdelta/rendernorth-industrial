@@ -7,7 +7,7 @@
 //! future sync backend (e.g. multi-device) without touching the engine or
 //! any command.
 
-use super::models::{OperationDetail, OperationHealth, OperationSummary};
+use super::models::{NewOperationInput, OperationDetail, OperationHealth, OperationSummary};
 use super::repository::OperationRepository;
 use rusqlite::Connection;
 
@@ -18,6 +18,7 @@ pub trait OperationProvider {
     fn upcoming_completions(&self, limit: i64) -> Result<Vec<OperationSummary>, String>;
     fn health(&self) -> Result<OperationHealth, String>;
     fn get_detail(&self, operation_id: i64) -> Result<OperationDetail, String>;
+    fn create(&self, input: &NewOperationInput) -> Result<i64, String>;
 }
 
 /// The live provider, backed by the demo-seeded rows from migration 0004.
@@ -58,5 +59,9 @@ impl<'a> OperationProvider for MockOperationProvider<'a> {
 
     fn get_detail(&self, operation_id: i64) -> Result<OperationDetail, String> {
         self.repo.get_detail(operation_id)
+    }
+
+    fn create(&self, input: &NewOperationInput) -> Result<i64, String> {
+        self.repo.create(input)
     }
 }

@@ -30,7 +30,7 @@ impl<'a> OperationRepository<'a> {
     fn summary_sql(where_clause: &str, order_by: &str) -> String {
         format!(
             "SELECT o.operation_id, o.goal, o.target_type_name, o.priority, o.status,
-                    o.progress, o.deadline, {IS_BLOCKED_EXPR} AS is_blocked
+                    o.progress, o.deadline, {IS_BLOCKED_EXPR} AS is_blocked, o.is_demo
              FROM operations o
              {where_clause}
              {order_by}"
@@ -38,6 +38,7 @@ impl<'a> OperationRepository<'a> {
     }
 
     fn map_summary(row: &rusqlite::Row) -> rusqlite::Result<OperationSummary> {
+        let is_demo: i64 = row.get(8)?;
         Ok(OperationSummary {
             operation_id: row.get(0)?,
             goal: row.get(1)?,
@@ -47,6 +48,7 @@ impl<'a> OperationRepository<'a> {
             progress: row.get(5)?,
             deadline: row.get(6)?,
             is_blocked: row.get(7)?,
+            is_demo: is_demo != 0,
         })
     }
 
@@ -131,7 +133,7 @@ impl<'a> OperationRepository<'a> {
     }
 
     pub fn get_detail(&self, operation_id: i64) -> Result<OperationDetail, String> {
-        let (goal, target_type_name, priority, status, progress, notes, deadline, is_blocked): (
+        let (goal, target_type_name, priority, status, progress, notes, deadline, is_blocked, is_demo): (
             String,
             Option<String>,
             i64,
@@ -140,12 +142,13 @@ impl<'a> OperationRepository<'a> {
             String,
             Option<String>,
             bool,
+            i64,
         ) = self
             .conn
             .query_row(
                 &format!(
                     "SELECT goal, target_type_name, priority, status, progress, notes,
-                            deadline, {IS_BLOCKED_EXPR} AS is_blocked
+                            deadline, {IS_BLOCKED_EXPR} AS is_blocked, o.is_demo
                      FROM operations o WHERE o.operation_id = ?1"
                 ),
                 [operation_id],
@@ -159,6 +162,7 @@ impl<'a> OperationRepository<'a> {
                         row.get(5)?,
                         row.get(6)?,
                         row.get(7)?,
+                        row.get(8)?,
                     ))
                 },
             )
@@ -225,8 +229,74 @@ impl<'a> OperationRepository<'a> {
             notes,
             deadline,
             is_blocked,
+            is_demo: is_demo != 0,
             dependencies,
             timeline,
         })
+    }
+
+    /// Real operation creation (Sprint 008). Inserts a genuine, non-demo
+    /// operation and, when a build target was selected, its
+    /// `operation_build_targets` row — in one transaction, so a partially
+    /// created operation can never exist. `blueprint_source` defaults to
+    /// "assumed" with ME/TE 0 when not otherwise specified.
+    pub fn create(&self, input: &super::models::NewOperationInput) -> Result<i64, String> {
+        self.conn
+            .execute_batch("BEGIN;")
+            .map_err(|e| format!("failed to begin operation-create transaction: {e}"))?;
+
+        let result: Result<i64, String> = (|| {
+            self.conn
+                .execute(
+                    "INSERT INTO operations (goal, priority, status, progress, notes, deadline, is_demo)
+                     VALUES (?1, ?2, 'planned', 0, ?3, ?4, 0)",
+                    (
+                        &input.goal,
+                        input.priority,
+                        input.notes.as_deref().unwrap_or(""),
+                        &input.deadline,
+                    ),
+                )
+                .map_err(|e| format!("failed to insert operation: {e}"))?;
+            let operation_id = self.conn.last_insert_rowid();
+
+            if let Some(type_id) = input.type_id {
+                let blueprint_mode = input.blueprint_mode.as_deref().unwrap_or("assumed");
+                self.conn
+                    .execute(
+                        "INSERT INTO operation_build_targets
+                            (operation_id, type_id, quantity_requested, blueprint_mode,
+                             owned_blueprint_id, assumed_is_bpc, assumed_me, assumed_te, assumed_runs)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                        (
+                            operation_id,
+                            type_id,
+                            input.quantity_requested.unwrap_or(1),
+                            blueprint_mode,
+                            input.owned_blueprint_id,
+                            input.assumed_is_bpc.unwrap_or(false) as i64,
+                            input.assumed_me.unwrap_or(0),
+                            input.assumed_te.unwrap_or(0),
+                            input.assumed_runs,
+                        ),
+                    )
+                    .map_err(|e| format!("failed to insert build target: {e}"))?;
+            }
+
+            Ok(operation_id)
+        })();
+
+        match result {
+            Ok(id) => {
+                self.conn
+                    .execute_batch("COMMIT;")
+                    .map_err(|e| format!("failed to commit operation-create transaction: {e}"))?;
+                Ok(id)
+            }
+            Err(e) => {
+                let _ = self.conn.execute_batch("ROLLBACK;");
+                Err(e)
+            }
+        }
     }
 }

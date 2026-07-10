@@ -1,6 +1,6 @@
 # RenderNorth Industrial — Database Schema
 
-Version 1.6 — Sprint 007 (migration 0007: Production Requirement domain foundation — production_requirements, production_requirement_groups, production_requirement_sources)
+Version 1.7 — Sprint 008 (migration 0008: Real Production Planner — static reference data, operation_build_targets, manual_inventory_entries, production_plan_snapshots, additive operations.is_demo)
 
 **Sprint 003.5 note:** no migration this sprint. The Operation Engine and
 Decision Engine (renamed from Recommendation Engine) were introduced as
@@ -18,7 +18,7 @@ Engine: SQLite (WAL mode, foreign keys ON). Migrations are numbered `NNNN_name.s
 - ISK amounts are `REAL` for MVP (revisit as integer 1/100 ISK if precision issues appear).
 - `sde_*` tables are rebuilt from the Static Data Export; `esi_*`-sourced tables are replaced per sync; `app_*`/project tables are user data and never bulk-replaced.
 
-## Live tables (migrations 0001–0007)
+## Live tables (migrations 0001–0008)
 
 ### schema_migrations
 | column | type | notes |
@@ -128,6 +128,18 @@ One-row-per-metric snapshot behind the Factory Status dashboard. Later sprints c
 - **production_requirement_sources**(id PK, requirement_id FK production_requirements, source_kind, contributed_quantity, note) — provenance: why a requirement's quantity was justified. A requirement can in principle have more than one contributing source (a blueprint material line plus a manual buffer); this sprint seeds exactly one per requirement.
 
 Coverage, shortage, and cross-operation "critical bottleneck" detection (a material required by 2+ operations, unmet in at least one) are always computed fresh — same "derive, don't trust a stale flag" precedent as `is_blocked`, `ReservationEngine::conflicts`, and the Blueprint Engine's missing-blueprint report.
+
+### Static Data Import + real planner (migration 0008, live now)
+
+- **sde_imports**(id PK, source_path, format, source_build nullable, imported_at, status, type_count, group_count, category_count, blueprint_count, material_count, error_summary nullable) — append-only audit log of every import run. Reference tables below are upserted/replaced in place, never versioned per-import. `format` distinguishes source: `csv_bundle` (sample fixture) or, as of Sprint 008.2, `jsonl_official` (official CCP SDE) — no schema change was needed to add the second format, since `format` was already a free-text column.
+- **eve_categories**(category_id PK, name, published) / **eve_groups**(group_id PK, category_id FK, name, published) / **eve_types**(type_id PK, name, group_id FK, published, is_manufacturable) — the game's own taxonomy, imported from a local CSV-derivative SDE bundle. Entirely separate from `inventory_categories` (migration 0003), which is RenderNorth's ownership-bucket vocabulary — the two are never merged.
+- **blueprint_products**(blueprint_type_id, product_type_id FK eve_types, quantity) / **blueprint_materials**(id PK, blueprint_type_id, material_type_id FK eve_types, quantity) — manufacturing-activity blueprint data. `is_manufacturable` on `eve_types` is denormalized at import time from `blueprint_products`.
+- **operation_build_targets**(operation_id PK FK operations, type_id FK eve_types, quantity_requested, blueprint_mode, owned_blueprint_id FK blueprints nullable, assumed_me, assumed_te, assumed_is_bpc, assumed_runs nullable, created_at, updated_at) — the real build target, quantity, and blueprint source for one operation. One row per operation.
+- **manual_inventory_entries**(id PK, type_id FK eve_types nullable, quantity, location_name, created_at, updated_at) — real, user-entered inventory, kept entirely separate from the demo-seeded `inventory_items`.
+- **production_plan_snapshots**(id PK, operation_id FK operations, sde_import_id FK sde_imports nullable, calculated_at, requested_quantity, inputs_json, result_json) — optional audit record of a calculated plan. Never the source of truth for a live view, which always recalculates.
+- **operations.is_demo** (additive `ALTER TABLE`, same pattern as migration 0005's `inventory_reservations.operation_id`) — defaults existing seeded rows to `1`; the real Sprint 008 `create_operation` mutation inserts `0`.
+
+See docs/REAL_PRODUCTION_PLANNER.md for the full CSV format, calculation rules, and data ownership boundaries.
 
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)

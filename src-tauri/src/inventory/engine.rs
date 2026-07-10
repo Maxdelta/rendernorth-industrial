@@ -4,7 +4,10 @@
 //! nothing above this layer touches SQL, and nothing here knows a Titan
 //! from a mineral.
 
-use super::models::{InventoryCategory, InventoryItem, InventoryLocation, InventorySummary};
+use super::models::{
+    InventoryCategory, InventoryItem, InventoryLocation, InventorySummary, ManualInventoryEntry,
+    NewManualInventoryEntry,
+};
 use super::provider::{InventoryProvider, MockInventoryProvider};
 use rusqlite::Connection;
 
@@ -47,6 +50,28 @@ impl<P: InventoryProvider> InventoryEngine<P> {
     /// (placeholder, tier-average) formula and its Sprint 004 successor.
     pub fn coverage_for_operation(&self, project_id: i64) -> Result<f64, String> {
         self.provider.coverage_for_operation(project_id)
+    }
+
+    // ---- manual inventory (Sprint 008): real, always available ----
+
+    pub fn list_manual_entries(&self) -> Result<Vec<ManualInventoryEntry>, String> {
+        self.provider.list_manual_entries()
+    }
+
+    pub fn add_manual_entry(&self, input: &NewManualInventoryEntry) -> Result<i64, String> {
+        self.provider.add_manual_entry(input)
+    }
+
+    pub fn add_manual_entries_bulk(&self, entries: &[NewManualInventoryEntry]) -> Result<i64, String> {
+        self.provider.add_manual_entries_bulk(entries)
+    }
+
+    pub fn update_manual_entry_quantity(&self, id: i64, quantity: i64) -> Result<(), String> {
+        self.provider.update_manual_entry_quantity(id, quantity)
+    }
+
+    pub fn remove_manual_entry(&self, id: i64) -> Result<(), String> {
+        self.provider.remove_manual_entry(id)
     }
 }
 

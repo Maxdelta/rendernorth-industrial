@@ -58,13 +58,12 @@ impl<P: OperationProvider> OperationEngine<P> {
     // marks them as a deliberate reminder, not an oversight — no command
     // calls them yet.
 
-    #[allow(dead_code, unused_variables)]
-    pub fn create_operation(
-        &self,
-        goal: &str,
-        target_type_id: Option<i64>,
-    ) -> Result<i64, String> {
-        Err("Operation Engine mutations are architecture-only this sprint".into())
+    /// Real as of Sprint 008: creates a genuine, non-demo operation (and,
+    /// when a build target is given, its `operation_build_targets` row)
+    /// through the provider. This is the one mutation the vertical slice
+    /// actually needs; the others below remain architecture-only.
+    pub fn create_operation(&self, input: &super::models::NewOperationInput) -> Result<i64, String> {
+        self.provider.create(input)
     }
 
     #[allow(dead_code, unused_variables)]

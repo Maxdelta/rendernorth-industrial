@@ -7,6 +7,7 @@ import { InventoryPage } from "./pages/Inventory";
 import { BlueprintsPage } from "./pages/Blueprints";
 import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
 import { ProductionPage } from "./pages/Production";
+import { SettingsPage } from "./pages/Settings";
 import {
   IndustryPage,
   LogisticsPage,
@@ -14,7 +15,6 @@ import {
   PlanningPage,
   IntelligencePage,
   ReportsPage,
-  SettingsPage,
 } from "./pages/placeholders";
 
 export default function App() {

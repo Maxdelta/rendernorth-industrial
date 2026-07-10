@@ -13,6 +13,7 @@ mod models;
 mod operation;
 mod production;
 mod reservation;
+mod staticdata;
 
 use tauri::Manager;
 
@@ -59,7 +60,20 @@ fn main() {
             commands::get_requirement_shortages,
             commands::get_critical_bottlenecks,
             commands::get_operation_requirement_breakdown,
-            commands::get_build_target_requirement_breakdown
+            commands::get_build_target_requirement_breakdown,
+            commands::import_static_data,
+            commands::import_official_sde,
+            commands::get_latest_import,
+            commands::search_eve_types,
+            commands::create_real_operation,
+            commands::calculate_production_plan,
+            commands::list_manual_inventory,
+            commands::add_manual_inventory_entry,
+            commands::add_manual_inventory_bulk,
+            commands::update_manual_inventory_quantity,
+            commands::remove_manual_inventory_entry,
+            commands::get_app_setting,
+            commands::set_app_setting
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

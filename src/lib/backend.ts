@@ -123,6 +123,8 @@ export interface OperationSummary {
   deadline: string | null;
   /** Derived from dependencies, never a hand-set literal. */
   isBlocked: boolean;
+  /** True for the Sprint 001–007 seeded scenario operations. */
+  isDemo: boolean;
 }
 
 export interface OperationTimelineEntry {
@@ -150,6 +152,7 @@ export interface OperationDetail {
   notes: string;
   deadline: string | null;
   isBlocked: boolean;
+  isDemo: boolean;
   dependencies: OperationDependency[];
   /** Owned by the Operation Engine; not rendered by the Workspace UI yet. */
   timeline: OperationTimelineEntry[];
@@ -372,6 +375,128 @@ export interface OperationRequirementBreakdown {
   totalRequirements: number;
   missingCount: number;
   coveragePercent: number;
+}
+
+// ---------------------------------------------------------------------------
+// Static Data Import (Sprint 008) — official EVE reference data, loaded
+// from a local directory the user selects. No network access, ever.
+
+export interface ImportSummary {
+  id: number;
+  sourcePath: string;
+  format: string;
+  sourceBuild: string | null;
+  importedAt: string;
+  status: string; // success / partial / failed
+  typeCount: number;
+  groupCount: number;
+  categoryCount: number;
+  blueprintCount: number;
+  materialCount: number;
+  errorSummary: string | null;
+}
+
+export interface TypeSearchResult {
+  typeId: number;
+  name: string;
+  groupName: string;
+  categoryName: string;
+  isManufacturable: boolean;
+  producingBlueprintTypeId: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Real operation creation (Sprint 008)
+
+export interface NewOperationInput {
+  goal: string;
+  priority: number;
+  deadline?: string | null;
+  notes?: string | null;
+  typeId?: number | null;
+  quantityRequested?: number | null;
+  blueprintMode?: "owned" | "assumed" | null;
+  ownedBlueprintId?: number | null;
+  assumedMe?: number | null;
+  assumedTe?: number | null;
+  assumedIsBpc?: boolean | null;
+  assumedRuns?: number | null;
+}
+
+export interface CreatedOperation {
+  operationId: number;
+}
+
+// ---------------------------------------------------------------------------
+// Real, blueprint-derived production plan (Sprint 008) — distinct from the
+// Sprint 007 demo-seeded RequirementLine/RequirementSummary above.
+
+export interface RequirementTreeNode {
+  typeId: number;
+  typeName: string;
+  isLeaf: boolean;
+  runs: number;
+  producedQuantity: number;
+  neededQuantity: number;
+  perRunQuantity: number;
+  ownedQuantity: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  missingQuantity: number;
+  coverageFraction: number;
+  isSatisfied: boolean;
+  meApplied: number;
+  meSource: string;
+  children: RequirementTreeNode[];
+}
+
+export interface LeafTotal {
+  typeId: number;
+  typeName: string;
+  groupName: string | null;
+  categoryName: string | null;
+  requiredQuantity: number;
+  ownedQuantity: number;
+  reservedQuantity: number;
+  availableQuantity: number;
+  missingQuantity: number;
+  coverageFraction: number;
+  isSatisfied: boolean;
+}
+
+export interface ProductionPlan {
+  operationId: number;
+  operationGoal: string;
+  buildTargetTypeId: number;
+  buildTargetName: string;
+  requestedQuantity: number;
+  blueprintMode: string;
+  me: number;
+  te: number;
+  totalRuns: number;
+  producedQuantity: number;
+  tree: RequirementTreeNode;
+  leafTotals: LeafTotal[];
+  warnings: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Manual inventory (Sprint 008) — real, user-entered stock.
+
+export interface ManualInventoryEntry {
+  id: number;
+  typeId: number;
+  typeName: string;
+  quantity: number;
+  locationName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NewManualInventoryEntry {
+  typeId: number;
+  quantity: number;
+  locationName?: string | null;
 }
 
 function inTauri(): boolean {
@@ -708,6 +833,115 @@ export async function getOperationRequirementBreakdown(operationId: number): Pro
   }
   const mock = await import("../data/productionMock");
   return mock.getMockOperationRequirementBreakdown(operationId);
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 008: real, backend-only features. These have no demo/mock
+// equivalent — importing your own static data, creating a real operation,
+// and calculating a real plan only make sense against the actual local
+// database. In browser preview (no Tauri shell) reads return empty/neutral
+// results so the UI can show a clear "open the desktop app" state rather
+// than crashing; mutations reject with an explicit error.
+
+const BROWSER_PREVIEW_ERROR =
+  "This feature reads and writes your local database and is only available in the RenderNorth Industrial desktop app.";
+
+export async function importStaticData(dirPath: string): Promise<ImportSummary> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<ImportSummary>("import_static_data", { dirPath });
+}
+
+/** Official CCP JSONL SDE import (Sprint 008.2) — unverified against a real export in this environment; see docs/REAL_PRODUCTION_PLANNER.md. */
+export async function importOfficialSde(dirPath: string): Promise<ImportSummary> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<ImportSummary>("import_official_sde", { dirPath });
+}
+
+export async function getLatestImport(): Promise<ImportSummary | null> {
+  if (!inTauri()) return null;
+  try {
+    return await invoke<ImportSummary | null>("get_latest_import");
+  } catch (err) {
+    console.error("get_latest_import failed:", err);
+    return null;
+  }
+}
+
+export async function searchEveTypes(query: string, limit = 25): Promise<TypeSearchResult[]> {
+  if (!inTauri()) return [];
+  try {
+    return await invoke<TypeSearchResult[]>("search_eve_types", { query, limit });
+  } catch (err) {
+    console.error("search_eve_types failed:", err);
+    return [];
+  }
+}
+
+export async function createRealOperation(input: NewOperationInput): Promise<CreatedOperation> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<CreatedOperation>("create_real_operation", { input });
+}
+
+export async function calculateProductionPlan(operationId: number): Promise<ProductionPlan> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<ProductionPlan>("calculate_production_plan", { operationId });
+}
+
+export async function listManualInventory(): Promise<ManualInventoryEntry[]> {
+  if (!inTauri()) return [];
+  try {
+    return await invoke<ManualInventoryEntry[]>("list_manual_inventory");
+  } catch (err) {
+    console.error("list_manual_inventory failed:", err);
+    return [];
+  }
+}
+
+export async function addManualInventoryEntry(input: NewManualInventoryEntry): Promise<number> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<number>("add_manual_inventory_entry", { input });
+}
+
+/** Paste Inventory bulk confirm (Sprint 008.2) — frontend has already parsed/matched/merged; this just persists. */
+export async function addManualInventoryBulk(entries: NewManualInventoryEntry[]): Promise<number> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<number>("add_manual_inventory_bulk", { entries });
+}
+
+export async function updateManualInventoryQuantity(id: number, quantity: number): Promise<void> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<void>("update_manual_inventory_quantity", { id, quantity });
+}
+
+export async function removeManualInventoryEntry(id: number): Promise<void> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<void>("remove_manual_inventory_entry", { id });
+}
+
+// ---------------------------------------------------------------------------
+// Generic app settings (Sprint 008.1) — reuses the existing app_meta
+// key/value pattern. In browser preview (no Tauri shell) these fall back to
+// an in-memory value for the session, since there is no local database to
+// persist to; this is a disclosed limitation, not a silent one.
+
+const browserSettingsFallback = new Map<string, string>();
+
+export async function getAppSetting(key: string): Promise<string | null> {
+  if (!inTauri()) return browserSettingsFallback.get(key) ?? null;
+  try {
+    return await invoke<string | null>("get_app_setting", { key });
+  } catch (err) {
+    console.error("get_app_setting failed:", err);
+    return null;
+  }
+}
+
+export async function setAppSetting(key: string, value: string): Promise<void> {
+  if (!inTauri()) {
+    browserSettingsFallback.set(key, value);
+    return;
+  }
+  await invoke<void>("set_app_setting", { key, value });
 }
 
 export async function healthCheck(): Promise<DbHealth | null> {

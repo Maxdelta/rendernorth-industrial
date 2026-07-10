@@ -1,6 +1,6 @@
 # RenderNorth Industrial — UI Constitution
 
-Version 1.5 — Sprint 007 (adds the inline coverage bar pattern)
+Version 1.6 — Sprint 008 (adds the search-then-select and expand/collapse tree patterns)
 Status: Ratified. The design system's law. `src/styles/theme.css` implements it; where code and this document disagree, this document wins and the code is a bug.
 
 ## 1. What the UI should feel like
@@ -127,6 +127,20 @@ Factory status derivation is code + constitution: `blocked_jobs > 0 → Blocked`
 - Fill color follows the same three-tier threshold as `TierGauge` — ≥100% `--nominal`, ≥60% `--furnace`, below `--alert` — so a person never has to learn a second color meaning for "coverage" depending on where it appears.
 - The percentage label sits to the right of the bar in mono, colored to match the fill, with a short qualifier ("N short") appended only when relevant — never a separate badge or icon.
 - Inline bars never animate on data change within the same session; they render at their final width immediately, since they typically appear already-populated in a list rather than growing from zero like a hero progress gauge does on first paint.
+
+## 10f. Search-then-select (Build Target Search pattern, Sprint 008)
+
+- A search field starts empty with a placeholder describing what it searches, never a dropdown pre-populated with options — the whole point is that the list comes from imported data, not a fixed set.
+- Results render as full-width rows in a bordered panel directly under the input, not a floating dropdown overlay — consistent with this app never using floating/popover chrome elsewhere.
+- Once something is selected, the search field is replaced by a compact "selected" card (name, category › group, a "Change" button) — never left showing both the input and a result below it at once.
+- A result that can't be chosen (not manufacturable) is visibly present but disabled and dimmed, with a `title` tooltip explaining why — never hidden, since seeing "this exists but isn't buildable" is itself useful information.
+
+## 10g. Expand/collapse requirement tree (Sprint 008)
+
+- Each row carries its own toggle (▸/▾), not a single "expand all" control — trees from real blueprint data can be deep and uneven, and per-row control keeps it navigable.
+- A leaf row (no children) shows a plain middle dot in the toggle's position, never an empty gap — the column stays aligned whether or not a row can expand.
+- Nesting is shown by a left border + indent on the children's wrapper, not by repeating chamfered plates per level — one plate per panel, rows carry the hierarchy.
+- The first two levels expand by default (immediately useful without clicking), everything deeper starts collapsed (keeps a large tree from opening as an overwhelming wall on first render).
 
 ## 11. Dashboard panel rules
 

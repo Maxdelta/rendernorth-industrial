@@ -15,6 +15,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (5, include_str!("../migrations/0005_reservation_foundation.sql")),
     (6, include_str!("../migrations/0006_blueprint_foundation.sql")),
     (7, include_str!("../migrations/0007_production_requirement_foundation.sql")),
+    (8, include_str!("../migrations/0008_real_production_planner.sql")),
 ];
 
 pub struct Db {
