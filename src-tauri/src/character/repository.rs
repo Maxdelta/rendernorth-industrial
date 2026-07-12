@@ -67,8 +67,12 @@ impl<'a> CharacterRepository<'a> {
                         CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-assets.read_assets.v1 ') > 0 THEN 1 ELSE 0 END,
                         COALESCE(s.status, 'never'), s.last_success_at,
                         COALESCE(s.asset_count, 0), COALESCE(s.page_count, 0), s.last_error
+                        ,CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-characters.read_blueprints.v1 ') > 0 THEN 1 ELSE 0 END
+                        ,COALESCE(bs.status, 'never'), bs.last_success_at,
+                        COALESCE(bs.blueprint_count, 0), COALESCE(bs.page_count, 0), bs.last_error
                  FROM characters c
                  LEFT JOIN character_asset_sync_state s ON s.character_id = c.character_id
+                 LEFT JOIN character_blueprint_sync_state bs ON bs.character_id = c.character_id
                  WHERE c.is_demo = 0 ORDER BY c.name",
             )
             .map_err(|e| e.to_string())?;
@@ -86,6 +90,12 @@ impl<'a> CharacterRepository<'a> {
                     asset_count: row.get(8)?,
                     page_count: row.get(9)?,
                     sync_error: row.get(10)?,
+                    blueprint_scope_granted: row.get::<_, i64>(11)? != 0,
+                    blueprint_sync_status: row.get(12)?,
+                    blueprint_last_sync_at: row.get(13)?,
+                    blueprint_count: row.get(14)?,
+                    blueprint_page_count: row.get(15)?,
+                    blueprint_sync_error: row.get(16)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -110,6 +120,7 @@ mod tests {
         include_str!("../../migrations/0010_demo_category_correction.sql"),
         include_str!("../../migrations/0011_esi_character_auth.sql"),
         include_str!("../../migrations/0012_character_asset_sync.sql"),
+        include_str!("../../migrations/0013_character_blueprint_sync.sql"),
     ];
 
     fn test_db() -> Connection {

@@ -106,6 +106,19 @@ pub struct ProductionPlan {
     pub tree: RequirementTreeNode,
     pub leaf_totals: Vec<LeafTotal>,
     pub warnings: Vec<String>,
+    pub synchronized_blueprints: Vec<OwnedBlueprintInfo>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnedBlueprintInfo {
+    pub item_id: i64,
+    pub owner_name: String,
+    pub is_copy: bool,
+    pub me: i64,
+    pub te: i64,
+    pub runs_remaining: Option<i64>,
+    pub source: String,
 }
 
 #[derive(Serialize, Clone)]

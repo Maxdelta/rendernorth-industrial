@@ -389,7 +389,7 @@ impl<'a> ProductionRepository<'a> {
             Ok(n) => n,
             Err(_) => return Ok(None),
         };
-        self.conn
+        let manual = self.conn
             .query_row(
                 "SELECT me_level FROM blueprints WHERE type_name = ?1 LIMIT 1",
                 [type_name],
@@ -399,7 +399,20 @@ impl<'a> ProductionRepository<'a> {
             .or_else(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => Ok(None),
                 other => Err(format!("owned-blueprint ME lookup failed: {other}")),
-            })
+            })?;
+        if manual.is_some() { return Ok(manual); }
+        // An ESI fallback is unambiguous only when exactly one enabled
+        // synchronized blueprint item exists for the producing blueprint
+        // type. Multiple candidates are displayed to the user but are not
+        // auto-selected by RNI-150.
+        let (count,me):(i64,Option<i64>)=self.conn.query_row(
+            "SELECT COUNT(*),MAX(cb.material_efficiency) FROM character_blueprints cb
+             JOIN characters c ON c.character_id=cb.character_id
+             WHERE c.enabled=1 AND c.is_demo=0 AND cb.type_id IN
+               (SELECT blueprint_type_id FROM blueprint_products WHERE product_type_id=?1)",
+            [product_type_id],|r|Ok((r.get(0)?,r.get(1)?))
+        ).map_err(|e|format!("synchronized blueprint ME lookup failed: {e}"))?;
+        Ok(if count==1 { me } else { None })
     }
 
     /// On-hand quantity for a type, for the real (non-demo) production
@@ -704,6 +717,15 @@ impl<'a> ProductionRepository<'a> {
         }
         leaf_totals.sort_by(|a, b| a.type_name.cmp(&b.type_name));
 
+        let mut bp_stmt=self.conn.prepare(
+            "SELECT cb.item_id,c.name,cb.runs != -1,cb.material_efficiency,cb.time_efficiency,CASE WHEN cb.runs=-1 THEN NULL ELSE cb.runs END
+             FROM character_blueprints cb JOIN characters c ON c.character_id=cb.character_id
+             WHERE c.enabled=1 AND c.is_demo=0 AND cb.type_id IN
+               (SELECT blueprint_type_id FROM blueprint_products WHERE product_type_id=?1)
+             ORDER BY c.name,cb.item_id"
+        ).map_err(|e|format!("owned synchronized blueprint lookup failed: {e}"))?;
+        let synchronized_blueprints=bp_stmt.query_map([type_id],|r|Ok(super::models::OwnedBlueprintInfo{item_id:r.get(0)?,owner_name:r.get(1)?,is_copy:r.get::<_,i64>(2)?!=0,me:r.get(3)?,te:r.get(4)?,runs_remaining:r.get(5)?,source:"ESI Character Blueprints".into()})).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;
+
         Ok(ProductionPlan {
             operation_id,
             operation_goal,
@@ -719,6 +741,7 @@ impl<'a> ProductionRepository<'a> {
             tree,
             leaf_totals,
             warnings,
+            synchronized_blueprints,
         })
     }
 }
@@ -749,6 +772,7 @@ mod tests {
         include_str!("../../migrations/0010_demo_category_correction.sql"),
         include_str!("../../migrations/0011_esi_character_auth.sql"),
         include_str!("../../migrations/0012_character_asset_sync.sql"),
+        include_str!("../../migrations/0013_character_blueprint_sync.sql"),
     ];
 
     fn test_db() -> Connection {
@@ -901,6 +925,24 @@ mod tests {
         // No owned blueprint exists for the Gadget in this fixture, so its
         // ME defaults to 0 regardless of the top-level assumption (10).
         assert_eq!(gadget_node.me_applied, 0);
+        assert!(plan.synchronized_blueprints.is_empty(), "no synchronized ownership must leave existing production behavior unchanged");
+    }
+
+    #[test]
+    fn production_detects_synchronized_owned_blueprint() {
+        let conn=test_db();seed_fixture(&conn);let op_id=seed_operation_with_target(&conn,1,0,0);
+        conn.execute("INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled) VALUES(1,'Maxdelta',0,'esi-assets.read_assets.v1 esi-characters.read_blueprints.v1',1)",[]).unwrap();
+        conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(1,9001,100,600,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now')",[]).unwrap();
+        let plan=ProductionRepository::new(&conn).calculate_plan(op_id).unwrap();
+        assert_eq!(plan.synchronized_blueprints.len(),1);let bp=&plan.synchronized_blueprints[0];assert_eq!(bp.owner_name,"Maxdelta");assert!(!bp.is_copy);assert_eq!((bp.me,bp.te,bp.runs_remaining),(10,20,None));
+    }
+
+    #[test]
+    fn exactly_one_synchronized_intermediate_blueprint_applies_its_me() {
+        let conn=test_db();seed_fixture(&conn);let op_id=seed_operation_with_target(&conn,1,0,0);
+        conn.execute("INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled) VALUES(1,'Maxdelta',0,'esi-characters.read_blueprints.v1',1)",[]).unwrap();
+        conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(1,9002,20,600,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now')",[]).unwrap();
+        let plan=ProductionRepository::new(&conn).calculate_plan(op_id).unwrap();let gadget=plan.tree.children.iter().find(|c|c.type_id==20).unwrap();assert_eq!(gadget.me_applied,10);
     }
 
     #[test]

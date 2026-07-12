@@ -10,6 +10,7 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct BlueprintRecord {
     pub blueprint_id: i64,
+    pub type_id: Option<i64>,
     pub type_name: String,
     pub is_copy: bool,
     pub me_level: i64,
@@ -19,6 +20,12 @@ pub struct BlueprintRecord {
     pub location_name: String,
     pub status: String, // idle / researching / copying / in_use
     pub linked_operation: Option<String>,
+    pub location_id: Option<i64>,
+    pub location_flag: Option<String>,
+    pub quantity: i64,
+    pub source: String,
+    pub last_synced: Option<String>,
+    pub is_owned: bool,
 }
 
 #[derive(Serialize, Clone)]

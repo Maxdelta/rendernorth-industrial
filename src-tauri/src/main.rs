@@ -83,7 +83,9 @@ fn main() {
             commands::list_characters,
             commands::sync_character_assets,
             commands::sync_all_character_assets,
-            commands::list_synced_assets
+            commands::list_synced_assets,
+            commands::sync_character_blueprints,
+            commands::sync_all_character_blueprints
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

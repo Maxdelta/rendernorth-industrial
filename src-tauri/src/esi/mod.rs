@@ -6,6 +6,7 @@
 
 pub mod auth;
 pub mod assets;
+pub mod blueprints;
 pub mod client;
 pub mod jwt;
 pub mod loopback;

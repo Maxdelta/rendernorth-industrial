@@ -19,7 +19,10 @@ use std::time::Duration;
 
 pub const REDIRECT_PORT: u16 = 38473;
 pub const REDIRECT_URI: &str = "http://localhost:38473/callback";
-pub const SCOPES: &[&str] = &["esi-assets.read_assets.v1"];
+pub const SCOPES: &[&str] = &[
+    "esi-assets.read_assets.v1",
+    "esi-characters.read_blueprints.v1",
+];
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub struct AddCharacterResult {

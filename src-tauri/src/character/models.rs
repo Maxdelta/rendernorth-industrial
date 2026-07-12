@@ -15,6 +15,12 @@ pub struct CharacterSummary {
     pub asset_count: i64,
     pub page_count: i64,
     pub sync_error: Option<String>,
+    pub blueprint_scope_granted: bool,
+    pub blueprint_sync_status: String,
+    pub blueprint_last_sync_at: Option<String>,
+    pub blueprint_count: i64,
+    pub blueprint_page_count: i64,
+    pub blueprint_sync_error: Option<String>,
 }
 
 pub struct NewCharacter {

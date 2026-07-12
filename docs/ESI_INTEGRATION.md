@@ -24,7 +24,8 @@ Multiple characters = repeat the flow; one token set per character in `esi_token
 
 ## 3. Scopes (minimum set per module)
 
-Sprint 011B active scope set: `esi-assets.read_assets.v1` only. Characters
+RNI-150 active scope set: `esi-assets.read_assets.v1` and
+`esi-characters.read_blueprints.v1`. Characters
 connected under Sprint 011A's identity-only grant must reauthorize through
 Add / Reauthorize Character before their first asset sync. This is required
 OAuth consent expansion; existing refresh tokens cannot silently gain scope.
@@ -51,6 +52,32 @@ Sprint 011B implements the personal-character asset slice: sequential
 store, and one transaction per completed character snapshot. A fetch or write
 failure retains the prior successful asset rows and records visible sync state.
 Corporation assets and structure-name resolution are not part of this slice.
+
+### Character blueprints (RNI-150)
+
+- Official operation: `GET /characters/{character_id}/blueprints/` (the
+  current `latest` compatibility route; operation version v2 in the legacy
+  versioned specification).
+- Required scope: `esi-characters.read_blueprints.v1`.
+- Pagination: request page 1, read `X-Pages`, then request every remaining
+  page sequentially. The route is cached for up to 3600 seconds; ESI may also
+  return standard cache metadata such as `Expires`, `ETag`, and `Last-Modified`.
+- `item_id`: unique inventory item identifier for this blueprint record.
+- `type_id`: blueprint item type; resolved through imported CCP type data.
+- `location_id`: raw location or containing-item identifier. No name
+  resolution is performed in RNI-150.
+- `location_flag`: ESI inventory flag describing where the item is stored.
+- `material_efficiency` / `time_efficiency`: the blueprint's ME and TE levels.
+- `runs`: `-1` means an original (BPO); a non-negative value is the remaining
+  licensed runs on a copy (BPC). This is the authoritative BPO/BPC rule.
+- `quantity`: commonly `-1` for a singleton original and `-2` for a copy; a
+  positive value can represent a stack of untouched originals. It is stored
+  exactly, but is not used instead of `runs` to classify BPO/BPC.
+- Production selection rule: manual ownership already explicitly selected by
+  an operation remains authoritative. For an intermediate product with no
+  manual owned blueprint, synchronized ME is applied only when exactly one
+  enabled ESI blueprint item can produce that product. If multiple candidates
+  exist, all are displayed and none is auto-selected.
 
 - **Per-resource fetchers** with a shared client: `assets`, `blueprints`, `industry_jobs`, `wallet`, `orders`.
 - **Cadence:** driven by ESI's own `expires` header per endpoint — never poll faster than the cache timer. Manual "Sync now" respects the same limits (button disabled until `next_allowed_at`).

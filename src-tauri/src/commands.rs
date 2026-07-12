@@ -732,3 +732,15 @@ pub fn list_synced_assets(db: State<'_, Db>) -> Result<Vec<inventory::models::Sy
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     inventory::repository::InventoryRepository::new(&conn).list_synced_assets()
 }
+
+#[tauri::command]
+pub fn sync_character_blueprints(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<blueprint::sync::BlueprintSyncResult, String> {
+    let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
+    blueprint::sync::sync_one(&conn,&client_id,character_id)
+}
+
+#[tauri::command]
+pub fn sync_all_character_blueprints(db: State<'_, Db>, client_id: String) -> Result<Vec<blueprint::sync::BlueprintSyncResult>, String> {
+    let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
+    blueprint::sync::sync_all(&conn,&client_id)
+}

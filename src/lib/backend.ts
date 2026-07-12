@@ -250,6 +250,7 @@ export interface OperationReservations {
 
 export interface BlueprintRecord {
   blueprintId: number;
+  typeId: number | null;
   typeName: string;
   isCopy: boolean;
   meLevel: number;
@@ -260,6 +261,12 @@ export interface BlueprintRecord {
   /** idle / researching / copying / in_use */
   status: string;
   linkedOperation: string | null;
+  locationId: number | null;
+  locationFlag: string | null;
+  quantity: number;
+  source: string;
+  lastSynced: string | null;
+  isOwned: boolean;
 }
 
 export interface BlueprintDetail {
@@ -500,6 +507,7 @@ export interface ProductionPlan {
   tree: RequirementTreeNode;
   leafTotals: LeafTotal[];
   warnings: string[];
+  synchronizedBlueprints: Array<{itemId:number;ownerName:string;isCopy:boolean;me:number;te:number;runsRemaining:number|null;source:string}>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1014,6 +1022,12 @@ export interface CharacterSummary {
   assetCount: number;
   pageCount: number;
   syncError: string | null;
+  blueprintScopeGranted: boolean;
+  blueprintSyncStatus: string;
+  blueprintLastSyncAt: string | null;
+  blueprintCount: number;
+  blueprintPageCount: number;
+  blueprintSyncError: string | null;
 }
 
 export interface AssetSyncResult { characterId: number; status: string; assetCount: number; pageCount: number; error: string | null; }
@@ -1022,6 +1036,7 @@ export interface SyncedAsset {
   itemId: number; locationId: number; locationType: string; locationFlag: string; singleton: boolean;
   source: string; lastSynced: string;
 }
+export interface BlueprintSyncResult { characterId:number; status:string; blueprintCount:number; pageCount:number; error:string|null; }
 
 /** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
 export async function addCharacter(clientId: string): Promise<CharacterSummary> {
@@ -1057,4 +1072,13 @@ export async function syncAllCharacterAssets(clientId: string): Promise<AssetSyn
 export async function listSyncedAssets(): Promise<SyncedAsset[]> {
   if (!inTauri()) return [];
   return invoke<SyncedAsset[]>("list_synced_assets");
+}
+
+export async function syncCharacterBlueprints(clientId:string,characterId:number):Promise<BlueprintSyncResult>{
+  if(!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<BlueprintSyncResult>("sync_character_blueprints",{clientId,characterId});
+}
+export async function syncAllCharacterBlueprints(clientId:string):Promise<BlueprintSyncResult[]>{
+  if(!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<BlueprintSyncResult[]>("sync_all_character_blueprints",{clientId});
 }

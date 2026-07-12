@@ -69,6 +69,7 @@ function linkedOperationFor(typeName: string): string | null {
 function toRecord(b: RawBlueprint): BlueprintRecord {
   return {
     blueprintId: b.blueprintId,
+    typeId: null,
     typeName: b.typeName,
     isCopy: b.isCopy,
     meLevel: b.meLevel,
@@ -78,6 +79,12 @@ function toRecord(b: RawBlueprint): BlueprintRecord {
     locationName: b.locationName,
     status: b.status,
     linkedOperation: linkedOperationFor(b.typeName),
+    locationId: null,
+    locationFlag: null,
+    quantity: 1,
+    source: "Manual Ownership",
+    lastSynced: null,
+    isOwned: true,
   };
 }
 

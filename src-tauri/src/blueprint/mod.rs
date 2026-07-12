@@ -21,6 +21,7 @@ pub mod engine;
 pub mod models;
 pub mod provider;
 pub mod repository;
+pub mod sync;
 
 // Re-exported for external callers that need the type name directly;
 // nothing does yet, hence the allow — same pattern as InventoryEngine,
