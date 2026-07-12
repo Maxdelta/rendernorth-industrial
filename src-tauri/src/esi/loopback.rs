@@ -12,6 +12,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
+#[derive(Debug)]
 pub struct CallbackResult {
     pub code: String,
 }
@@ -165,6 +166,16 @@ fn respond(stream: &mut TcpStream, status: u16, message: &str) {
     );
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
+    // Explicit graceful half-close before the stream drops. Without
+    // this, dropping a TcpStream immediately after write+flush can race
+    // with the OS still delivering the send buffer — on Windows this
+    // manifests as the client seeing a connection reset (error 10054)
+    // instead of a clean end-of-response, even though every byte was
+    // actually written successfully. Telling the OS explicitly "no more
+    // writes are coming" avoids that race. Errors here are ignored: if
+    // the client already closed their end, shutdown legitimately fails
+    // and there's nothing further to do.
+    let _ = stream.shutdown(std::net::Shutdown::Write);
 }
 
 #[cfg(test)]
