@@ -3,6 +3,7 @@
 //! Remove/Enable/List. No asset sync, no location resolution, no
 //! inventory integration — those belong to a later sprint.
 
+pub mod assets;
 pub mod engine;
 pub mod models;
 pub mod repository;

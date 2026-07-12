@@ -18,9 +18,21 @@ fn entry_for(character_id: i64) -> Result<keyring::Entry, String> {
 }
 
 pub fn store_refresh_token(character_id: i64, refresh_token: &str) -> Result<(), String> {
-    entry_for(character_id)?
+    let entry = entry_for(character_id)?;
+    entry
         .set_password(refresh_token)
-        .map_err(|e| format!("failed to store refresh token for character {character_id}: {e}"))
+        .map_err(|e| format!("failed to store refresh token for character {character_id}: {e}"))?;
+
+    // Verify the native store immediately. This catches a missing or
+    // misconfigured platform backend during reauthorization instead of
+    // reporting success and failing later when Sync tries to read it.
+    let stored = entry
+        .get_password()
+        .map_err(|e| format!("refresh token was written but could not be read back for character {character_id}: {e}"))?;
+    if stored != refresh_token {
+        return Err(format!("secure storage verification failed for character {character_id}"));
+    }
+    Ok(())
 }
 
 pub fn get_refresh_token(character_id: i64) -> Result<String, String> {

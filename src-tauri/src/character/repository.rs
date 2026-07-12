@@ -63,8 +63,13 @@ impl<'a> CharacterRepository<'a> {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT character_id, name, enabled, authorization_status, last_login_at
-                 FROM characters WHERE is_demo = 0 ORDER BY name",
+                "SELECT c.character_id, c.name, c.enabled, c.authorization_status, c.last_login_at,
+                        CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-assets.read_assets.v1 ') > 0 THEN 1 ELSE 0 END,
+                        COALESCE(s.status, 'never'), s.last_success_at,
+                        COALESCE(s.asset_count, 0), COALESCE(s.page_count, 0), s.last_error
+                 FROM characters c
+                 LEFT JOIN character_asset_sync_state s ON s.character_id = c.character_id
+                 WHERE c.is_demo = 0 ORDER BY c.name",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
@@ -75,6 +80,12 @@ impl<'a> CharacterRepository<'a> {
                     enabled: row.get::<_, i64>(2)? != 0,
                     authorization_status: row.get(3)?,
                     last_login_at: row.get(4)?,
+                    asset_scope_granted: row.get::<_, i64>(5)? != 0,
+                    sync_status: row.get(6)?,
+                    last_sync_at: row.get(7)?,
+                    asset_count: row.get(8)?,
+                    page_count: row.get(9)?,
+                    sync_error: row.get(10)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -98,6 +109,7 @@ mod tests {
         include_str!("../../migrations/0009_inventory_scope.sql"),
         include_str!("../../migrations/0010_demo_category_correction.sql"),
         include_str!("../../migrations/0011_esi_character_auth.sql"),
+        include_str!("../../migrations/0012_character_asset_sync.sql"),
     ];
 
     fn test_db() -> Connection {

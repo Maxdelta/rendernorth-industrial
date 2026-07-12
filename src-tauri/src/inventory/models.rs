@@ -22,6 +22,23 @@ pub struct ManualInventoryEntry {
     pub updated_at: String,
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncedAsset {
+    pub character_id: i64,
+    pub character_owner: String,
+    pub type_id: i64,
+    pub type_name: String,
+    pub quantity: i64,
+    pub item_id: i64,
+    pub location_id: i64,
+    pub location_type: String,
+    pub location_flag: String,
+    pub singleton: bool,
+    pub source: String,
+    pub last_synced: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewManualInventoryEntry {

@@ -80,7 +80,10 @@ fn main() {
             commands::add_character,
             commands::remove_character,
             commands::set_character_enabled,
-            commands::list_characters
+            commands::list_characters,
+            commands::sync_character_assets,
+            commands::sync_all_character_assets,
+            commands::list_synced_assets
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

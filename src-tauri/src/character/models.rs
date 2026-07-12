@@ -9,6 +9,12 @@ pub struct CharacterSummary {
     /// "authorized" | "expired" | "revoked"
     pub authorization_status: String,
     pub last_login_at: Option<String>,
+    pub asset_scope_granted: bool,
+    pub sync_status: String,
+    pub last_sync_at: Option<String>,
+    pub asset_count: i64,
+    pub page_count: i64,
+    pub sync_error: Option<String>,
 }
 
 pub struct NewCharacter {

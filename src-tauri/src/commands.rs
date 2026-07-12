@@ -714,3 +714,21 @@ pub fn list_characters(db: State<'_, Db>) -> Result<Vec<CharacterSummary>, Strin
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     character::engine::list_characters(&conn)
 }
+
+#[tauri::command]
+pub fn sync_character_assets(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<character::assets::SyncResult, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    character::assets::sync_one(&conn, &client_id, character_id)
+}
+
+#[tauri::command]
+pub fn sync_all_character_assets(db: State<'_, Db>, client_id: String) -> Result<Vec<character::assets::SyncResult>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    character::assets::sync_all(&conn, &client_id)
+}
+
+#[tauri::command]
+pub fn list_synced_assets(db: State<'_, Db>) -> Result<Vec<inventory::models::SyncedAsset>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    inventory::repository::InventoryRepository::new(&conn).list_synced_assets()
+}

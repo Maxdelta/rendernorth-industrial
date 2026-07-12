@@ -411,15 +411,7 @@ impl<'a> ProductionRepository<'a> {
     /// exists yet (that's a later sprint), so there is nothing else to
     /// add here.
     fn owned_quantity(&self, type_id: i64) -> Result<(i64, &'static str), String> {
-        let from_manual: i64 = self
-            .conn
-            .query_row(
-                "SELECT COALESCE(SUM(quantity), 0) FROM manual_inventory_entries WHERE type_id = ?1",
-                [type_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
-        Ok((from_manual, "Manual Inventory"))
+        crate::character::assets::global_owned_quantity(self.conn, type_id)
     }
 
     /// Quantity of a type already reserved for this specific operation
@@ -756,6 +748,7 @@ mod tests {
         include_str!("../../migrations/0009_inventory_scope.sql"),
         include_str!("../../migrations/0010_demo_category_correction.sql"),
         include_str!("../../migrations/0011_esi_character_auth.sql"),
+        include_str!("../../migrations/0012_character_asset_sync.sql"),
     ];
 
     fn test_db() -> Connection {

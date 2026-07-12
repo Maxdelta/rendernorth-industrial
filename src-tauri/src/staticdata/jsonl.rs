@@ -359,6 +359,7 @@ mod tests {
         include_str!("../../migrations/0009_inventory_scope.sql"),
         include_str!("../../migrations/0010_demo_category_correction.sql"),
         include_str!("../../migrations/0011_esi_character_auth.sql"),
+        include_str!("../../migrations/0012_character_asset_sync.sql"),
     ];
 
     fn test_db() -> Connection {

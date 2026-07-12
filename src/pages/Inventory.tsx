@@ -7,6 +7,8 @@ import {
   formatQty,
   type ManualInventoryEntry,
   type TypeSearchResult,
+  listSyncedAssets,
+  type SyncedAsset,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
 import { BuildTargetSearch } from "../components/BuildTargetSearch";
@@ -160,9 +162,42 @@ function ManualInventorySection() {
   );
 }
 
+function SyncedAssetsSection() {
+  const [assets, setAssets] = useState<SyncedAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  async function refresh() {
+    setLoading(true); setError(null);
+    try { setAssets(await listSyncedAssets()); }
+    catch (err) { setError(String(err)); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { refresh(); }, []);
+  return <Panel title="Synchronized ESI Assets" keel="furnace" className="dash-hero"
+    headerRight={<button className="target-select enabled" onClick={refresh} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button>}>
+    <p className="ph-mission">Read-only personal assets from connected characters. Raw location IDs are shown; structure-name resolution and location filtering are deferred.</p>
+    {error ? <div className="sd-error"><div className="conflict-desc">Failed to load synchronized assets: {error}</div></div> :
+    loading ? <p className="ph-mission">Loading synchronized assets…</p> :
+    assets.length === 0 ? <p className="ph-mission">No synchronized character assets yet.</p> :
+      <div className="inv-table" style={{ overflowX: "auto" }}>
+        <div className="inv-row" style={{ gridTemplateColumns: "1fr 1.4fr .7fr 1fr 1fr .8fr 1fr .7fr 1fr 1.2fr", minWidth: 1300 }}>
+          <div>Owner</div><div>Type</div><div>Quantity</div><div>Item ID</div><div>Location ID</div>
+          <div>Location Type</div><div>Location Flag</div><div>Singleton</div><div>Source</div><div>Last Synced</div>
+        </div>
+        {assets.map((a) => <div className="inv-row" key={`${a.characterId}-${a.itemId}`}
+          style={{ gridTemplateColumns: "1fr 1.4fr .7fr 1fr 1fr .8fr 1fr .7fr 1fr 1.2fr", minWidth: 1300 }}>
+          <div className="inv-name">{a.characterOwner}</div><div>{a.typeName}</div><div>{formatQty(a.quantity)}</div>
+          <div>{a.itemId}</div><div>{a.locationId}</div><div>{a.locationType}</div><div>{a.locationFlag}</div>
+          <div>{a.singleton ? "Yes" : "No"}</div><div>{a.source}</div><div>{new Date(a.lastSynced).toLocaleString()}</div>
+        </div>)}
+      </div>}
+  </Panel>;
+}
+
 export function InventoryPage() {
   return (
     <div className="dash">
+      <SyncedAssetsSection />
       <ManualInventorySection />
     </div>
   );

@@ -19,6 +19,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (9, include_str!("../migrations/0009_inventory_scope.sql")),
     (10, include_str!("../migrations/0010_demo_category_correction.sql")),
     (11, include_str!("../migrations/0011_esi_character_auth.sql")),
+    (12, include_str!("../migrations/0012_character_asset_sync.sql")),
 ];
 
 pub struct Db {

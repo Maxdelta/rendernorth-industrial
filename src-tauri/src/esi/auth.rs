@@ -10,30 +10,20 @@
 //! the right order with the right values," which is what
 //! docs/ESI_INTEGRATION.md §2's numbered steps describe.
 //!
-//! SCOPES ARE DELIBERATELY EMPTY this sprint. Sprint 011A is
-//! authentication only — no asset endpoint, no structure resolution, no
-//! ESI game-data call of any kind exists anywhere in this build.
-//! Requesting `esi-assets.read_assets.v1` or similar here, with no code
-//! that would ever use it, would mean showing the user a CCP consent
-//! screen asking for a permission this build doesn't act on — an empty
-//! scope list authenticates identity only (who the character is),
-//! nothing more. When a later sprint implements asset sync, the scope
-//! list here will need to change, and every already-connected character
-//! will need to go through Add Character again to grant the new
-//! permission — that's expected and correct, not a bug to work around
-//! now.
+//! Sprint 011B requests the single read-only scope used by character asset
+//! synchronization. Characters connected before this scope was introduced
+//! must run Add Character again so CCP can grant it.
 
 use super::{client, jwt, loopback, pkce};
 use std::time::Duration;
 
 pub const REDIRECT_PORT: u16 = 38473;
 pub const REDIRECT_URI: &str = "http://localhost:38473/callback";
-pub const SCOPES: &[&str] = &[];
+pub const SCOPES: &[&str] = &["esi-assets.read_assets.v1"];
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub struct AddCharacterResult {
     pub identity: jwt::CharacterIdentity,
-    pub access_token: String,
     pub refresh_token: String,
 }
 
@@ -75,7 +65,6 @@ pub fn run_add_character_flow(client_id: &str) -> Result<AddCharacterResult, Str
 
     Ok(AddCharacterResult {
         identity,
-        access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
     })
 }

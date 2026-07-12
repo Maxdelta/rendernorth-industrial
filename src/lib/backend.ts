@@ -1008,6 +1008,19 @@ export interface CharacterSummary {
   /** "authorized" | "expired" | "revoked" */
   authorizationStatus: string;
   lastLoginAt: string | null;
+  assetScopeGranted: boolean;
+  syncStatus: string;
+  lastSyncAt: string | null;
+  assetCount: number;
+  pageCount: number;
+  syncError: string | null;
+}
+
+export interface AssetSyncResult { characterId: number; status: string; assetCount: number; pageCount: number; error: string | null; }
+export interface SyncedAsset {
+  characterId: number; characterOwner: string; typeId: number; typeName: string; quantity: number;
+  itemId: number; locationId: number; locationType: string; locationFlag: string; singleton: boolean;
+  source: string; lastSynced: string;
 }
 
 /** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
@@ -1029,4 +1042,19 @@ export async function setCharacterEnabled(characterId: number, enabled: boolean)
 export async function listCharacters(): Promise<CharacterSummary[]> {
   if (!inTauri()) return [];
   return invoke<CharacterSummary[]>("list_characters");
+}
+
+export async function syncCharacterAssets(clientId: string, characterId: number): Promise<AssetSyncResult> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<AssetSyncResult>("sync_character_assets", { clientId, characterId });
+}
+
+export async function syncAllCharacterAssets(clientId: string): Promise<AssetSyncResult[]> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<AssetSyncResult[]>("sync_all_character_assets", { clientId });
+}
+
+export async function listSyncedAssets(): Promise<SyncedAsset[]> {
+  if (!inTauri()) return [];
+  return invoke<SyncedAsset[]>("list_synced_assets");
 }

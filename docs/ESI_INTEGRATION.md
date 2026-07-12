@@ -24,6 +24,11 @@ Multiple characters = repeat the flow; one token set per character in `esi_token
 
 ## 3. Scopes (minimum set per module)
 
+Sprint 011B active scope set: `esi-assets.read_assets.v1` only. Characters
+connected under Sprint 011A's identity-only grant must reauthorize through
+Add / Reauthorize Character before their first asset sync. This is required
+OAuth consent expansion; existing refresh tokens cannot silently gain scope.
+
 | Scope | Used by | Why |
 |---|---|---|
 | esi-assets.read_assets.v1 | Asset Manager, Inventory Engine | What do I own / where is it |
@@ -40,6 +45,12 @@ Asset safety contents have limited ESI visibility; the Asset Safety Recovery mod
 Each release lists its exact scope set in the auth screen before the browser opens. Adding a scope requires re-consent, never silent expansion.
 
 ## 4. Sync Engine Design (Sprint 002–003)
+
+Sprint 011B implements the personal-character asset slice: sequential
+`X-Pages` pagination, access-token refresh through the existing secure token
+store, and one transaction per completed character snapshot. A fetch or write
+failure retains the prior successful asset rows and records visible sync state.
+Corporation assets and structure-name resolution are not part of this slice.
 
 - **Per-resource fetchers** with a shared client: `assets`, `blueprints`, `industry_jobs`, `wallet`, `orders`.
 - **Cadence:** driven by ESI's own `expires` header per endpoint — never poll faster than the cache timer. Manual "Sync now" respects the same limits (button disabled until `next_allowed_at`).

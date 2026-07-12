@@ -5,7 +5,7 @@
 
 use super::models::{
     InventoryAllocation, InventoryCategory, InventoryItem, InventoryLocation, InventoryReservation,
-    InventorySummary, ManualInventoryEntry, NewManualInventoryEntry,
+    InventorySummary, ManualInventoryEntry, NewManualInventoryEntry, SyncedAsset,
 };
 use rusqlite::Connection;
 
@@ -13,9 +13,58 @@ pub struct InventoryRepository<'a> {
     conn: &'a Connection,
 }
 
+#[cfg(test)]
+mod synced_asset_tests {
+    use super::*;
+
+    #[test]
+    fn synchronized_assets_are_returned_with_owner_type_location_and_source() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE characters(character_id INTEGER PRIMARY KEY, name TEXT);
+             CREATE TABLE eve_types(type_id INTEGER PRIMARY KEY, name TEXT);
+             CREATE TABLE character_assets(
+                character_id INTEGER, item_id INTEGER, type_id INTEGER, quantity INTEGER,
+                location_id INTEGER, location_type TEXT, location_flag TEXT,
+                is_singleton INTEGER, synced_at TEXT);
+             INSERT INTO characters VALUES(1, 'Maxdelta');
+             INSERT INTO eve_types VALUES(34, 'Tritanium');
+             INSERT INTO character_assets VALUES(1, 99, 34, 500, 60003760, 'station', 'Hangar', 0, '2026-07-12T18:35:01Z');"
+        ).unwrap();
+
+        let assets = InventoryRepository::new(&conn).list_synced_assets().unwrap();
+        assert_eq!(assets.len(), 1);
+        assert_eq!(assets[0].character_owner, "Maxdelta");
+        assert_eq!(assets[0].type_name, "Tritanium");
+        assert_eq!(assets[0].location_id, 60003760);
+        assert_eq!(assets[0].source, "ESI Character Assets");
+    }
+}
+
 impl<'a> InventoryRepository<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
+    }
+
+    pub fn list_synced_assets(&self) -> Result<Vec<SyncedAsset>, String> {
+        let mut stmt = self.conn.prepare(
+            "SELECT a.character_id, c.name, a.type_id,
+                    COALESCE(t.name, 'Unknown Type ' || a.type_id), a.quantity, a.item_id,
+                    a.location_id, a.location_type, a.location_flag, a.is_singleton, a.synced_at
+             FROM character_assets a
+             JOIN characters c ON c.character_id = a.character_id
+             LEFT JOIN eve_types t ON t.type_id = a.type_id
+             ORDER BY c.name, a.location_id,
+                      COALESCE(t.name, 'Unknown Type ' || a.type_id), a.item_id"
+        ).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| Ok(SyncedAsset {
+            character_id: row.get(0)?, character_owner: row.get(1)?, type_id: row.get(2)?,
+            type_name: row.get(3)?, quantity: row.get(4)?, item_id: row.get(5)?,
+            location_id: row.get(6)?, location_type: row.get(7)?, location_flag: row.get(8)?,
+            singleton: row.get::<_, i64>(9)? != 0, source: "ESI Character Assets".into(),
+            last_synced: row.get(10)?,
+        })).map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
     }
 
     /// Normal runtime: excludes demo-seeded rows (`source = 'demo'`).
