@@ -7,6 +7,7 @@ import {
   getBlueprintReadinessForOperation,
   getOperationRequirementBreakdown,
   calculateProductionPlan,
+  deleteRealOperation,
   formatQty,
   type OperationSummary,
   type OperationDetail,
@@ -18,7 +19,6 @@ import {
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
 import { NewBuildForm } from "../components/NewBuildForm";
-import { useShowDemoData } from "../lib/demoDataPreference";
 
 function statusTone(status: string, isBlocked: boolean): "nominal" | "furnace" | "alert" | "coolant" {
   if (isBlocked) return "alert";
@@ -38,7 +38,35 @@ export function OperationsWorkspacePage() {
   const [requirementBreakdown, setRequirementBreakdown] = useState<OperationRequirementBreakdown | null>(null);
   const [plan, setPlan] = useState<ProductionPlan | null>(null);
   const [showNewBuildForm, setShowNewBuildForm] = useState(false);
-  const [showDemoData] = useShowDemoData();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleConfirmDelete() {
+    if (!detail) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteRealOperation(detail.operationId);
+      const dashboard = await getOperationsDashboard();
+      setOperations(dashboard.currentOperations);
+      setShowDeleteConfirm(false);
+      if (dashboard.currentOperations.length > 0) {
+        setSearchParams({ op: String(dashboard.currentOperations[0].operationId) });
+      } else {
+        // No real builds left. All normal queries are real-only already —
+        // regardless of the Show Demo Data toggle. Clear the selection
+        // entirely so the page shows the "No real builds yet" state.
+        setDetail(null);
+        setPlan(null);
+        setSearchParams({});
+      }
+    } catch (err) {
+      setDeleteError(String(err));
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function refreshOperationsAndSelect(operationId?: number) {
     const dashboard = await getOperationsDashboard();
@@ -70,6 +98,8 @@ export function OperationsWorkspacePage() {
 
   useEffect(() => {
     if (!selectedId) return;
+    setShowDeleteConfirm(false);
+    setDeleteError(null);
     let live = true;
     getOperationDetail(selectedId).then((d) => live && setDetail(d));
     getOperationReservations(selectedId).then((r) => live && setReservations(r));
@@ -100,38 +130,34 @@ export function OperationsWorkspacePage() {
             }
           >
             <div className="ops-rail-list">
-              {operations
-                .filter((op) => showDemoData || !op.isDemo)
-                .map((op) => (
-                  <button
-                    key={op.operationId}
-                    className={op.operationId === selectedId ? "ops-rail-row active" : "ops-rail-row"}
-                    onClick={() => setSearchParams({ op: String(op.operationId) })}
-                  >
-                    <span className="ops-rail-goal">
-                      {op.goal}
-                      {op.isDemo && <span className="demo-badge">DEMO</span>}
-                    </span>
-                    <span className="ops-rail-meta">
-                      <span>P{op.priority}</span>
-                      <span className={op.isBlocked ? "alert" : ""}>{op.isBlocked ? "Blocked" : op.status}</span>
-                      <span>{Math.round(op.progress * 100)}%</span>
-                    </span>
-                  </button>
-                ))}
-              {operations.length > 0 && !showDemoData && operations.every((op) => op.isDemo) && (
-                <p className="ph-mission" style={{ padding: 10 }}>
-                  All operations are demo data, currently hidden. Turn "Show Demo Data" back on in Settings, or create a
-                  New Build.
-                </p>
-              )}
+              {operations.map((op) => (
+                <button
+                  key={op.operationId}
+                  className={op.operationId === selectedId ? "ops-rail-row active" : "ops-rail-row"}
+                  onClick={() => setSearchParams({ op: String(op.operationId) })}
+                >
+                  <span className="ops-rail-goal">{op.goal}</span>
+                  <span className="ops-rail-meta">
+                    <span>P{op.priority}</span>
+                    <span className={op.isBlocked ? "alert" : ""}>{op.isBlocked ? "Blocked" : op.status}</span>
+                    <span>{Math.round(op.progress * 100)}%</span>
+                  </span>
+                </button>
+              ))}
             </div>
           </Panel>
 
-          {!detail ? (
+          {!selectedId ? (
+            <Panel title="Overview" keel="coolant">
+              <p className="ph-mission">
+                {operations.length > 0 ? "Select a build from the list." : "No real builds yet. Click \"New Build\" to create one."}
+              </p>
+            </Panel>
+          ) : !detail ? (
             <Panel title="Overview" keel="furnace">
               <div className="data-source">Loading operation…</div>
             </Panel>
+
           ) : (
             <div>
             <Panel
@@ -140,7 +166,6 @@ export function OperationsWorkspacePage() {
               className="dash-hero"
               headerRight={
                 <>
-                  {detail.isDemo && <span className="demo-badge">DEMO</span>}
                   <a className="target-select enabled" href={`#/production?op=${detail.operationId}`} style={{ marginLeft: 8 }}>
                     View Production Plan
                   </a>
@@ -177,6 +202,47 @@ export function OperationsWorkspacePage() {
               )}
               <div className="ops-field-label">Notes</div>
               <p className="ops-notes">{detail.notes || "No notes recorded for this operation."}</p>
+
+              {!detail.isDemo && (
+                <div className="ops-destructive-zone">
+                  {!showDeleteConfirm ? (
+                    <button className="target-select destructive" onClick={() => setShowDeleteConfirm(true)}>
+                      Delete Build
+                    </button>
+                  ) : (
+                    <div className="ops-delete-confirm">
+                      <p className="ops-delete-warning">
+                        Delete <strong>{detail.goal}</strong>
+                        {plan ? (
+                          <>
+                            {" "}
+                            — build target <strong>{plan.buildTargetName}</strong> × <strong>{plan.requestedQuantity}</strong>
+                          </>
+                        ) : (
+                          " — no build target set"
+                        )}
+                        ? This also permanently removes this operation's own dependencies, timeline, blueprint
+                        requirements, production requirements, calculation snapshots, and reservations. Imported CCP
+                        static data, manual inventory, owned blueprints, and every other operation are never affected.
+                        This cannot be undone.
+                      </p>
+                      {deleteError && (
+                        <div className="sd-error">
+                          <div className="conflict-desc">{deleteError}</div>
+                        </div>
+                      )}
+                      <div className="new-op-actions">
+                        <button className="target-select destructive" onClick={handleConfirmDelete} disabled={deleting}>
+                          {deleting ? "Deleting…" : "Confirm Delete"}
+                        </button>
+                        <button className="target-select" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </Panel>
 
             <div style={{ height: 14 }} />

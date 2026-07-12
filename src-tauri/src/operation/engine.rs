@@ -66,6 +66,16 @@ impl<P: OperationProvider> OperationEngine<P> {
         self.provider.create(input)
     }
 
+    /// Real as of Sprint 009.1: deletes a real operation and every row it
+    /// owns, transactionally. Demo operations are refused — the Operation
+    /// Engine owns deletion orchestration for its own domain's data the
+    /// same way it owns creation; it does not reach into Inventory's,
+    /// Blueprint's, or Static Data Import's tables, only the rows that
+    /// exist specifically because this operation does.
+    pub fn delete_operation(&self, operation_id: i64) -> Result<(), String> {
+        self.provider.delete(operation_id)
+    }
+
     #[allow(dead_code, unused_variables)]
     pub fn set_priority(&self, operation_id: i64, priority: i64) -> Result<(), String> {
         Err("Operation Engine mutations are architecture-only this sprint".into())

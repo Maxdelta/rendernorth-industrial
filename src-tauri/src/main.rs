@@ -5,9 +5,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod blueprint;
+mod character;
 mod commands;
 mod db;
 mod decision;
+mod esi;
 mod inventory;
 mod models;
 mod operation;
@@ -66,6 +68,7 @@ fn main() {
             commands::get_latest_import,
             commands::search_eve_types,
             commands::create_real_operation,
+            commands::delete_real_operation,
             commands::calculate_production_plan,
             commands::list_manual_inventory,
             commands::add_manual_inventory_entry,
@@ -73,7 +76,11 @@ fn main() {
             commands::update_manual_inventory_quantity,
             commands::remove_manual_inventory_entry,
             commands::get_app_setting,
-            commands::set_app_setting
+            commands::set_app_setting,
+            commands::add_character,
+            commands::remove_character,
+            commands::set_character_enabled,
+            commands::list_characters
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

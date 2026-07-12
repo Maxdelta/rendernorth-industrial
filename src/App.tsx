@@ -2,7 +2,6 @@ import { HashRouter, Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { MissionControlPage } from "./pages/MissionControl";
-import { BuildTargetsPage } from "./pages/BuildTargets";
 import { InventoryPage } from "./pages/Inventory";
 import { BlueprintsPage } from "./pages/Blueprints";
 import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
@@ -17,6 +16,14 @@ import {
   ReportsPage,
 } from "./pages/placeholders";
 
+// NOTE: src/pages/BuildTargets.tsx and src/components/TargetPicker.tsx are
+// deliberately retained but unrouted. The Build Targets concept and its
+// backend (list_build_targets/select_build_target, build_projects and its
+// schema) are preserved pending a product decision on its future role
+// (planning sandbox / quick estimator / production preview / pre-operation
+// workflow) — see docs/architecture/DATA_OWNERSHIP.md. Only the redundant
+// legacy UI surface is retired here; nothing about the concept is deleted.
+
 export default function App() {
   return (
     <HashRouter>
@@ -28,7 +35,6 @@ export default function App() {
             <Routes>
               <Route path="/" element={<MissionControlPage />} />
               <Route path="/operations" element={<OperationsWorkspacePage />} />
-              <Route path="/targets" element={<BuildTargetsPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/blueprints" element={<BlueprintsPage />} />
               <Route path="/production" element={<ProductionPage />} />

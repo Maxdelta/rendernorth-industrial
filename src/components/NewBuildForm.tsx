@@ -5,6 +5,7 @@ import {
   type BlueprintRecord,
   type TypeSearchResult,
   type CreatedOperation,
+  type InventoryScope,
 } from "../lib/backend";
 import { BuildTargetSearch } from "./BuildTargetSearch";
 import { Panel } from "./Panel";
@@ -34,6 +35,7 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [customName, setCustomName] = useState("");
+  const [inventoryScope, setInventoryScope] = useState<InventoryScope>("all_included_inventory");
   const [priority, setPriority] = useState(3);
   const [deadline, setDeadline] = useState("");
   const [notes, setNotes] = useState("");
@@ -78,6 +80,7 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
         assumedTe: mode === "assumed" ? assumedTe : null,
         assumedIsBpc: mode === "assumed" ? assumedIsBpc : null,
         assumedRuns: mode === "assumed" && assumedIsBpc && assumedRuns !== "" ? Number(assumedRuns) : null,
+        inventoryScope,
       });
       onCreated(result);
     } catch (err) {
@@ -191,6 +194,41 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
                 placeholder={target ? autoGoal(target.name, quantity) : "Select a build target first"}
               />
             </label>
+
+            <div className="new-op-field">
+              <span className="ops-field-label">Inventory Scope</span>
+              <p className="ph-mission" style={{ marginTop: 0, marginBottom: 8 }}>
+                Which inventory counts toward this build's coverage. Only "All Included Inventory" is active today —
+                the others are placeholders for future location-aware filtering (no route/jump calculation or ESI
+                yet).
+              </p>
+              <div className="inv-scope-list">
+                {(
+                  [
+                    { value: "build_location_only", label: "Build Location Only" },
+                    { value: "same_solar_system", label: "Same Solar System" },
+                    { value: "within_n_jumps", label: "Within N Jumps" },
+                    { value: "selected_locations", label: "Selected Locations" },
+                    { value: "all_included_inventory", label: "All Included Inventory" },
+                  ] as const
+                ).map((opt) => {
+                  const enabled = opt.value === "all_included_inventory";
+                  return (
+                    <label key={opt.value} className="new-op-radio-row">
+                      <input
+                        type="radio"
+                        name="inventoryScope"
+                        checked={inventoryScope === opt.value}
+                        disabled={!enabled}
+                        onChange={() => enabled && setInventoryScope(opt.value)}
+                      />
+                      {opt.label}
+                      {!enabled && <span className="demo-badge">COMING SOON</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
             <div className="new-op-row">
               <label className="new-op-field">
                 <span className="ops-field-label">Priority</span>

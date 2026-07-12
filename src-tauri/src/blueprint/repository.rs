@@ -32,6 +32,7 @@ impl<'a> BlueprintRepository<'a> {
             JOIN operations o ON o.operation_id = r.operation_id
             GROUP BY r.type_name
         ) op ON op.type_name = b.type_name
+        WHERE b.is_demo = 0
     ";
 
     fn map_record(row: &rusqlite::Row) -> rusqlite::Result<BlueprintRecord> {
@@ -60,7 +61,7 @@ impl<'a> BlueprintRepository<'a> {
     }
 
     pub fn get_detail(&self, blueprint_id: i64) -> Result<BlueprintDetail, String> {
-        let sql = format!("{} WHERE b.blueprint_id = ?1", Self::RECORD_SELECT);
+        let sql = format!("{} AND b.blueprint_id = ?1", Self::RECORD_SELECT);
         let record = self
             .conn
             .query_row(&sql, [blueprint_id], Self::map_record)
@@ -104,7 +105,7 @@ impl<'a> BlueprintRepository<'a> {
                     SUM(CASE WHEN is_copy = 1 THEN 1 ELSE 0 END),
                     SUM(CASE WHEN status != 'researching' THEN 1 ELSE 0 END),
                     COALESCE(SUM(CASE WHEN is_copy = 1 THEN runs_remaining ELSE 0 END), 0)
-                 FROM blueprints",
+                 FROM blueprints WHERE is_demo = 0",
                 [],
                 |row| {
                     Ok((
@@ -123,7 +124,8 @@ impl<'a> BlueprintRepository<'a> {
             .query_row(
                 "SELECT COUNT(DISTINCT r.type_name)
                  FROM operation_blueprint_requirements r
-                 WHERE NOT EXISTS (SELECT 1 FROM blueprints b WHERE b.type_name = r.type_name)",
+                 JOIN operations o ON o.operation_id = r.operation_id AND o.is_demo = 0
+                 WHERE NOT EXISTS (SELECT 1 FROM blueprints b WHERE b.type_name = r.type_name AND b.is_demo = 0)",
                 [],
                 |row| row.get(0),
             )
@@ -149,7 +151,8 @@ impl<'a> BlueprintRepository<'a> {
             .prepare(
                 "SELECT DISTINCT r.type_name
                  FROM operation_blueprint_requirements r
-                 WHERE NOT EXISTS (SELECT 1 FROM blueprints b WHERE b.type_name = r.type_name)",
+                 JOIN operations o ON o.operation_id = r.operation_id AND o.is_demo = 0
+                 WHERE NOT EXISTS (SELECT 1 FROM blueprints b WHERE b.type_name = r.type_name AND b.is_demo = 0)",
             )
             .map_err(|e| e.to_string())?;
         let type_names: Vec<String> = stmt
@@ -163,7 +166,7 @@ impl<'a> BlueprintRepository<'a> {
                 .conn
                 .prepare(
                     "SELECT o.goal FROM operation_blueprint_requirements r
-                     JOIN operations o ON o.operation_id = r.operation_id
+                     JOIN operations o ON o.operation_id = r.operation_id AND o.is_demo = 0
                      WHERE r.type_name = ?1",
                 )
                 .map_err(|e| e.to_string())?;
@@ -245,7 +248,12 @@ impl<'a> BlueprintRepository<'a> {
     pub fn readiness_all(&self) -> Result<Vec<BlueprintReadiness>, String> {
         let mut stmt = self
             .conn
-            .prepare("SELECT DISTINCT operation_id FROM operation_blueprint_requirements ORDER BY operation_id")
+            .prepare(
+                "SELECT DISTINCT r.operation_id
+                 FROM operation_blueprint_requirements r
+                 JOIN operations o ON o.operation_id = r.operation_id AND o.is_demo = 0
+                 ORDER BY r.operation_id",
+            )
             .map_err(|e| e.to_string())?;
         let operation_ids: Vec<i64> = stmt
             .query_map([], |row| row.get(0))

@@ -4,6 +4,7 @@ import { formatQty, type RequirementTreeNode } from "../lib/backend";
 interface TreeNodeRowProps {
   node: RequirementTreeNode;
   depth: number;
+  validationMode?: boolean;
 }
 
 function tone(node: RequirementTreeNode): "nominal" | "furnace" | "alert" {
@@ -11,7 +12,7 @@ function tone(node: RequirementTreeNode): "nominal" | "furnace" | "alert" {
   return node.coverageFraction >= 0.6 ? "furnace" : "alert";
 }
 
-export function TreeNodeRow({ node, depth }: TreeNodeRowProps) {
+export function TreeNodeRow({ node, depth, validationMode = false }: TreeNodeRowProps) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children.length > 0;
 
@@ -29,17 +30,30 @@ export function TreeNodeRow({ node, depth }: TreeNodeRowProps) {
             </span>
           )}
         </div>
-        <div className="inv-qty">{formatQty(node.neededQuantity)}</div>
-        <div className="inv-qty">{formatQty(node.ownedQuantity)}</div>
+        <div className="inv-qty">
+          {formatQty(node.neededQuantity)}
+        </div>
+        <div className="inv-qty">
+          {formatQty(node.ownedQuantity)}
+          {node.ownedQuantity > 0 && <span className="bts-result-meta"> · {node.ownedSource}</span>}
+        </div>
         <div className="inv-qty">{node.reservedQuantity > 0 ? formatQty(node.reservedQuantity) : "—"}</div>
         <div className="inv-qty">{formatQty(node.availableQuantity)}</div>
         <div className="inv-qty">{Math.round(node.coverageFraction * 100)}%</div>
         <div className={`inv-status ${tone(node)}`}>{node.isSatisfied ? "OK" : "Short"}</div>
       </div>
+      {validationMode && (
+        <div className="validation-detail" style={{ paddingLeft: depth * 4 + 20 }}>
+          <span>Blueprint: {node.blueprintTypeId !== null ? `type ${node.blueprintTypeId}` : "— (leaf, no blueprint)"}</span>
+          <span>Activity: {node.activity}</span>
+          <span>Required: {formatQty(node.neededQuantity)}</span>
+          <span>Path: {node.calculationPath}</span>
+        </div>
+      )}
       {hasChildren && expanded && (
         <div className="tree-children">
           {node.children.map((child) => (
-            <TreeNodeRow key={`${child.typeId}-${depth}`} node={child} depth={depth + 1} />
+            <TreeNodeRow key={`${child.typeId}-${depth}`} node={child} depth={depth + 1} validationMode={validationMode} />
           ))}
         </div>
       )}

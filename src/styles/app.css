@@ -1317,3 +1317,49 @@
   margin-bottom: 10px;
 }
 .paste-inv-textarea:focus { outline: none; border-color: var(--furnace); }
+
+/* ---------- Inventory Scope selector ---------- */
+.inv-scope-list { display: flex; flex-direction: column; gap: 2px; }
+
+/* ---------- Validation Mode (Sprint 009) ---------- */
+.validation-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 3px 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--coolant);
+  border-bottom: 1px solid var(--bulkhead);
+  background: var(--deck);
+}
+
+/* ---------- Delete Build (Sprint 009.1) ---------- */
+.ops-destructive-zone {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--alert);
+}
+
+.target-select.destructive {
+  border-color: var(--alert);
+  color: var(--alert);
+}
+.target-select.destructive:hover:not(:disabled) {
+  background: var(--alert);
+  color: var(--deck);
+}
+
+.ops-delete-confirm {
+  border: 1px solid var(--alert);
+  padding: 14px;
+  background: var(--deck);
+}
+
+.ops-delete-warning {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 14px;
+}
+

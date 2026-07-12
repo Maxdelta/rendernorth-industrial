@@ -9,6 +9,10 @@ use crate::blueprint::{
         MissingBlueprintReport,
     },
 };
+use crate::character::{
+    self,
+    models::CharacterSummary,
+};
 use crate::db::Db;
 use crate::inventory::{
     self,
@@ -573,6 +577,15 @@ pub fn create_real_operation(
     Ok(CreatedOperation { operation_id })
 }
 
+/// Real operation deletion (Sprint 009.1). Refuses demo operations before
+/// any transaction begins; deletes the operation and every row it owns,
+/// transactionally, in one call.
+#[tauri::command]
+pub fn delete_real_operation(db: State<'_, Db>, operation_id: i64) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    operation::engine_for(&conn).delete_operation(operation_id)
+}
+
 // ---------------------------------------------------------------------------
 // Real production plan calculation (Sprint 008). Recursive, deterministic,
 // derived live from imported static data + owned/assumed blueprint state +
@@ -662,4 +675,42 @@ pub fn set_app_setting(db: State<'_, Db>, key: String, value: String) -> Result<
     )
     .map_err(|e| format!("failed to write app setting: {e}"))?;
     Ok(())
+}
+
+// ============================================================
+// Sprint 011A — EVE SSO Character Authentication Foundation.
+// Authentication only: Add/Remove/Enable/List a connected character.
+// No asset sync, no universe map, no inventory scope, no production
+// integration — those are explicitly out of scope for this sprint.
+// See docs/ESI_INTEGRATION.md for the design and
+// docs/SPRINT_011A_SETUP.md for exact EVE Developer app configuration.
+// ============================================================
+
+/// Blocking (opens the system browser, waits on the loopback listener).
+/// Deliberately a *non-async* command — Tauri dispatches non-async
+/// command handlers off its main thread automatically, which is exactly
+/// what a multi-minute wait on user login needs, without requiring `Db`
+/// to be `Arc`-wrapped/cloned the way an explicit `spawn_blocking` would.
+#[tauri::command]
+pub fn add_character(db: State<'_, Db>, client_id: String) -> Result<CharacterSummary, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    character::engine::add_character(&conn, &client_id)
+}
+
+#[tauri::command]
+pub fn remove_character(db: State<'_, Db>, character_id: i64) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    character::engine::remove_character(&conn, character_id)
+}
+
+#[tauri::command]
+pub fn set_character_enabled(db: State<'_, Db>, character_id: i64, enabled: bool) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    character::engine::set_enabled(&conn, character_id, enabled)
+}
+
+#[tauri::command]
+pub fn list_characters(db: State<'_, Db>) -> Result<Vec<CharacterSummary>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    character::engine::list_characters(&conn)
 }

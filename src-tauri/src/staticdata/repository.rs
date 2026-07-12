@@ -91,6 +91,7 @@ struct CsvActivityMaterial {
 
 const MANUFACTURING_ACTIVITY_ID: i64 = 1;
 
+
 pub struct StaticDataRepository<'a> {
     conn: &'a Connection,
 }
@@ -159,7 +160,7 @@ impl<'a> StaticDataRepository<'a> {
             .map(|t| ParsedType {
                 type_id: t.type_id,
                 name: t.type_name.clone(),
-                group_id: t.group_id,
+                group_id: Some(t.group_id),
                 published: t.published != 0,
             })
             .collect();
@@ -170,6 +171,7 @@ impl<'a> StaticDataRepository<'a> {
                 blueprint_type_id: p.blueprint_type_id,
                 product_type_id: p.product_type_id,
                 quantity: p.quantity,
+                source_line: None, // CSV rows already get their own diagnostics via read_csv's per-row error handling
             })
             .collect();
         let materials: Vec<ParsedMaterial> = raw_materials
@@ -179,6 +181,7 @@ impl<'a> StaticDataRepository<'a> {
                 blueprint_type_id: m.blueprint_type_id,
                 material_type_id: m.material_type_id,
                 quantity: m.quantity,
+                source_line: None,
             })
             .collect();
 
@@ -212,6 +215,8 @@ impl<'a> StaticDataRepository<'a> {
             .execute_batch("BEGIN;")
             .map_err(|e| format!("failed to begin import transaction: {e}"))?;
 
+        let mut stub_warnings: Vec<String> = Vec::new();
+
         let result: Result<(), String> = (|| {
             self.conn
                 .execute_batch(
@@ -221,6 +226,20 @@ impl<'a> StaticDataRepository<'a> {
                 )
                 .map_err(|e| format!("failed to clear reference tables: {e}"))?;
 
+            // Parents before children, all the way down: real categories,
+            // then a stub for any category a group references that wasn't
+            // actually provided; real groups, then a stub for any group a
+            // type references that wasn't provided; real types, then a
+            // stub for any type a blueprint references that wasn't
+            // provided; only then the blueprint rows themselves. Real data
+            // always goes in first at each level, so the stub step only
+            // ever catches a genuine gap — never fires (and never
+            // generates a false warning) for an id that the import
+            // actually supplied. This is the fix for real-data "FOREIGN
+            // KEY constraint failed" errors: a referenced id is guaranteed
+            // present by the time anything that needs it is inserted,
+            // whether the gap was a genuine absence in the export or a
+            // record this importer's tolerant parsing didn't recognize.
             for c in categories {
                 self.conn
                     .execute(
@@ -231,6 +250,10 @@ impl<'a> StaticDataRepository<'a> {
                     .map_err(|e| format!("failed to upsert category {}: {e}", c.category_id))?;
             }
             for g in groups {
+                self.ensure_category_stub(g.category_id, &mut stub_warnings)?;
+            }
+
+            for g in groups {
                 self.conn
                     .execute(
                         "INSERT INTO eve_groups (group_id, category_id, name, published) VALUES (?1, ?2, ?3, ?4)
@@ -240,6 +263,12 @@ impl<'a> StaticDataRepository<'a> {
                     )
                     .map_err(|e| format!("failed to upsert group {}: {e}", g.group_id))?;
             }
+            for t in types {
+                if let Some(group_id) = t.group_id {
+                    self.ensure_group_stub(group_id, &mut stub_warnings)?;
+                }
+            }
+
             for t in types {
                 self.conn
                     .execute(
@@ -254,6 +283,20 @@ impl<'a> StaticDataRepository<'a> {
             self.conn
                 .execute("UPDATE eve_types SET is_manufacturable = 0", [])
                 .map_err(|e| format!("failed to reset is_manufacturable: {e}"))?;
+
+            for p in products {
+                let loc = p.source_line.map(|l| format!(", blueprints.jsonl line {l}")).unwrap_or_default();
+                self.ensure_type_stub(
+                    p.blueprint_type_id,
+                    &format!("the blueprint itself, producing type {}{loc}", p.product_type_id),
+                    &mut stub_warnings,
+                )?;
+                self.ensure_type_stub(
+                    p.product_type_id,
+                    &format!("product of blueprint {}{loc}", p.blueprint_type_id),
+                    &mut stub_warnings,
+                )?;
+            }
             for p in products {
                 self.conn
                     .execute(
@@ -262,7 +305,28 @@ impl<'a> StaticDataRepository<'a> {
                          ON CONFLICT(blueprint_type_id, product_type_id) DO UPDATE SET quantity = excluded.quantity",
                         (p.blueprint_type_id, p.product_type_id, p.quantity),
                     )
-                    .map_err(|e| format!("failed to insert blueprint product {}: {e}", p.blueprint_type_id))?;
+                    .map_err(|e| {
+                        format!(
+                            "failed to insert blueprint product: blueprint_id={}, product_type_id={}, quantity={}{}: {e}",
+                            p.blueprint_type_id,
+                            p.product_type_id,
+                            p.quantity,
+                            p.source_line.map(|l| format!(", blueprints.jsonl line {l}")).unwrap_or_default()
+                        )
+                    })?;
+            }
+            for m in materials {
+                let loc = m.source_line.map(|l| format!(", blueprints.jsonl line {l}")).unwrap_or_default();
+                self.ensure_type_stub(
+                    m.blueprint_type_id,
+                    &format!("the blueprint itself, requiring material {}{loc}", m.material_type_id),
+                    &mut stub_warnings,
+                )?;
+                self.ensure_type_stub(
+                    m.material_type_id,
+                    &format!("material of blueprint {}{loc}", m.blueprint_type_id),
+                    &mut stub_warnings,
+                )?;
             }
             for m in materials {
                 self.conn
@@ -271,7 +335,15 @@ impl<'a> StaticDataRepository<'a> {
                          VALUES (?1, ?2, ?3)",
                         (m.blueprint_type_id, m.material_type_id, m.quantity),
                     )
-                    .map_err(|e| format!("failed to insert blueprint material for bp {}: {e}", m.blueprint_type_id))?;
+                    .map_err(|e| {
+                        format!(
+                            "failed to insert blueprint material: blueprint_id={}, material_type_id={}, quantity={}{}: {e}",
+                            m.blueprint_type_id,
+                            m.material_type_id,
+                            m.quantity,
+                            m.source_line.map(|l| format!(", blueprints.jsonl line {l}")).unwrap_or_default()
+                        )
+                    })?;
             }
             self.conn
                 .execute(
@@ -289,7 +361,13 @@ impl<'a> StaticDataRepository<'a> {
             return Err(e);
         }
 
-        let status = if parse_error_summary.is_none() { "success" } else { "partial" };
+        let mut all_warnings: Vec<String> = Vec::new();
+        if let Some(parse_errors) = &parse_error_summary {
+            all_warnings.push(parse_errors.clone());
+        }
+        all_warnings.extend(stub_warnings);
+        let error_summary = if all_warnings.is_empty() { None } else { Some(all_warnings.join("\n")) };
+        let status = if error_summary.is_none() { "success" } else { "partial" };
 
         self.conn
             .execute(
@@ -307,7 +385,7 @@ impl<'a> StaticDataRepository<'a> {
                     categories.len() as i64,
                     products.len() as i64,
                     materials.len() as i64,
-                    &parse_error_summary,
+                    &error_summary,
                 ),
             )
             .map_err(|e| format!("failed to record import metadata: {e}"))?;
@@ -318,6 +396,80 @@ impl<'a> StaticDataRepository<'a> {
 
         self.latest_import()
             .map_err(|e| format!("import committed but failed to read back summary: {e}"))
+    }
+
+    /// Ensures `category_id` exists in `eve_categories` before something
+    /// that references it is inserted. `ON CONFLICT DO NOTHING` means a
+    /// category that *was* successfully parsed is never overwritten by a
+    /// placeholder — this only fills genuine gaps. Records a warning so a
+    /// stub is always visible in the import summary, never silent.
+    fn ensure_category_stub(&self, category_id: i64, warnings: &mut Vec<String>) -> Result<(), String> {
+        let changed = self
+            .conn
+            .execute(
+                "INSERT INTO eve_categories (category_id, name, published) VALUES (?1, ?2, 0)
+                 ON CONFLICT(category_id) DO NOTHING",
+                (category_id, format!("Unknown Category {category_id}")),
+            )
+            .map_err(|e| format!("failed to insert placeholder category {category_id}: {e}"))?;
+        if changed > 0 {
+            warnings.push(format!(
+                "category {category_id} was referenced but not present in the imported categories — created as a placeholder"
+            ));
+        }
+        Ok(())
+    }
+
+    /// Same pattern as `ensure_category_stub`, one level down: a group
+    /// referenced by a type but missing from the imported groups.
+    fn ensure_group_stub(&self, group_id: i64, warnings: &mut Vec<String>) -> Result<(), String> {
+        let changed = self
+            .conn
+            .execute(
+                "INSERT INTO eve_groups (group_id, category_id, name, published) VALUES (?1, NULL, ?2, 0)
+                 ON CONFLICT(group_id) DO NOTHING",
+                (group_id, format!("Unknown Group {group_id}")),
+            )
+            .map_err(|e| format!("failed to insert placeholder group {group_id}: {e}"))?;
+        if changed > 0 {
+            warnings.push(format!(
+                "group {group_id} was referenced but not present in the imported groups — created as a placeholder"
+            ));
+        }
+        Ok(())
+    }
+
+    /// The fix for the real-data "FOREIGN KEY constraint failed" error:
+    /// `blueprint_products`/`blueprint_materials` both reference
+    /// `eve_types` (for `blueprint_type_id`, `product_type_id`, and
+    /// `material_type_id` alike). If a blueprint record references a type
+    /// that isn't present among the successfully-parsed types — whether
+    /// because that specific record didn't match this importer's tolerant
+    /// field patterns, or because the real export simply doesn't guarantee
+    /// every referenced type appears in `types.jsonl` — this ensures the
+    /// row exists (as a clearly-labeled, unpublished, non-manufacturable
+    /// placeholder) before the FK-dependent insert runs, rather than
+    /// letting the whole import fail on one gap.
+    /// `context` carries the diagnostic detail a bare type id can't:
+    /// which blueprint referenced it, in what role (product/material/the
+    /// blueprint's own id), and the source file/line when known. Always
+    /// present in the warning, never just the id alone.
+    fn ensure_type_stub(&self, type_id: i64, context: &str, warnings: &mut Vec<String>) -> Result<(), String> {
+        let changed = self
+            .conn
+            .execute(
+                "INSERT INTO eve_types (type_id, name, group_id, published, is_manufacturable)
+                 VALUES (?1, ?2, NULL, 0, 0)
+                 ON CONFLICT(type_id) DO NOTHING",
+                (type_id, format!("Unknown Type {type_id}")),
+            )
+            .map_err(|e| format!("failed to insert placeholder type {type_id}: {e}"))?;
+        if changed > 0 {
+            warnings.push(format!(
+                "type {type_id} ({context}) was not present in the imported types — created as a placeholder so the reference could still be inserted"
+            ));
+        }
+        Ok(())
     }
 
     fn read_csv<T: for<'de> Deserialize<'de>>(
@@ -341,6 +493,7 @@ impl<'a> StaticDataRepository<'a> {
         }
         out
     }
+
 
     pub fn latest_import(&self) -> Result<ImportSummary, String> {
         self.conn

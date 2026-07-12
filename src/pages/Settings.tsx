@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { importStaticData, importOfficialSde, getLatestImport, type ImportSummary } from "../lib/backend";
-import { useShowDemoData } from "../lib/demoDataPreference";
 import { Panel } from "../components/Panel";
+import { CharactersPanel } from "../components/CharactersPanel";
 
 type ImportMode = "sample" | "official";
 
 export function SettingsPage() {
-  const [showDemoData, setShowDemoData] = useShowDemoData();
   const [latest, setLatest] = useState<ImportSummary | null>(null);
   const [loadingLatest, setLoadingLatest] = useState(true);
   const [mode, setMode] = useState<ImportMode>("official");
@@ -153,26 +152,12 @@ export function SettingsPage() {
         )}
       </Panel>
 
-      <Panel title="Demo Data" keel="coolant">
-        <p className="ph-mission">
-          RenderNorth Industrial ships with seeded demo operations, blueprints, and inventory (Sprints 001–007) so the
-          app is usable before you import anything or create a real build. Demo operations are labeled{" "}
-          <span className="demo-badge">DEMO</span> throughout the app and are kept separate from anything real you
-          create. Demo data is never deleted by this toggle — it only controls whether demo operations are shown in
-          the Operations list and Mission Control.
-        </p>
-        <div className="demo-toggle-row">
-          <span className="ops-field-label">Show Demo Data</span>
-          <button className={showDemoData ? "target-select enabled active" : "target-select enabled"} onClick={() => setShowDemoData(!showDemoData)}>
-            {showDemoData ? "ON — showing demo operations" : "OFF — demo operations hidden"}
-          </button>
-        </div>
-      </Panel>
+      <CharactersPanel />
 
       <Panel title="Other Settings" keel="coolant">
         <p className="ph-mission">
-          Character management (official CCP ESI OAuth), scope review, and notification preferences remain planned —
-          this app performs no ESI synchronization and no gameplay automation.
+          Notification preferences remain planned. Blueprint jobs and industry job tracking are separate future
+          scopes, not covered by the character connection above.
         </p>
       </Panel>
     </div>

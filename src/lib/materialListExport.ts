@@ -15,7 +15,7 @@ function csvEscape(value: string): string {
 }
 
 export function toCsv(plan: ProductionPlan): string {
-  const header = ["Type ID", "Type Name", "Category/Group", "Required", "Owned", "Reserved", "Available", "Missing", "Operation"];
+  const header = ["Type ID", "Type Name", "Category/Group", "Required", "Owned", "Owned Source", "Reserved", "Available", "Missing", "Operation"];
   const lines = [header.join(",")];
   for (const r of rows(plan)) {
     const categoryGroup = [r.categoryName, r.groupName].filter(Boolean).join(" / ");
@@ -26,6 +26,7 @@ export function toCsv(plan: ProductionPlan): string {
         csvEscape(categoryGroup || "—"),
         r.requiredQuantity,
         r.ownedQuantity,
+        csvEscape(r.ownedQuantity > 0 ? r.ownedSource : ""),
         r.reservedQuantity,
         r.availableQuantity,
         r.missingQuantity,
@@ -42,14 +43,16 @@ export function toMarkdown(plan: ProductionPlan): string {
     "",
     `Operation: ${plan.operationGoal}`,
     `Build target: ${plan.buildTargetName} × ${plan.requestedQuantity} (${plan.totalRuns} runs, ${plan.blueprintMode})`,
+    `Inventory scope: ${plan.inventoryScope}`,
     "",
-    "| Type | Category/Group | Required | Owned | Reserved | Available | Missing |",
-    "|---|---|---|---|---|---|---|",
+    "| Type | Category/Group | Required | Owned | Owned Source | Reserved | Available | Missing |",
+    "|---|---|---|---|---|---|---|---|",
   ];
   for (const r of rows(plan)) {
     const categoryGroup = [r.categoryName, r.groupName].filter(Boolean).join(" / ") || "—";
+    const source = r.ownedQuantity > 0 ? r.ownedSource : "—";
     lines.push(
-      `| ${r.typeName} | ${categoryGroup} | ${r.requiredQuantity} | ${r.ownedQuantity} | ${r.reservedQuantity} | ${r.availableQuantity} | ${r.missingQuantity} |`,
+      `| ${r.typeName} | ${categoryGroup} | ${r.requiredQuantity} | ${r.ownedQuantity} | ${source} | ${r.reservedQuantity} | ${r.availableQuantity} | ${r.missingQuantity} |`,
     );
   }
   return lines.join("\n");
@@ -58,7 +61,7 @@ export function toMarkdown(plan: ProductionPlan): string {
 export function toPlainText(plan: ProductionPlan): string {
   const lines = [TITLE, `Operation: ${plan.operationGoal}`, `Build target: ${plan.buildTargetName} × ${plan.requestedQuantity}`, ""];
   for (const r of rows(plan)) {
-    lines.push(`${r.typeName}: need ${r.requiredQuantity}, have ${r.ownedQuantity}, missing ${r.missingQuantity}`);
+    lines.push(`${r.typeName}: need ${r.requiredQuantity}, have ${r.ownedQuantity} (${r.ownedQuantity > 0 ? r.ownedSource : "none"}), missing ${r.missingQuantity}`);
   }
   return lines.join("\n");
 }

@@ -18,6 +18,12 @@ impl<'a> InventoryRepository<'a> {
         Self { conn }
     }
 
+    /// Normal runtime: excludes demo-seeded rows (`source = 'demo'`).
+    /// Real inventory lives in `manual_inventory_entries`, a separate
+    /// table with its own commands — this function and the demo
+    /// `inventory_items` table it reads are retained for developer/test
+    /// fixture use only; no normal UI calls this after Sprint 010's demo
+    /// retirement. See docs/architecture/DATA_OWNERSHIP.md.
     pub fn summary(&self) -> Result<InventorySummary, String> {
         let (total_assets, estimated_value, unique_item_types): (i64, f64, i64) = self
             .conn
@@ -25,7 +31,7 @@ impl<'a> InventoryRepository<'a> {
                 "SELECT COALESCE(SUM(quantity), 0),
                         COALESCE(SUM(quantity * unit_value), 0),
                         COUNT(DISTINCT type_name)
-                 FROM inventory_items",
+                 FROM inventory_items WHERE source != 'demo'",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
@@ -44,7 +50,7 @@ impl<'a> InventoryRepository<'a> {
                 "SELECT COALESCE(SUM(i.unit_value * r.quantity), 0)
                  FROM inventory_reservations r
                  JOIN inventory_items i ON i.item_id = r.item_id
-                 WHERE r.released_at IS NULL",
+                 WHERE r.released_at IS NULL AND i.source != 'demo'",
                 [],
                 |row| row.get(0),
             )
@@ -65,7 +71,7 @@ impl<'a> InventoryRepository<'a> {
             .conn
             .prepare(
                 "SELECT c.key, c.label, c.sort_order,
-                        (SELECT COALESCE(SUM(quantity), 0) FROM inventory_items i WHERE i.category_key = c.key)
+                        (SELECT COALESCE(SUM(quantity), 0) FROM inventory_items i WHERE i.category_key = c.key AND i.source != 'demo')
                  FROM inventory_categories c
                  ORDER BY c.sort_order",
             )
@@ -116,7 +122,7 @@ impl<'a> InventoryRepository<'a> {
                 JOIN build_projects bp ON bp.project_id = a.project_id
                 GROUP BY a.item_id
             ) alloc ON alloc.item_id = i.item_id
-            WHERE (?1 IS NULL OR i.category_key = ?1)
+            WHERE (?1 IS NULL OR i.category_key = ?1) AND i.source != 'demo'
             ORDER BY (i.quantity * i.unit_value) DESC
         ";
 

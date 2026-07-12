@@ -408,6 +408,13 @@ export interface TypeSearchResult {
 // ---------------------------------------------------------------------------
 // Real operation creation (Sprint 008)
 
+export type InventoryScope =
+  | "build_location_only"
+  | "same_solar_system"
+  | "within_n_jumps"
+  | "selected_locations"
+  | "all_included_inventory";
+
 export interface NewOperationInput {
   goal: string;
   priority: number;
@@ -421,6 +428,8 @@ export interface NewOperationInput {
   assumedTe?: number | null;
   assumedIsBpc?: boolean | null;
   assumedRuns?: number | null;
+  /** Captured now, not yet enforced — only "all_included_inventory" actually filters anything (i.e. nothing) today. */
+  inventoryScope?: InventoryScope | null;
 }
 
 export interface CreatedOperation {
@@ -440,6 +449,8 @@ export interface RequirementTreeNode {
   neededQuantity: number;
   perRunQuantity: number;
   ownedQuantity: number;
+  /** Which inventory source contributed ownedQuantity — "Manual Inventory" today; demo inventory never contributes. */
+  ownedSource: string;
   reservedQuantity: number;
   availableQuantity: number;
   missingQuantity: number;
@@ -447,6 +458,12 @@ export interface RequirementTreeNode {
   isSatisfied: boolean;
   meApplied: number;
   meSource: string;
+  /** Validation Mode (Sprint 009) — the blueprint producing this node; null for leaves. */
+  blueprintTypeId: number | null;
+  /** Always "manufacturing" this sprint. */
+  activity: string;
+  /** Ancestor chain, e.g. "Apostle > Capital Armor Plates > Mechanical Parts" — engineering verification only. */
+  calculationPath: string;
   children: RequirementTreeNode[];
 }
 
@@ -455,8 +472,11 @@ export interface LeafTotal {
   typeName: string;
   groupName: string | null;
   categoryName: string | null;
+  /** Validation Mode (Sprint 009) — every distinct ancestor chain that contributed to this leaf's total. */
+  calculationPaths: string[];
   requiredQuantity: number;
   ownedQuantity: number;
+  ownedSource: string;
   reservedQuantity: number;
   availableQuantity: number;
   missingQuantity: number;
@@ -475,6 +495,8 @@ export interface ProductionPlan {
   te: number;
   totalRuns: number;
   producedQuantity: number;
+  /** Captured, not yet enforced — see NewOperationInput.inventoryScope. */
+  inventoryScope: string;
   tree: RequirementTreeNode;
   leafTotals: LeafTotal[];
   warnings: string[];
@@ -882,6 +904,12 @@ export async function createRealOperation(input: NewOperationInput): Promise<Cre
   return invoke<CreatedOperation>("create_real_operation", { input });
 }
 
+/** Sprint 009.1 — refuses demo operations server-side; deletes the operation and every row it owns, transactionally. */
+export async function deleteRealOperation(operationId: number): Promise<void> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<void>("delete_real_operation", { operationId });
+}
+
 export async function calculateProductionPlan(operationId: number): Promise<ProductionPlan> {
   if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
   return invoke<ProductionPlan>("calculate_production_plan", { operationId });
@@ -966,4 +994,39 @@ export function formatQty(value: number): string {
   if (value >= 1_000_000) return (value / 1_000_000).toFixed(1).replace(/\.0$/, "") + "m";
   if (value >= 10_000) return Math.round(value / 1000) + "k";
   return value.toLocaleString();
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 011A — EVE SSO Character Authentication Foundation. Authentication
+// only. See docs/ESI_INTEGRATION.md and docs/SPRINT_011A_SETUP.md.
+// ---------------------------------------------------------------------------
+
+export interface CharacterSummary {
+  characterId: number;
+  name: string;
+  enabled: boolean;
+  /** "authorized" | "expired" | "revoked" */
+  authorizationStatus: string;
+  lastLoginAt: string | null;
+}
+
+/** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
+export async function addCharacter(clientId: string): Promise<CharacterSummary> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<CharacterSummary>("add_character", { clientId });
+}
+
+export async function removeCharacter(characterId: number): Promise<void> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<void>("remove_character", { characterId });
+}
+
+export async function setCharacterEnabled(characterId: number, enabled: boolean): Promise<void> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<void>("set_character_enabled", { characterId, enabled });
+}
+
+export async function listCharacters(): Promise<CharacterSummary[]> {
+  if (!inTauri()) return [];
+  return invoke<CharacterSummary[]>("list_characters");
 }

@@ -402,19 +402,15 @@ impl<'a> ProductionRepository<'a> {
             })
     }
 
-    /// On-hand quantity for a type: demo `inventory_items` (matched by
-    /// name, same convention as Sprint 003–007) plus real
-    /// `manual_inventory_entries` (matched by `type_id`, since those rows
-    /// are always tied to imported static data).
-    fn owned_quantity(&self, type_id: i64, type_name: &str) -> Result<i64, String> {
-        let from_demo: i64 = self
-            .conn
-            .query_row(
-                "SELECT COALESCE(SUM(quantity), 0) FROM inventory_items WHERE type_name = ?1",
-                [type_name],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
+    /// On-hand quantity for a type, for the real (non-demo) production
+    /// plan calculation: `manual_inventory_entries` only.
+    ///
+    /// Demo `inventory_items` (Sprint 001-007's seeded scenario data) is
+    /// deliberately EXCLUDED here, unconditionally. Sprint 011A note:
+    /// this remains manual-inventory-only — no character asset sync
+    /// exists yet (that's a later sprint), so there is nothing else to
+    /// add here.
+    fn owned_quantity(&self, type_id: i64) -> Result<(i64, &'static str), String> {
         let from_manual: i64 = self
             .conn
             .query_row(
@@ -423,7 +419,7 @@ impl<'a> ProductionRepository<'a> {
                 |row| row.get(0),
             )
             .map_err(|e| e.to_string())?;
-        Ok(from_demo + from_manual)
+        Ok((from_manual, "Manual Inventory"))
     }
 
     /// Quantity of a type already reserved for this specific operation
@@ -452,27 +448,33 @@ impl<'a> ProductionRepository<'a> {
         operation_id: i64,
         path: &mut HashSet<i64>,
         depth: i64,
-        leaves: &mut HashMap<i64, (String, i64)>,
+        leaves: &mut HashMap<i64, (String, i64, Vec<String>)>,
         warnings: &mut Vec<String>,
+        path_prefix: &str,
     ) -> Result<RequirementTreeNode, String> {
         let type_name = self.type_name(type_id).unwrap_or_else(|_| format!("Unknown type {type_id}"));
+        let calculation_path = if path_prefix.is_empty() {
+            type_name.clone()
+        } else {
+            format!("{path_prefix} > {type_name}")
+        };
 
         if depth > MAX_DEPTH {
             warnings.push(format!("maximum recursion depth exceeded at {type_name} ({type_id})"));
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves);
+            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
         }
         if path.contains(&type_id) {
             warnings.push(format!("cycle detected at {type_name} ({type_id}) — stopped expanding this branch"));
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves);
+            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
         }
 
         let blueprint = self.blueprint_for_product(type_id)?;
         let Some((blueprint_type_id, product_quantity)) = blueprint else {
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves);
+            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
         };
         if product_quantity <= 0 {
             warnings.push(format!("{type_name} ({type_id}) has a non-positive blueprint output quantity — treated as a leaf"));
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves);
+            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
         }
 
         let me = if depth == 0 {
@@ -512,13 +514,17 @@ impl<'a> ProductionRepository<'a> {
                 depth + 1,
                 leaves,
                 warnings,
+                &calculation_path,
             )?;
             children.push(child);
         }
         path.remove(&type_id);
 
-        let owned_quantity = self.owned_quantity(type_id, &type_name)?;
+        let (owned_quantity, owned_source) = self.owned_quantity(type_id)?;
         let reserved_quantity = self.reserved_quantity(operation_id, &type_name)?;
+        // Available for Build = In Scope minus reservations — never
+        // Globally Owned minus reservations. Owning something somewhere
+        // is not the same as it being usable for this build.
         let available_quantity = (owned_quantity - reserved_quantity).max(0);
         let missing_quantity = (needed_quantity - available_quantity).max(0);
         let coverage_fraction = if needed_quantity > 0 {
@@ -536,6 +542,7 @@ impl<'a> ProductionRepository<'a> {
             needed_quantity,
             per_run_quantity: product_quantity,
             owned_quantity,
+            owned_source: owned_source.to_string(),
             reserved_quantity,
             available_quantity,
             missing_quantity,
@@ -543,22 +550,28 @@ impl<'a> ProductionRepository<'a> {
             is_satisfied: available_quantity >= needed_quantity,
             me_applied: me,
             me_source,
+            blueprint_type_id: Some(blueprint_type_id),
+            activity: "manufacturing".to_string(),
+            calculation_path,
             children,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn leaf_node(
         &self,
         type_id: i64,
         type_name: &str,
         needed_quantity: i64,
         operation_id: i64,
-        leaves: &mut HashMap<i64, (String, i64)>,
+        leaves: &mut HashMap<i64, (String, i64, Vec<String>)>,
+        calculation_path: &str,
     ) -> Result<RequirementTreeNode, String> {
-        let entry = leaves.entry(type_id).or_insert_with(|| (type_name.to_string(), 0));
+        let entry = leaves.entry(type_id).or_insert_with(|| (type_name.to_string(), 0, Vec::new()));
         entry.1 += needed_quantity;
+        entry.2.push(calculation_path.to_string());
 
-        let owned_quantity = self.owned_quantity(type_id, type_name)?;
+        let (owned_quantity, owned_source) = self.owned_quantity(type_id)?;
         let reserved_quantity = self.reserved_quantity(operation_id, type_name)?;
         let available_quantity = (owned_quantity - reserved_quantity).max(0);
         let missing_quantity = (needed_quantity - available_quantity).max(0);
@@ -577,6 +590,7 @@ impl<'a> ProductionRepository<'a> {
             needed_quantity,
             per_run_quantity: 0,
             owned_quantity,
+            owned_source: owned_source.to_string(),
             reserved_quantity,
             available_quantity,
             missing_quantity,
@@ -584,6 +598,9 @@ impl<'a> ProductionRepository<'a> {
             is_satisfied: available_quantity >= needed_quantity,
             me_applied: 0,
             me_source: "n/a".to_string(),
+            blueprint_type_id: None,
+            activity: "manufacturing".to_string(),
+            calculation_path: calculation_path.to_string(),
             children: Vec::new(),
         })
     }
@@ -603,17 +620,18 @@ impl<'a> ProductionRepository<'a> {
             )
             .map_err(|e| format!("operation {operation_id} not found: {e}"))?;
 
-        let (type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te): (
+        let (type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te, inventory_scope): (
             i64,
             i64,
             String,
             Option<i64>,
             i64,
             i64,
+            String,
         ) = self
             .conn
             .query_row(
-                "SELECT type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te
+                "SELECT type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te, inventory_scope
                  FROM operation_build_targets WHERE operation_id = ?1",
                 [operation_id],
                 |row| {
@@ -624,6 +642,7 @@ impl<'a> ProductionRepository<'a> {
                         row.get(3)?,
                         row.get::<_, Option<i64>>(4)?.unwrap_or(0),
                         row.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                        row.get(6)?,
                     ))
                 },
             )
@@ -648,7 +667,7 @@ impl<'a> ProductionRepository<'a> {
         };
 
         let mut path = HashSet::new();
-        let mut leaves: HashMap<i64, (String, i64)> = HashMap::new();
+        let mut leaves: HashMap<i64, (String, i64, Vec<String>)> = HashMap::new();
         let mut warnings = Vec::new();
 
         let tree = self.expand(
@@ -660,11 +679,12 @@ impl<'a> ProductionRepository<'a> {
             0,
             &mut leaves,
             &mut warnings,
+            "",
         )?;
 
         let mut leaf_totals: Vec<LeafTotal> = Vec::new();
-        for (leaf_type_id, (leaf_name, required_quantity)) in leaves {
-            let owned_quantity = self.owned_quantity(leaf_type_id, &leaf_name)?;
+        for (leaf_type_id, (leaf_name, required_quantity, calculation_paths)) in leaves {
+            let (owned_quantity, owned_source) = self.owned_quantity(leaf_type_id)?;
             let reserved_quantity = self.reserved_quantity(operation_id, &leaf_name)?;
             let available_quantity = (owned_quantity - reserved_quantity).max(0);
             let missing_quantity = (required_quantity - available_quantity).max(0);
@@ -677,10 +697,12 @@ impl<'a> ProductionRepository<'a> {
             leaf_totals.push(LeafTotal {
                 group_name,
                 category_name,
+                calculation_paths,
                 type_id: leaf_type_id,
                 type_name: leaf_name,
                 required_quantity,
                 owned_quantity,
+                owned_source: owned_source.to_string(),
                 reserved_quantity,
                 available_quantity,
                 missing_quantity,
@@ -701,6 +723,7 @@ impl<'a> ProductionRepository<'a> {
             te,
             total_runs: tree.runs,
             produced_quantity: tree.produced_quantity,
+            inventory_scope,
             tree,
             leaf_totals,
             warnings,
@@ -730,6 +753,9 @@ mod tests {
         include_str!("../../migrations/0006_blueprint_foundation.sql"),
         include_str!("../../migrations/0007_production_requirement_foundation.sql"),
         include_str!("../../migrations/0008_real_production_planner.sql"),
+        include_str!("../../migrations/0009_inventory_scope.sql"),
+        include_str!("../../migrations/0010_demo_category_correction.sql"),
+        include_str!("../../migrations/0011_esi_character_auth.sql"),
     ];
 
     fn test_db() -> Connection {
@@ -763,6 +789,40 @@ mod tests {
                 (20, 30, 7);",
         )
         .expect("seed fixture");
+    }
+
+    /// A 3-level-deep fixture (Ship -> Capital Component -> Component ->
+    /// Mineral) matching real capital-ship BOM depth, with Mineral A
+    /// (type 10) required both directly by the ship (depth 1) and via the
+    /// deepest component (depth 3) — the hardest realistic case for both
+    /// "does recursion reach the right depth" and "are shared leaves
+    /// summed, not overwritten." Independently verified against a Python
+    /// simulation of the same algorithm before being written here — see
+    /// Sprint 009's audit notes.
+    fn seed_three_level_fixture(conn: &Connection) {
+        conn.execute_batch(
+            "INSERT INTO eve_categories (category_id, name) VALUES (2, 'Capital Component');
+             INSERT INTO eve_groups (group_id, category_id, name) VALUES (2, 2, 'Test Group');
+             INSERT INTO eve_types (type_id, name, group_id, is_manufacturable) VALUES
+                (1000, 'Test Capital Ship', 2, 1),
+                (500,  'Test Capital Component', 2, 1),
+                (200,  'Test Component', 2, 1),
+                (10,   'Mineral A', 2, 0),
+                (20,   'Mineral B', 2, 0),
+                (30,   'Mineral C', 2, 0);
+             INSERT INTO blueprint_products (blueprint_type_id, product_type_id, quantity) VALUES
+                (1000, 1000, 1),
+                (500, 500, 1),
+                (200, 200, 5);
+             INSERT INTO blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES
+                (1000, 500, 3),
+                (1000, 10, 200),
+                (500, 200, 2),
+                (500, 20, 50),
+                (200, 10, 100),
+                (200, 30, 30);",
+        )
+        .expect("seed three-level fixture");
     }
 
     fn seed_operation_with_target(conn: &Connection, quantity: i64, me: i64, te: i64) -> i64 {
@@ -851,7 +911,11 @@ mod tests {
     }
 
     #[test]
-    fn inventory_coverage_and_exact_shortage() {
+    fn large_demo_inventory_with_no_manual_entries_gives_owned_zero() {
+        // The exact pattern requested after a report that demo inventory
+        // was still appearing as "Owned" on a real production plan. A
+        // large demo row exists; no manual inventory exists at all. Owned
+        // must be exactly 0, not any fraction of the demo quantity.
         let conn = test_db();
         seed_fixture(&conn);
         let op_id = seed_operation_with_target(&conn, 5, 10, 20);
@@ -873,7 +937,242 @@ mod tests {
         .unwrap();
         conn.execute(
             "INSERT INTO inventory_items (type_name, category_key, quantity, location_id, character_id, unit_value, source)
-             VALUES ('Sample Material A', 'sample_mat', 200, 999, -99, 1, 'demo')",
+             VALUES ('Sample Material A', 'sample_mat', 1620000, 999, -99, 1, 'demo')",
+            [],
+        )
+        .unwrap();
+        // Deliberately: no INSERT into manual_inventory_entries at all.
+
+        let repo = ProductionRepository::new(&conn);
+        let plan = repo.calculate_plan(op_id).expect("calculate_plan");
+
+        let material_a = plan.leaf_totals.iter().find(|l| l.type_id == 10).unwrap();
+        assert_eq!(material_a.owned_quantity, 0, "a large demo row with zero manual entries must give Owned = 0, not the demo quantity");
+        assert_eq!(material_a.available_quantity, 0);
+        assert!(!material_a.is_satisfied);
+    }
+
+    #[test]
+    fn large_demo_inventory_plus_manual_entry_gives_owned_equal_to_manual_only() {
+        // Same large demo row as above, plus a real manual entry of 42.
+        // Owned must be exactly 42 — the demo row must contribute nothing,
+        // not even partially.
+        let conn = test_db();
+        seed_fixture(&conn);
+        let op_id = seed_operation_with_target(&conn, 5, 10, 20);
+
+        conn.execute(
+            "INSERT INTO inventory_locations (location_id, name, kind) VALUES (999, 'Test Station', 'station')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO characters (character_id, name, is_demo) VALUES (-99, 'Tester', 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO inventory_categories (key, label, sort_order) VALUES ('sample_mat', 'Sample Material', 99)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO inventory_items (type_name, category_key, quantity, location_id, character_id, unit_value, source)
+             VALUES ('Sample Material A', 'sample_mat', 1620000, 999, -99, 1, 'demo')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO manual_inventory_entries (type_id, quantity, location_name) VALUES (10, 42, 'Home')",
+            [],
+        )
+        .unwrap();
+
+        let repo = ProductionRepository::new(&conn);
+        let plan = repo.calculate_plan(op_id).expect("calculate_plan");
+
+        let material_a = plan.leaf_totals.iter().find(|l| l.type_id == 10).unwrap();
+        assert_eq!(
+            material_a.owned_quantity, 42,
+            "Owned must equal the manual entry (42) only — the 1,620,000-unit demo row must not add anything"
+        );
+        assert_eq!(material_a.owned_source, "Manual Inventory");
+    }
+
+
+    #[test]
+    fn three_level_recursion_reaches_correct_depth_and_sums_shared_leaf_across_levels() {
+        // Sprint 009 audit (Task 2 & 4): the original tests only exercised
+        // 2-level depth. Real capital-ship BOMs are typically 3 levels
+        // (Ship -> Capital Component -> Component -> Mineral). This
+        // fixture has Mineral A required both directly by the ship
+        // (depth 1) and via the deepest component (depth 3) — the
+        // hardest case for "correct manufacturing level" and "no
+        // duplicate counting" at once.
+        let conn = test_db();
+        seed_three_level_fixture(&conn);
+
+        conn.execute(
+            "INSERT INTO operations (goal, priority, status, progress, notes, deadline, is_demo)
+             VALUES ('Build Test Capital Ship', 2, 'planned', 0, '', NULL, 0)",
+            [],
+        )
+        .unwrap();
+        let op_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO operation_build_targets
+                (operation_id, type_id, quantity_requested, blueprint_mode, assumed_me, assumed_te, assumed_is_bpc)
+             VALUES (?1, 1000, 5, 'assumed', 0, 0, 0)",
+            [op_id],
+        )
+        .unwrap();
+
+        let repo = ProductionRepository::new(&conn);
+        let plan = repo.calculate_plan(op_id).expect("calculate_plan");
+
+        // Top level: ship, runs=5 (1/run), produced=5.
+        assert_eq!(plan.total_runs, 5);
+        assert_eq!(plan.produced_quantity, 5);
+
+        // Depth 1: Capital Component, needed=3*5=15, runs=15 (1/run).
+        let capital_component = plan.tree.children.iter().find(|c| c.type_id == 500).expect("capital component present");
+        assert_eq!(capital_component.needed_quantity, 15);
+        assert_eq!(capital_component.runs, 15);
+
+        // Depth 2: Component, needed=2*15=30, runs=ceil(30/5)=6, produced=30.
+        let component = capital_component.children.iter().find(|c| c.type_id == 200).expect("component present");
+        assert_eq!(component.needed_quantity, 30);
+        assert_eq!(component.runs, 6);
+        assert_eq!(component.produced_quantity, 30);
+
+        // Leaf totals: Mineral A must sum BOTH contributions (1000 direct
+        // at depth 1, plus 600 via the component at depth 3) to 1600 —
+        // not overwrite, not double-count, not stop at just one branch.
+        let mineral_a = plan.leaf_totals.iter().find(|l| l.type_id == 10).expect("mineral A present");
+        assert_eq!(mineral_a.required_quantity, 1600, "Mineral A must sum its depth-1 and depth-3 contributions: 200*5 + 100*6 = 1600");
+        assert_eq!(mineral_a.calculation_paths.len(), 2, "Mineral A must record both contributing paths, Validation Mode's whole point");
+        assert!(mineral_a.calculation_paths.iter().any(|p| p == "Test Capital Ship > Mineral A"));
+        assert!(mineral_a
+            .calculation_paths
+            .iter()
+            .any(|p| p == "Test Capital Ship > Test Capital Component > Test Component > Mineral A"));
+
+        assert_eq!(capital_component.blueprint_type_id, Some(500));
+        assert_eq!(capital_component.activity, "manufacturing");
+        assert_eq!(capital_component.calculation_path, "Test Capital Ship > Test Capital Component");
+
+        let mineral_b = plan.leaf_totals.iter().find(|l| l.type_id == 20).expect("mineral B present");
+        assert_eq!(mineral_b.required_quantity, 750, "50 * 15 runs = 750");
+
+        let mineral_c = plan.leaf_totals.iter().find(|l| l.type_id == 30).expect("mineral C present");
+        assert_eq!(mineral_c.required_quantity, 180, "30 * 6 runs = 180");
+
+        assert!(plan.warnings.is_empty());
+    }
+
+    #[test]
+    fn real_operation_plan_never_reflects_demo_ledger_data() {
+        // Explicit fixture, not the migration chain's baked-in demo seed
+        // — Sprint 010 retired demo data from normal runtime, so this
+        // test builds its own minimal demo-ledger scenario rather than
+        // depending on migration 0004/0007's specific seeded names
+        // (which a fresh install no longer even has). The deeper
+        // guarantee being proven: `calculate_plan` and the Sprint 007
+        // demo ledger (`lines`/`summary`, backed by
+        // `production_requirements`) are separate query surfaces over
+        // separate tables, coexisting in the same database — a real
+        // operation's plan must never contain the demo ledger's data,
+        // not through a query bug, not through incidental overlap.
+        let conn = test_db();
+        seed_fixture(&conn);
+        let op_id = seed_operation_with_target(&conn, 5, 10, 20);
+
+        conn.execute(
+            "INSERT INTO operations (goal, priority, status, progress, notes, deadline, is_demo)
+             VALUES ('Fixture Demo Op', 2, 'planned', 0, '', NULL, 1)",
+            [],
+        )
+        .unwrap();
+        let demo_op_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO production_requirement_groups (operation_id, category_key) VALUES (?1, 'minerals')",
+            [demo_op_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO production_requirements (operation_id, category_key, type_name, required_quantity)
+             VALUES (?1, 'minerals', 'Fixture Demo Mineral', 999999)",
+            [demo_op_id],
+        )
+        .unwrap();
+
+        let repo = ProductionRepository::new(&conn);
+
+        // Sanity check: the demo ledger really is present in this same
+        // database (proves this test would actually catch a leak, not
+        // just pass vacuously because there was nothing to leak).
+        let demo_names: Vec<String> = repo.lines(None, None).unwrap().iter().map(|l| l.type_name.clone()).collect();
+        assert!(
+            demo_names.iter().any(|n| n == "Fixture Demo Mineral"),
+            "demo ledger fixture must be present for this test to be meaningful"
+        );
+
+        let plan = repo.calculate_plan(op_id).expect("calculate_plan");
+
+        let plan_type_names: Vec<&str> = plan
+            .leaf_totals
+            .iter()
+            .map(|l| l.type_name.as_str())
+            .chain(std::iter::once(plan.tree.type_name.as_str()))
+            .collect();
+
+        assert!(
+            !plan_type_names.contains(&"Fixture Demo Mineral"),
+            "real operation's plan must never contain demo ledger material, but plan contained: {plan_type_names:?}"
+        );
+        assert_eq!(
+            plan.operation_goal, "Build Sample Widget",
+            "the plan must reflect only the real operation's own goal, never the demo operation's goal"
+        );
+    }
+
+    #[test]
+    fn inventory_coverage_and_exact_shortage() {
+        let conn = test_db();
+        seed_fixture(&conn);
+        let op_id = seed_operation_with_target(&conn, 5, 10, 20);
+
+        // Demo inventory (inventory_items) — must NOT contribute to a real
+        // operation's owned quantity. Deliberately set far higher than the
+        // manual entry below, so if the old bug (summing both sources)
+        // ever regressed, this test would catch it immediately via a
+        // wrong owned_quantity rather than by coincidence.
+        conn.execute(
+            "INSERT INTO inventory_locations (location_id, name, kind) VALUES (999, 'Test Station', 'station')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO characters (character_id, name, is_demo) VALUES (-99, 'Tester', 1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO inventory_categories (key, label, sort_order) VALUES ('sample_mat', 'Sample Material', 99)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO inventory_items (type_name, category_key, quantity, location_id, character_id, unit_value, source)
+             VALUES ('Sample Material A', 'sample_mat', 999999, 999, -99, 1, 'demo')",
+            [],
+        )
+        .unwrap();
+
+        // Real, explicitly-entered manual inventory — this is the only
+        // source that should count.
+        conn.execute(
+            "INSERT INTO manual_inventory_entries (type_id, quantity, location_name) VALUES (10, 200, 'Home')",
             [],
         )
         .unwrap();
@@ -883,7 +1182,11 @@ mod tests {
 
         let material_a = plan.leaf_totals.iter().find(|l| l.type_id == 10).unwrap();
         assert_eq!(material_a.required_quantity, 315);
-        assert_eq!(material_a.owned_quantity, 200);
+        assert_eq!(
+            material_a.owned_quantity, 200,
+            "owned must come only from the 200-unit manual entry — the 999999-unit demo row must never contribute"
+        );
+        assert_eq!(material_a.owned_source, "Manual Inventory");
         assert_eq!(material_a.reserved_quantity, 0);
         assert_eq!(material_a.available_quantity, 200);
         assert_eq!(material_a.missing_quantity, 115); // exact shortage: 315 - 200

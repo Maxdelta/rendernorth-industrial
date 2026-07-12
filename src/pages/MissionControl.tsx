@@ -1,42 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useShowDemoData } from "../lib/demoDataPreference";
 import {
-  getMissionControl,
-  listBuildTargets,
-  selectBuildTarget,
   getOperationsDashboard,
   getInventoryCommitment,
   getReservationConflicts,
   getBlueprintReadinessAll,
-  getRequirementSummary,
   getLatestImport,
   type ImportSummary,
   healthCheck,
-  formatIsk,
   formatQty,
-  type MissionControl,
-  type BuildTargetSummary,
   type OperationsDashboard,
   type OperationSummary,
   type InventoryCommitment,
   type ReservationConflict,
   type BlueprintReadiness,
-  type RequirementSummary,
   type DbHealth,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
-import { StatCard } from "../components/StatCard";
-import { TierGauge } from "../components/TierGauge";
-import { SegGauge } from "../components/SegGauge";
-import { HullSchematic } from "../components/HullSchematic";
-import { TargetPicker } from "../components/TargetPicker";
-
-function healthTone(status: string): "nominal" | "furnace" | "alert" {
-  if (status === "Blocked") return "alert";
-  if (status === "Degraded") return "furnace";
-  return "nominal";
-}
 
 function opStatusTone(op: OperationSummary): "nominal" | "furnace" | "alert" | "coolant" {
   if (op.isBlocked) return "alert";
@@ -46,71 +26,28 @@ function opStatusTone(op: OperationSummary): "nominal" | "furnace" | "alert" | "
 }
 
 export function MissionControlPage() {
-  const [showDemoData] = useShowDemoData();
-  const [mission, setMission] = useState<MissionControl | null>(null);
   const [ops, setOps] = useState<OperationsDashboard | null>(null);
   const [commitment, setCommitment] = useState<InventoryCommitment | null>(null);
   const [conflicts, setConflicts] = useState<ReservationConflict[] | null>(null);
   const [readiness, setReadiness] = useState<BlueprintReadiness[] | null>(null);
-  const [requirementSummary, setRequirementSummary] = useState<RequirementSummary | null>(null);
   const [importStatus, setImportStatus] = useState<ImportSummary | null>(null);
-  const [targets, setTargets] = useState<BuildTargetSummary[]>([]);
   const [health, setHealth] = useState<DbHealth | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
-    getMissionControl().then((m) => live && setMission(m));
     getOperationsDashboard().then((o) => live && setOps(o));
     getInventoryCommitment().then((c) => live && setCommitment(c));
     getReservationConflicts().then((c) => live && setConflicts(c));
     getBlueprintReadinessAll().then((r) => live && setReadiness(r));
-    getRequirementSummary().then((r) => live && setRequirementSummary(r));
     getLatestImport().then((s) => live && setImportStatus(s));
-    listBuildTargets().then((t) => live && setTargets(t));
     healthCheck().then((h) => live && setHealth(h));
     return () => {
       live = false;
     };
   }, []);
 
-  async function handleSelect(projectId: number) {
-    const next = await selectBuildTarget(projectId);
-    setMission(next);
-    setTargets(await listBuildTargets());
-    setPickerOpen(false);
-  }
-
-  if (!mission) {
-    return <div className="data-source">Bringing Mission Control online…</div>;
-  }
-
-  const target = mission.selectedTarget;
-  const fh = mission.factoryHealth;
-  const overallPct = Math.round(target.overallProgress * 100);
-  const tone = healthTone(fh.status);
-
   return (
     <div className="dash">
-      <div className="stat-strip">
-        <StatCard label="Running Jobs" value={String(mission.runningJobs)} tone="coolant" keel="coolant" note="industry slots active" />
-        <StatCard
-          label="Idle Characters"
-          value={String(mission.idleCharacters)}
-          tone={mission.idleCharacters > 0 ? "furnace" : "nominal"}
-          keel={mission.idleCharacters > 0 ? "furnace" : "nominal"}
-          note="unassigned production capacity"
-        />
-        <StatCard
-          label="Idle BPOs"
-          value={String(mission.idleBpos)}
-          tone={mission.idleBpos > 0 ? "furnace" : "nominal"}
-          keel={mission.idleBpos > 0 ? "furnace" : "nominal"}
-          note="researched originals not in a job"
-        />
-        <StatCard label="Wallet" value={formatIsk(mission.walletIsk)} tone="nominal" keel="nominal" note="liquid across all characters" />
-      </div>
-
       <Panel title="Real Operations Readiness" keel={importStatus ? "coolant" : "furnace"} className="dash-hero">
         <div className="res-summary-grid">
           <div className="res-summary-cell">
@@ -122,22 +59,8 @@ export function MissionControlPage() {
           {ops && (
             <div className="res-summary-cell">
               <div className="res-summary-label">Real Operations</div>
-              <div className="res-summary-value">{ops.currentOperations.filter((o) => !o.isDemo).length}</div>
+              <div className="res-summary-value">{ops.currentOperations.length}</div>
             </div>
-          )}
-          {requirementSummary && (
-            <>
-              <div className="res-summary-cell">
-                <div className="res-summary-label">Coverage % (demo ledger)</div>
-                <div className="res-summary-value">{Math.round(requirementSummary.coveragePercent)}%</div>
-              </div>
-              <div className="res-summary-cell">
-                <div className="res-summary-label">Bottlenecks (demo ledger)</div>
-                <div className={`res-summary-value ${requirementSummary.criticalBottleneckCount > 0 ? "alert" : "nominal"}`}>
-                  {requirementSummary.criticalBottleneckCount}
-                </div>
-              </div>
-            </>
           )}
         </div>
         {!importStatus && (
@@ -146,17 +69,20 @@ export function MissionControlPage() {
             plans. Until then, real operations without a build target can still be created and tracked.
           </p>
         )}
-        {ops && ops.currentOperations.some((o) => !o.isDemo) && (
+        {ops && ops.currentOperations.length > 0 && (
           <div className="op-simple-list" style={{ marginTop: 12 }}>
-            {ops.currentOperations
-              .filter((o) => !o.isDemo)
-              .map((o) => (
-                <Link className="op-simple-row" to={`/operations?op=${o.operationId}`} key={o.operationId}>
-                  <span className="op-simple-goal">{o.goal}</span>
-                  <span className="op-status coolant">real</span>
-                </Link>
-              ))}
+            {ops.currentOperations.map((o) => (
+              <Link className="op-simple-row" to={`/operations?op=${o.operationId}`} key={o.operationId}>
+                <span className="op-simple-goal">{o.goal}</span>
+                <span className="op-status coolant">real</span>
+              </Link>
+            ))}
           </div>
+        )}
+        {ops && ops.currentOperations.length === 0 && (
+          <p className="ph-mission" style={{ marginTop: 12 }}>
+            No real builds yet. Create one from Operations → New Build.
+          </p>
         )}
       </Panel>
 
@@ -188,41 +114,44 @@ export function MissionControlPage() {
           </Panel>
 
           <Panel title="Current Operations" keel="coolant" className="dash-hero">
-            <div className="op-list">
-              <div className="op-row op-head">
-                <div>Goal</div>
-                <div>Target</div>
-                <div>Priority</div>
-                <div>Progress</div>
-                <div>Status</div>
-              </div>
-              {ops.currentOperations
-                .filter((op) => showDemoData || !op.isDemo)
-                .map((op) => (
+            {ops.currentOperations.length === 0 ? (
+              <p className="ph-mission">No real builds yet.</p>
+            ) : (
+              <div className="op-list">
+                <div className="op-row op-head">
+                  <div>Goal</div>
+                  <div>Target</div>
+                  <div>Priority</div>
+                  <div>Progress</div>
+                  <div>Status</div>
+                </div>
+                {ops.currentOperations.map((op) => (
                   <Link className="op-row op-link" to={`/operations?op=${op.operationId}`} key={op.operationId}>
-                    <div className="op-goal">
-                      {op.goal}
-                      {op.isDemo && <span className="demo-badge">DEMO</span>}
-                    </div>
+                    <div className="op-goal">{op.goal}</div>
                     <div className="op-target">{op.targetTypeName ?? "—"}</div>
                     <div className="op-priority">P{op.priority}</div>
                     <div className="op-progress">{Math.round(op.progress * 100)}%</div>
                     <div className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</div>
                   </Link>
                 ))}
-            </div>
+              </div>
+            )}
           </Panel>
 
           <Panel title="Priority Queue" keel="furnace" className="dash-half">
-            <div className="op-simple-list">
-              {ops.priorityQueue.map((op) => (
-                <Link className="op-simple-row" to={`/operations?op=${op.operationId}`} key={op.operationId}>
-                  <span className="op-simple-priority">P{op.priority}</span>
-                  <span className="op-simple-goal">{op.goal}</span>
-                  <span className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</span>
-                </Link>
-              ))}
-            </div>
+            {ops.priorityQueue.length === 0 ? (
+              <p className="ph-mission">Nothing queued.</p>
+            ) : (
+              <div className="op-simple-list">
+                {ops.priorityQueue.map((op) => (
+                  <Link className="op-simple-row" to={`/operations?op=${op.operationId}`} key={op.operationId}>
+                    <span className="op-simple-priority">P{op.priority}</span>
+                    <span className="op-simple-goal">{op.goal}</span>
+                    <span className={`op-status ${opStatusTone(op)}`}>{op.isBlocked ? "Blocked" : op.status}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </Panel>
 
           <Panel title="Blocked Operations" keel={ops.blocked.length > 0 ? "alert" : "nominal"} className="dash-half">
@@ -306,163 +235,36 @@ export function MissionControlPage() {
 
       {readiness && (
         <Panel title="Blueprint Readiness" keel={readiness.some((r) => r.missingCount > 0) ? "alert" : "nominal"} className="dash-hero">
-          <div className="readiness-list">
-            <div className="readiness-row">
-              <div className="ops-field-label">Operation</div>
-              <div className="ops-field-label">Owned</div>
-              <div className="ops-field-label">Missing</div>
-              <div className="ops-field-label">Warnings</div>
-            </div>
-            {readiness.map((r) => (
-              <Link className="readiness-row readiness-link" to={`/operations?op=${r.operationId}`} key={r.operationId}>
-                <div className="readiness-goal">{r.operationGoal}</div>
-                <div className="readiness-metric nominal">{r.ownedCount}</div>
-                <div className={`readiness-metric ${r.missingCount > 0 ? "alert" : "nominal"}`}>{r.missingCount}</div>
-                <div className={`readiness-metric ${r.warningCount > 0 ? "furnace" : "nominal"}`}>{r.warningCount}</div>
-              </Link>
-            ))}
-          </div>
-        </Panel>
-      )}
-
-      {requirementSummary && (
-        <Panel title="Production Readiness" keel={requirementSummary.criticalBottleneckCount > 0 ? "alert" : "nominal"} className="dash-hero">
-          <div className="health-grid production-readiness-grid">
-            <div className="health-cell">
-              <div className="stat-label">Total Requirements</div>
-              <div className="stat-value coolant">{requirementSummary.totalRequirements}</div>
-            </div>
-            <div className="health-cell">
-              <div className="stat-label">Satisfied</div>
-              <div className="stat-value nominal">{requirementSummary.satisfied}</div>
-            </div>
-            <div className="health-cell">
-              <div className="stat-label">Missing</div>
-              <div className={`stat-value ${requirementSummary.missing > 0 ? "alert" : "nominal"}`}>{requirementSummary.missing}</div>
-            </div>
-            <div className="health-cell">
-              <div className="stat-label">Coverage %</div>
-              <div className="stat-value coolant">{Math.round(requirementSummary.coveragePercent)}%</div>
-            </div>
-            <div className="health-cell">
-              <div className="stat-label">Critical Bottlenecks</div>
-              <div className={`stat-value ${requirementSummary.criticalBottleneckCount > 0 ? "alert" : "nominal"}`}>
-                {requirementSummary.criticalBottleneckCount}
+          {readiness.length === 0 ? (
+            <p className="ph-mission">No real operation has blueprint requirements recorded yet.</p>
+          ) : (
+            <div className="readiness-list">
+              <div className="readiness-row">
+                <div className="ops-field-label">Operation</div>
+                <div className="ops-field-label">Owned</div>
+                <div className="ops-field-label">Missing</div>
+                <div className="ops-field-label">Warnings</div>
               </div>
-            </div>
-          </div>
-        </Panel>
-      )}
-
-      <Panel title="Factory Health" keel={tone} className="dash-hero">
-        <div className="health-grid">
-          <div className="health-cell">
-            <div className="stat-label">Health</div>
-            <div className={`stat-value ${tone}`}>{Math.round(fh.health * 100)}%</div>
-          </div>
-          <div className="health-cell">
-            <div className="stat-label">Status</div>
-            <div className={`health-status ${tone}`}>{fh.status}</div>
-          </div>
-          <div className="health-cell">
-            <div className="stat-label">Idle Slots</div>
-            <div className={`stat-value ${fh.idleSlots > 0 ? "furnace" : "nominal"}`}>{fh.idleSlots}</div>
-          </div>
-          <div className="health-cell">
-            <div className="stat-label">Blocked Jobs</div>
-            <div className={`stat-value ${fh.blockedJobs > 0 ? "alert" : "nominal"}`}>{fh.blockedJobs}</div>
-          </div>
-          <div className="health-cell">
-            <div className="stat-label">Missing Inputs</div>
-            <div className={`stat-value ${fh.missingInputs > 0 ? "alert" : "nominal"}`}>{fh.missingInputs}</div>
-          </div>
-          <div className="health-cell">
-            <div className="stat-label">ISK Locked in Jobs</div>
-            <div className="stat-value coolant">{formatIsk(fh.iskLockedInJobs)}</div>
-          </div>
-          <div className="health-cell">
-            <div className="stat-label">Projected Finish</div>
-            <div className="stat-value">{fh.projectedFinishDays}d</div>
-          </div>
-        </div>
-      </Panel>
-
-      <Panel
-        title="Current Operation"
-        keel="furnace"
-        className="dash-hero"
-        headerRight={
-          <button className="target-select" onClick={() => setPickerOpen((v) => !v)}>
-            {pickerOpen ? "Close" : "Change target"}
-          </button>
-        }
-      >
-        {pickerOpen && <TargetPicker targets={targets} onSelect={handleSelect} />}
-        <div className="titan-grid">
-          <div className="schematic-wrap">
-            <HullSchematic progress={target.overallProgress} />
-            <div className="schematic-caption">Build target · drydock elevation</div>
-          </div>
-          <div>
-            <div className="stat-label">Selected Build Target</div>
-            <div className="titan-name">{target.name}</div>
-            <div className="titan-class">{target.className}</div>
-            <div className="overall-row">
-              <div className="overall-pct">{overallPct}%</div>
-              <div className="overall-label">
-                Inventory Coverage
-                <div className="overall-source">via Inventory Engine</div>
-              </div>
-            </div>
-            <SegGauge progress={target.overallProgress} />
-            <div className="tiers">
-              {target.tiers.map((tier) => (
-                <TierGauge key={tier.label} label={tier.label} coverage={tier.coverage} />
+              {readiness.map((r) => (
+                <Link className="readiness-row readiness-link" to={`/operations?op=${r.operationId}`} key={r.operationId}>
+                  <div className="readiness-goal">{r.operationGoal}</div>
+                  <div className="readiness-metric nominal">{r.ownedCount}</div>
+                  <div className={`readiness-metric ${r.missingCount > 0 ? "alert" : "nominal"}`}>{r.missingCount}</div>
+                  <div className={`readiness-metric ${r.warningCount > 0 ? "furnace" : "nominal"}`}>{r.warningCount}</div>
+                </Link>
               ))}
             </div>
-          </div>
-        </div>
-      </Panel>
-
-      <Panel title="Missing Inputs" keel={mission.missingMaterials.length > 0 ? "alert" : "nominal"} className="dash-half">
-        {mission.missingMaterials.length === 0 ? (
-          <p className="ph-mission">No missing inputs for this target. All requirements are covered.</p>
-        ) : (
-          <div className="mat-list">
-            {mission.missingMaterials.map((mat) => (
-              <div className="mat-row" key={mat.name}>
-                <div className="mat-qty">{formatQty(mat.quantity)}</div>
-                <div className="mat-name">{mat.name}</div>
-                <div className="mat-tag">{mat.category}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-
-      <Panel title="Next Recommendation" keel="furnace" className="dash-half">
-        <div className="rec-title">{mission.recommendation.title}</div>
-        <p className="rec-reason">{mission.recommendation.reason}</p>
-        <div className="rec-rule">{mission.recommendation.ruleId}</div>
-        {mission.recommendation.inputs && (
-          <div className="rec-inputs">
-            {Object.entries(mission.recommendation.inputs).map(([k, v]) => (
-              <span className="rec-input" key={k}>
-                {k}={String(v)}
-              </span>
-            ))}
-          </div>
-        )}
-      </Panel>
+          )}
+        </Panel>
+      )}
 
       <div className="data-source" style={{ gridColumn: "1 / -1" }}>
-        Data source: <b>{mission.source}</b>
         {health && (
           <>
-            {" · "}db <b>{health.ok ? "connected" : "error"}</b> · schema v<b>{health.schemaVersion}</b> · {health.dbPath}
+            db <b>{health.ok ? "connected" : "error"}</b> · schema v<b>{health.schemaVersion}</b> · {health.dbPath}
           </>
         )}
-        {!health && mission.source === "mock" && <> · running in browser without the Tauri shell</>}
+        {!health && <>Running in browser without the Tauri shell.</>}
       </div>
     </div>
   );

@@ -1,0 +1,5 @@
+typeID,activityID,materialTypeID,quantity
+100,1,10,100
+100,1,20,3
+20,1,10,5
+20,1,30,7

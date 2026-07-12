@@ -19,6 +19,7 @@ pub trait OperationProvider {
     fn health(&self) -> Result<OperationHealth, String>;
     fn get_detail(&self, operation_id: i64) -> Result<OperationDetail, String>;
     fn create(&self, input: &NewOperationInput) -> Result<i64, String>;
+    fn delete(&self, operation_id: i64) -> Result<(), String>;
 }
 
 /// The live provider, backed by the demo-seeded rows from migration 0004.
@@ -63,5 +64,9 @@ impl<'a> OperationProvider for MockOperationProvider<'a> {
 
     fn create(&self, input: &NewOperationInput) -> Result<i64, String> {
         self.repo.create(input)
+    }
+
+    fn delete(&self, operation_id: i64) -> Result<(), String> {
+        self.repo.delete(operation_id)
     }
 }

@@ -27,6 +27,11 @@ pub struct NewOperationInput {
     pub assumed_te: Option<i64>,
     pub assumed_is_bpc: Option<bool>,
     pub assumed_runs: Option<i64>,
+    /// One of "build_location_only" / "same_solar_system" / "within_n_jumps"
+    /// / "selected_locations" / "all_included_inventory". Captured but not
+    /// yet enforced — see migration 0009's doc comment. Defaults to
+    /// "all_included_inventory" (today's actual behavior) when omitted.
+    pub inventory_scope: Option<String>,
 }
 
 #[derive(Serialize, Clone)]

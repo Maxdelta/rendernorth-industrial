@@ -22,6 +22,11 @@ pub struct RequirementTreeNode {
     pub needed_quantity: i64,
     pub per_run_quantity: i64,
     pub owned_quantity: i64,
+    /// Which inventory source contributed `owned_quantity` — "Manual
+    /// Inventory" today; a future ESI-backed source would extend this
+    /// label set, not replace it. Demo inventory never contributes to a
+    /// real operation's plan, so it's never one of these values.
+    pub owned_source: String,
     pub reserved_quantity: i64,
     pub available_quantity: i64,
     pub missing_quantity: i64,
@@ -32,6 +37,19 @@ pub struct RequirementTreeNode {
     /// for sub-components with no owned blueprint, or the operation's own
     /// assumption at the root).
     pub me_source: String,
+    /// Sprint 009 Validation Mode — the blueprint that produces this
+    /// node, if it isn't a leaf. `None` for leaves (nothing manufactures
+    /// a raw material). Distinct from `type_id`: in real EVE a
+    /// blueprint's own type id can differ from what it produces.
+    pub blueprint_type_id: Option<i64>,
+    /// Fixed at "manufacturing" this sprint — the only activity this
+    /// engine calculates. Present as its own field so a future reaction/
+    /// invention activity is additive, not a breaking rename.
+    pub activity: String,
+    /// The ancestor chain that led to this node, e.g. "Apostle > Capital
+    /// Armor Plates > Mechanical Parts" — engineering-verification detail,
+    /// not shown outside Validation Mode.
+    pub calculation_path: String,
     pub children: Vec<RequirementTreeNode>,
 }
 
@@ -48,8 +66,14 @@ pub struct LeafTotal {
     /// finishes; never touches the expansion/ME/run-rounding logic itself.
     pub group_name: Option<String>,
     pub category_name: Option<String>,
+    /// Sprint 009 Validation Mode — every distinct ancestor chain that
+    /// contributed to this leaf's total. A shared subcomponent (like
+    /// Mineral A required both directly and three levels deep) has more
+    /// than one entry here; the required_quantity below is their sum.
+    pub calculation_paths: Vec<String>,
     pub required_quantity: i64,
     pub owned_quantity: i64,
+    pub owned_source: String,
     pub reserved_quantity: i64,
     pub available_quantity: i64,
     pub missing_quantity: i64,
@@ -73,6 +97,12 @@ pub struct ProductionPlan {
     pub te: i64,
     pub total_runs: i64,
     pub produced_quantity: i64,
+    /// Captured but not yet enforced — see `operation_build_targets.inventory_scope`.
+    /// The plan is always calculated against all manual inventory
+    /// regardless of the chosen scope until location-aware filtering
+    /// (which needs real location data, not yet available without ESI)
+    /// is implemented.
+    pub inventory_scope: String,
     pub tree: RequirementTreeNode,
     pub leaf_totals: Vec<LeafTotal>,
     pub warnings: Vec<String>,

@@ -33,16 +33,23 @@ impl<'a> ReservationRepository<'a> {
         })
     }
 
+    /// Normal runtime: excludes reservations against demo-seeded
+    /// inventory items. No real writer currently creates a reservation
+    /// against real (manual) inventory — this and the rest of the
+    /// Reservation Engine's global aggregates remain genuinely useful
+    /// once that exists; they correctly show zero/empty until then,
+    /// rather than the 100% demo data that used to fill them.
     const RECORD_SELECT: &'static str = "
         SELECT r.id, r.item_id, i.type_name, r.operation_id, o.goal,
                r.quantity, r.reason, r.released_at, r.created_at
         FROM inventory_reservations r
         JOIN inventory_items i ON i.item_id = r.item_id
         LEFT JOIN operations o ON o.operation_id = r.operation_id
+        WHERE i.source != 'demo'
     ";
 
     pub fn list_active(&self) -> Result<Vec<ReservationRecord>, String> {
-        let sql = format!("{} WHERE r.released_at IS NULL ORDER BY r.id", Self::RECORD_SELECT);
+        let sql = format!("{} AND r.released_at IS NULL ORDER BY r.id", Self::RECORD_SELECT);
         let mut stmt = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], Self::map_record)
@@ -51,7 +58,7 @@ impl<'a> ReservationRepository<'a> {
     }
 
     pub fn get_detail(&self, reservation_id: i64) -> Result<ReservationDetail, String> {
-        let sql = format!("{} WHERE r.id = ?1", Self::RECORD_SELECT);
+        let sql = format!("{} AND r.id = ?1", Self::RECORD_SELECT);
         let record = self
             .conn
             .query_row(&sql, [reservation_id], Self::map_record)
@@ -97,8 +104,10 @@ impl<'a> ReservationRepository<'a> {
         ) = self
             .conn
             .query_row(
-                "SELECT COUNT(*), COALESCE(SUM(quantity), 0), COUNT(DISTINCT item_id)
-                 FROM inventory_reservations WHERE released_at IS NULL",
+                "SELECT COUNT(*), COALESCE(SUM(r.quantity), 0), COUNT(DISTINCT r.item_id)
+                 FROM inventory_reservations r
+                 JOIN inventory_items i ON i.item_id = r.item_id
+                 WHERE r.released_at IS NULL AND i.source != 'demo'",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
@@ -130,7 +139,7 @@ impl<'a> ReservationRepository<'a> {
                             SUM(r.quantity) AS total_reserved, i.quantity AS on_hand
                      FROM inventory_reservations r
                      JOIN inventory_items i ON i.item_id = r.item_id
-                     WHERE r.released_at IS NULL
+                     WHERE r.released_at IS NULL AND i.source != 'demo'
                      GROUP BY r.item_id
                      HAVING op_count > 1",
                 )
@@ -164,7 +173,7 @@ impl<'a> ReservationRepository<'a> {
                     "SELECT r.item_id, i.type_name, SUM(r.quantity) AS total_reserved, i.quantity AS on_hand
                      FROM inventory_reservations r
                      JOIN inventory_items i ON i.item_id = r.item_id
-                     WHERE r.released_at IS NULL
+                     WHERE r.released_at IS NULL AND i.source != 'demo'
                      GROUP BY r.item_id
                      HAVING total_reserved > on_hand",
                 )
@@ -198,7 +207,7 @@ impl<'a> ReservationRepository<'a> {
                     "SELECT r.item_id, i.type_name
                      FROM inventory_reservations r
                      JOIN inventory_items i ON i.item_id = r.item_id
-                     WHERE r.released_at IS NULL AND i.quantity = 0",
+                     WHERE r.released_at IS NULL AND i.quantity = 0 AND i.source != 'demo'",
                 )
                 .map_err(|e| e.to_string())?;
             let rows = stmt
@@ -224,15 +233,20 @@ impl<'a> ReservationRepository<'a> {
     pub fn inventory_commitment(&self) -> Result<InventoryCommitment, String> {
         let total_inventory: i64 = self
             .conn
-            .query_row("SELECT COALESCE(SUM(quantity), 0) FROM inventory_items", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT COALESCE(SUM(quantity), 0) FROM inventory_items WHERE source != 'demo'",
+                [],
+                |row| row.get(0),
+            )
             .map_err(|e| format!("total inventory query failed: {e}"))?;
 
         let reserved: i64 = self
             .conn
             .query_row(
-                "SELECT COALESCE(SUM(quantity), 0) FROM inventory_reservations WHERE released_at IS NULL",
+                "SELECT COALESCE(SUM(r.quantity), 0)
+                 FROM inventory_reservations r
+                 JOIN inventory_items i ON i.item_id = r.item_id
+                 WHERE r.released_at IS NULL AND i.source != 'demo'",
                 [],
                 |row| row.get(0),
             )
@@ -253,7 +267,8 @@ impl<'a> ReservationRepository<'a> {
                      SELECT item_id, SUM(quantity) AS reserved_qty
                      FROM inventory_reservations WHERE released_at IS NULL
                      GROUP BY item_id
-                 ) res ON res.item_id = i.item_id",
+                 ) res ON res.item_id = i.item_id
+                 WHERE i.source != 'demo'",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
@@ -264,7 +279,8 @@ impl<'a> ReservationRepository<'a> {
             .query_row(
                 "SELECT COALESCE(SUM(i.quantity), 0)
                  FROM inventory_items i
-                 WHERE NOT EXISTS (
+                 WHERE i.source != 'demo'
+                 AND NOT EXISTS (
                      SELECT 1 FROM inventory_reservations r
                      WHERE r.item_id = i.item_id AND r.released_at IS NULL
                  )

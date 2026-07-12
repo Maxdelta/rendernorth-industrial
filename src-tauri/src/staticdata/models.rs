@@ -25,7 +25,15 @@ pub struct ParsedGroup {
 pub struct ParsedType {
     pub type_id: i64,
     pub name: String,
-    pub group_id: i64,
+    /// Nullable, matching `eve_types.group_id`'s actual schema (no `NOT
+    /// NULL`). Sprint 008.2's first JSONL attempt wrongly *required* this
+    /// field to be present and parseable — rejecting the entire type
+    /// record if not, silently dropping any type CCP's real data doesn't
+    /// assign a recognizable group to. That was the real cause of a large
+    /// consecutive range of valid type IDs going missing from `eve_types`
+    /// (surfaced only indirectly, as blueprint-reference placeholder
+    /// warnings, once blueprints.jsonl referenced those same IDs).
+    pub group_id: Option<i64>,
     pub published: bool,
 }
 
@@ -33,12 +41,19 @@ pub struct ParsedProduct {
     pub blueprint_type_id: i64,
     pub product_type_id: i64,
     pub quantity: i64,
+    /// Line number in the source file this was parsed from, when known
+    /// (JSONL only — the CSV path already reports row numbers through its
+    /// own per-row error handling in `read_csv`). Used to make a stub-
+    /// creation warning traceable back to the exact record that needed
+    /// one, not just the type id.
+    pub source_line: Option<usize>,
 }
 
 pub struct ParsedMaterial {
     pub blueprint_type_id: i64,
     pub material_type_id: i64,
     pub quantity: i64,
+    pub source_line: Option<usize>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -70,3 +85,4 @@ pub struct TypeSearchResult {
     /// type_id, so the caller can immediately look up its materials.
     pub producing_blueprint_type_id: Option<i64>,
 }
+

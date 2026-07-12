@@ -1,0 +1,15 @@
+-- RenderNorth Industrial — migration 0009
+-- Inventory Scope field (placeholder for future location-aware filtering).
+-- Additive only; 0001–0008 are untouched.
+--
+-- Captures the user's *intent* for which inventory should count toward a
+-- real operation's production plan — it does not implement any of the
+-- location/route logic itself yet. Route/jump-distance calculations and
+-- ESI-provided location data are both out of scope for this change; see
+-- docs/REAL_PRODUCTION_PLANNER.md. Until that lands, every scope value
+-- behaves identically to 'all_included_inventory' — the calculation
+-- always sums all manual inventory, regardless of which scope is chosen.
+-- The field exists now so the UI has a real, persisted place to record
+-- the choice, and so the eventual filtering work is additive rather than
+-- requiring a new column later.
+ALTER TABLE operation_build_targets ADD COLUMN inventory_scope TEXT NOT NULL DEFAULT 'all_included_inventory';
