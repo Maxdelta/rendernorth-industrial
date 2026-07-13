@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getBlueprintSummary,listBlueprints,getMissingBlueprintReport,type BlueprintSummary,type BlueprintRecord,type MissingBlueprintReport } from "../lib/backend";
 import { Panel } from "../components/Panel";import { StatCard } from "../components/StatCard";
+import {LocationDisplay} from "../components/LocationDisplay";
 
 type Filter="All Owned"|"ESI Character Blueprints"|"Manual Ownership"|"CCP Reference Data";
 export function BlueprintsPage(){
@@ -14,8 +15,8 @@ export function BlueprintsPage(){
   <Panel title="Blueprint Library" keel="furnace" className="dash-hero" headerRight={<button className="target-select enabled" onClick={refresh} disabled={loading}>{loading?"Loading…":"Refresh"}</button>}>
    <div className="new-op-actions">{(["All Owned","ESI Character Blueprints","Manual Ownership","CCP Reference Data"] as Filter[]).map(f=><button key={f} className={`target-select ${filter===f?"enabled":""}`} onClick={()=>setFilter(f)}>{f}</button>)}</div>
    {!error&&!loading&&shown.length===0&&<p className="ph-mission">No blueprints in this source.</p>}
-   {!error&&shown.length>0&&<div className="inv-table" style={{overflowX:"auto"}}><div className="inv-row" style={{gridTemplateColumns:"1.5fr .5fr 1fr .4fr .4fr .5fr 1fr 1fr 1.2fr 1fr 1.2fr",minWidth:1400}}><div>Blueprint</div><div>Type</div><div>Owner</div><div>ME</div><div>TE</div><div>Runs</div><div>Location ID</div><div>Location Flag</div><div>Source</div><div>Status</div><div>Operation</div></div>
-   {shown.map(b=><div className="inv-row" key={`${b.source}-${b.ownerName}-${b.blueprintId}`} style={{gridTemplateColumns:"1.5fr .5fr 1fr .4fr .4fr .5fr 1fr 1fr 1.2fr 1fr 1.2fr",minWidth:1400}}><div className="inv-name">{b.typeName}</div><div>{b.isCopy?"BPC":"BPO"}</div><div>{b.ownerName}</div><div>{b.meLevel}</div><div>{b.teLevel}</div><div>{b.runsRemaining??"∞"}</div><div>{b.locationId??"—"}</div><div>{b.locationFlag??"—"}</div><div>{b.source}</div><div>{b.status}</div><div>{b.linkedOperation??"—"}</div></div>)}</div>}
+   {!error&&shown.length>0&&<div className="inv-table" style={{overflowX:"auto"}}><div className="inv-row" style={{gridTemplateColumns:"1.5fr .5fr 1fr .4fr .4fr .5fr 2fr 1fr 1.2fr 1fr",minWidth:1400}}><div>Blueprint</div><div>Type</div><div>Owner</div><div>ME</div><div>TE</div><div>Runs</div><div>Location</div><div>System</div><div>Source</div><div>Status</div></div>
+   {shown.map(b=><div className="inv-row" key={`${b.source}-${b.ownerName}-${b.blueprintId}`} style={{gridTemplateColumns:"1.5fr .5fr 1fr .4fr .4fr .5fr 2fr 1fr 1.2fr 1fr",minWidth:1400}}><div className="inv-name">{b.typeName}</div><div>{b.isCopy?"BPC":"BPO"}</div><div>{b.ownerName}</div><div>{b.meLevel}</div><div>{b.teLevel}</div><div>{b.runsRemaining??"∞"}</div><LocationDisplay location={b.resolvedLocation}/><div>{b.resolvedLocation?.solarSystemName??"—"}</div><div>{b.source}</div><div>{b.status}</div></div>)}</div>}
   </Panel>
   {!error&&<Panel title="Missing Blueprint Report" keel={missing.length?"alert":"nominal"} className="dash-hero">{missing.length===0?<p className="ph-mission">Every required blueprint type is owned somewhere.</p>:<div className="conflict-list">{missing.map(m=><div className="conflict-row" key={m.typeName}><div className="conflict-type">not owned</div><div className="conflict-desc">{m.typeName} — required by {m.requiredByOperations.join(", ")}</div></div>)}</div>}</Panel>}
  </div>

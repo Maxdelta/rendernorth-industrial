@@ -734,6 +734,26 @@ pub fn list_synced_assets(db: State<'_, Db>) -> Result<Vec<inventory::models::Sy
 }
 
 #[tauri::command]
+pub async fn refresh_asset_locations(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<crate::location::RefreshResult, String> {
+    // Location resolution may perform several sequential CCP requests. Run it
+    // away from Tauri's event loop and use a separate SQLite connection so
+    // Inventory/Blueprint reads are not blocked behind the shared Db mutex.
+    let path = db.path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = rusqlite::Connection::open(&path)
+            .map_err(|e| format!("failed to open location worker database: {e}"))?;
+        conn.pragma_update(None, "foreign_keys", "ON")
+            .map_err(|e| format!("failed to configure location worker database: {e}"))?;
+        crate::location::refresh(&conn, &client_id)
+    })
+    .await
+    .map_err(|e| format!("location worker failed: {e}"))?
+}
+
+#[tauri::command]
 pub fn sync_character_blueprints(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<blueprint::sync::BlueprintSyncResult, String> {
     let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
     blueprint::sync::sync_one(&conn,&client_id,character_id)

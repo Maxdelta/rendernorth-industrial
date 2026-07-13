@@ -267,6 +267,7 @@ export interface BlueprintRecord {
   source: string;
   lastSynced: string | null;
   isOwned: boolean;
+  resolvedLocation: ResolvedLocation | null;
 }
 
 export interface BlueprintDetail {
@@ -1028,14 +1029,17 @@ export interface CharacterSummary {
   blueprintCount: number;
   blueprintPageCount: number;
   blueprintSyncError: string | null;
+  structureScopeGranted: boolean;
 }
 
 export interface AssetSyncResult { characterId: number; status: string; assetCount: number; pageCount: number; error: string | null; }
+export interface ResolvedLocation { rawLocationId:number; displayName:string; locationKind:string; solarSystemName:string|null; constellationName:string|null; regionName:string|null; containerPath:string[]; fullPath:string[]; resolutionStatus:string; resolutionSource:string; lastResolved:string|null; }
 export interface SyncedAsset {
   characterId: number; characterOwner: string; typeId: number; typeName: string; quantity: number;
   itemId: number; locationId: number; locationType: string; locationFlag: string; singleton: boolean;
-  source: string; lastSynced: string;
+  source: string; lastSynced: string; resolvedLocation: ResolvedLocation;
 }
+export interface LocationRefreshResult { resolved:number; inaccessible:number; errors:string[]; }
 export interface BlueprintSyncResult { characterId:number; status:string; blueprintCount:number; pageCount:number; error:string|null; }
 
 /** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
@@ -1073,6 +1077,7 @@ export async function listSyncedAssets(): Promise<SyncedAsset[]> {
   if (!inTauri()) return [];
   return invoke<SyncedAsset[]>("list_synced_assets");
 }
+export async function refreshAssetLocations(clientId:string):Promise<LocationRefreshResult>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<LocationRefreshResult>("refresh_asset_locations",{clientId});}
 
 export async function syncCharacterBlueprints(clientId:string,characterId:number):Promise<BlueprintSyncResult>{
   if(!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);

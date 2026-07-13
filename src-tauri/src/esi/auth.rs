@@ -22,6 +22,7 @@ pub const REDIRECT_URI: &str = "http://localhost:38473/callback";
 pub const SCOPES: &[&str] = &[
     "esi-assets.read_assets.v1",
     "esi-characters.read_blueprints.v1",
+    "esi-universe.read_structures.v1",
 ];
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(180);
 

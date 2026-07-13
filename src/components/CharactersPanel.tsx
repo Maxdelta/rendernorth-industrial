@@ -9,7 +9,7 @@ import { Panel } from "./Panel";
 
 function statusTone(c: CharacterSummary): "nominal" | "furnace" | "alert" {
   if (c.authorizationStatus === "revoked" || c.syncStatus === "error") return "alert";
-  if (!c.assetScopeGranted || !c.blueprintScopeGranted || c.authorizationStatus === "expired") return "furnace";
+  if (!c.assetScopeGranted || !c.blueprintScopeGranted || !c.structureScopeGranted || c.authorizationStatus === "expired") return "furnace";
   return "nominal";
 }
 
@@ -77,7 +77,8 @@ export function CharactersPanel() {
     <p className="ph-mission">
       Connect characters through official EVE SSO and synchronize read-only personal assets and blueprints. Characters
       missing <code>esi-characters.read_blueprints.v1</code> must use Add / Reauthorize Character again; the existing
-      <code> esi-assets.read_assets.v1</code> permission remains requested.
+      <code> esi-assets.read_assets.v1</code> permission remains requested. Player structures additionally require
+      <code> esi-universe.read_structures.v1</code>.
       Tokens remain in Windows Credential Manager and are never exposed here.
     </p>
     <label className="new-op-field" style={{ marginTop: 10 }}>
@@ -102,7 +103,7 @@ export function CharactersPanel() {
       <div className="inv-row inv-head"><div>Character</div><div>Authorization</div><div>Enabled</div><div>ESI Sync</div><div>Actions</div></div>
       {characters.map((c) => <div className="inv-row" key={c.characterId}>
         <div className="inv-name">{c.name}</div>
-        <div className={`inv-status ${statusTone(c)}`}>{c.authorizationStatus}{(!c.assetScopeGranted || !c.blueprintScopeGranted) && <><br />reauthorize</>}</div>
+        <div className={`inv-status ${statusTone(c)}`}>{c.authorizationStatus}{(!c.assetScopeGranted || !c.blueprintScopeGranted || !c.structureScopeGranted) && <><br />reauthorize</>}</div>
         <div><button className="target-select enabled" onClick={() => handleToggleEnabled(c)}>{c.enabled ? "ON" : "OFF"}</button></div>
         <div className="bts-result-meta">
           {c.syncStatus} · {c.assetCount.toLocaleString()} assets · {c.pageCount} pages<br />

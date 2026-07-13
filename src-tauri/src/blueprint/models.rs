@@ -26,6 +26,7 @@ pub struct BlueprintRecord {
     pub source: String,
     pub last_synced: Option<String>,
     pub is_owned: bool,
+    pub resolved_location: Option<crate::location::ResolvedLocation>,
 }
 
 #[derive(Serialize, Clone)]

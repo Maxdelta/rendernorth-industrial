@@ -85,6 +85,7 @@ function toRecord(b: RawBlueprint): BlueprintRecord {
     source: "Manual Ownership",
     lastSynced: null,
     isOwned: true,
+    resolvedLocation: null,
   };
 }
 

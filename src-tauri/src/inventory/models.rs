@@ -37,6 +37,7 @@ pub struct SyncedAsset {
     pub singleton: bool,
     pub source: String,
     pub last_synced: String,
+    pub resolved_location: crate::location::ResolvedLocation,
 }
 
 #[derive(Deserialize)]

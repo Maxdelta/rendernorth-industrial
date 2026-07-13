@@ -79,6 +79,19 @@ Corporation assets and structure-name resolution are not part of this slice.
   enabled ESI blueprint item can produce that product. If multiple candidates
   exist, all are displayed and none is auto-selected.
 
+### Human-readable locations (RNI-151)
+
+- Required player-structure scope: `esi-universe.read_structures.v1`.
+- Authenticated route: `GET /universe/structures/{structure_id}`.
+- Public routes: `GET /universe/stations/{station_id}`,
+  `/universe/systems/{system_id}`, `/universe/constellations/{constellation_id}`,
+  and `/universe/regions/{region_id}`.
+- Requests use `X-Compatibility-Date: 2026-07-12`. Resolved terminal metadata
+  is normalized in `location_cache`; raw IDs remain on asset/blueprint rows.
+- Parent item IDs are walked through the synchronized character asset snapshot
+  with cycle detection and a 32-segment maximum. Inaccessible structures are
+  labeled honestly with their raw ID and never assigned a guessed name.
+
 - **Per-resource fetchers** with a shared client: `assets`, `blueprints`, `industry_jobs`, `wallet`, `orders`.
 - **Cadence:** driven by ESI's own `expires` header per endpoint — never poll faster than the cache timer. Manual "Sync now" respects the same limits (button disabled until `next_allowed_at`).
 - **ETags:** stored in `sync_state`; `304 Not Modified` costs no error budget and no DB write.

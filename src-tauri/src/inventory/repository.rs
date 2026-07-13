@@ -27,6 +27,7 @@ mod synced_asset_tests {
                 character_id INTEGER, item_id INTEGER, type_id INTEGER, quantity INTEGER,
                 location_id INTEGER, location_type TEXT, location_flag TEXT,
                 is_singleton INTEGER, synced_at TEXT);
+             CREATE TABLE location_cache(location_id INTEGER PRIMARY KEY,location_kind TEXT,display_name TEXT,solar_system_name TEXT,constellation_name TEXT,region_name TEXT,resolution_status TEXT,resolution_source TEXT,resolved_at TEXT);
              INSERT INTO characters VALUES(1, 'Maxdelta');
              INSERT INTO eve_types VALUES(34, 'Tritanium');
              INSERT INTO character_assets VALUES(1, 99, 34, 500, 60003760, 'station', 'Hangar', 0, '2026-07-12T18:35:01Z');"
@@ -57,13 +58,14 @@ impl<'a> InventoryRepository<'a> {
              ORDER BY c.name, a.location_id,
                       COALESCE(t.name, 'Unknown Type ' || a.type_id), a.item_id"
         ).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |row| Ok(SyncedAsset {
-            character_id: row.get(0)?, character_owner: row.get(1)?, type_id: row.get(2)?,
+        let rows = stmt.query_map([], |row| { let character_id=row.get(0)?; let location_id=row.get(6)?; Ok(SyncedAsset {
+            character_id, character_owner: row.get(1)?, type_id: row.get(2)?,
             type_name: row.get(3)?, quantity: row.get(4)?, item_id: row.get(5)?,
-            location_id: row.get(6)?, location_type: row.get(7)?, location_flag: row.get(8)?,
+            location_id, location_type: row.get(7)?, location_flag: row.get(8)?,
             singleton: row.get::<_, i64>(9)? != 0, source: "ESI Character Assets".into(),
             last_synced: row.get(10)?,
-        })).map_err(|e| e.to_string())?;
+            resolved_location: crate::location::resolve(self.conn,character_id,location_id).map_err(|e|rusqlite::Error::ToSqlConversionFailure(e.into()))?,
+        })}).map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
     }
 

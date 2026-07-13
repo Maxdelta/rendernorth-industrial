@@ -21,6 +21,7 @@ pub struct CharacterSummary {
     pub blueprint_count: i64,
     pub blueprint_page_count: i64,
     pub blueprint_sync_error: Option<String>,
+    pub structure_scope_granted: bool,
 }
 
 pub struct NewCharacter {
