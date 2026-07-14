@@ -12,6 +12,8 @@ mod decision;
 mod esi;
 mod inventory;
 mod location;
+mod market;
+mod volume;
 mod models;
 mod operation;
 mod production;
@@ -86,6 +88,14 @@ fn main() {
             commands::sync_all_character_assets,
             commands::list_synced_assets,
             commands::refresh_asset_locations,
+            commands::get_market_profile,
+            commands::refresh_market_prices,
+            commands::search_inventory_market,
+            commands::get_market_quote,
+            commands::get_operation_cost_assumptions,
+            commands::save_operation_cost_assumptions,
+            commands::reset_operation_cost_assumptions,
+            commands::get_operation_economics,
             commands::sync_character_blueprints,
             commands::sync_all_character_blueprints
         ])

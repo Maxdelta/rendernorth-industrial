@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatQty, type RequirementTreeNode } from "../lib/backend";
+import { formatQty, formatVolume, type RequirementTreeNode } from "../lib/backend";
 
 interface TreeNodeRowProps {
   node: RequirementTreeNode;
@@ -32,21 +32,26 @@ export function TreeNodeRow({ node, depth, validationMode = false }: TreeNodeRow
         </div>
         <div className="inv-qty">
           {formatQty(node.neededQuantity)}
+          <div className="bts-result-meta">{formatVolume(node.requiredVolumeM3)}</div>
         </div>
         <div className="inv-qty">
           {formatQty(node.ownedQuantity)}
           {node.ownedQuantity > 0 && <span className="bts-result-meta"> · {node.ownedSource}</span>}
+          <div className="bts-result-meta">{formatVolume(node.ownedVolumeM3)}</div>
         </div>
         <div className="inv-qty">{node.reservedQuantity > 0 ? formatQty(node.reservedQuantity) : "—"}</div>
         <div className="inv-qty">{formatQty(node.availableQuantity)}</div>
         <div className="inv-qty">{Math.round(node.coverageFraction * 100)}%</div>
-        <div className={`inv-status ${tone(node)}`}>{node.isSatisfied ? "OK" : "Short"}</div>
+        <div className={`inv-status ${tone(node)}`}>{node.isSatisfied ? "OK" : "Short"}<div className="bts-result-meta">Missing {formatVolume(node.missingVolumeM3)}</div></div>
       </div>
       {validationMode && (
         <div className="validation-detail" style={{ paddingLeft: depth * 4 + 20 }}>
           <span>Blueprint: {node.blueprintTypeId !== null ? `type ${node.blueprintTypeId}` : "— (leaf, no blueprint)"}</span>
           <span>Activity: {node.activity}</span>
           <span>Required: {formatQty(node.neededQuantity)}</span>
+          <span>Required volume: {formatVolume(node.requiredVolumeM3)}</span>
+          <span>Owned volume: {formatVolume(node.ownedVolumeM3)}</span>
+          <span>Missing volume: {formatVolume(node.missingVolumeM3)}</span>
           <span>Path: {node.calculationPath}</span>
         </div>
       )}

@@ -15,7 +15,7 @@ function csvEscape(value: string): string {
 }
 
 export function toCsv(plan: ProductionPlan): string {
-  const header = ["Type ID", "Type Name", "Category/Group", "Required", "Owned", "Owned Source", "Reserved", "Available", "Missing", "Operation"];
+  const header = ["Type ID", "Type Name", "Category/Group", "Unit m3", "Required", "Required m3", "Owned", "Owned m3", "Owned Source", "Reserved", "Available", "Missing", "Purchase m3", "Operation"];
   const lines = [header.join(",")];
   for (const r of rows(plan)) {
     const categoryGroup = [r.categoryName, r.groupName].filter(Boolean).join(" / ");
@@ -24,12 +24,16 @@ export function toCsv(plan: ProductionPlan): string {
         r.typeId,
         csvEscape(r.typeName),
         csvEscape(categoryGroup || "—"),
+        r.unitVolumeM3 ?? "",
         r.requiredQuantity,
+        r.requiredVolumeM3 ?? "",
         r.ownedQuantity,
+        r.ownedVolumeM3 ?? "",
         csvEscape(r.ownedQuantity > 0 ? r.ownedSource : ""),
         r.reservedQuantity,
         r.availableQuantity,
         r.missingQuantity,
+        r.missingVolumeM3 ?? "",
         csvEscape(plan.operationGoal),
       ].join(","),
     );
@@ -44,24 +48,27 @@ export function toMarkdown(plan: ProductionPlan): string {
     `Operation: ${plan.operationGoal}`,
     `Build target: ${plan.buildTargetName} × ${plan.requestedQuantity} (${plan.totalRuns} runs, ${plan.blueprintMode})`,
     `Inventory scope: ${plan.inventoryScope}`,
+    `Total required volume: ${plan.totalRequiredVolumeM3 ?? "unknown"} m³`,
+    `Total owned volume: ${plan.totalOwnedVolumeM3 ?? "unknown"} m³`,
+    `Total purchase volume: ${plan.totalMissingVolumeM3 ?? "unknown"} m³`,
     "",
-    "| Type | Category/Group | Required | Owned | Owned Source | Reserved | Available | Missing |",
-    "|---|---|---|---|---|---|---|---|",
+    "| Type | Category/Group | Unit m³ | Required | Required m³ | Owned | Owned m³ | Owned Source | Reserved | Available | Missing | Purchase m³ |",
+    "|---|---|---|---|---|---|---|---|---|---|---|---|",
   ];
   for (const r of rows(plan)) {
     const categoryGroup = [r.categoryName, r.groupName].filter(Boolean).join(" / ") || "—";
     const source = r.ownedQuantity > 0 ? r.ownedSource : "—";
     lines.push(
-      `| ${r.typeName} | ${categoryGroup} | ${r.requiredQuantity} | ${r.ownedQuantity} | ${source} | ${r.reservedQuantity} | ${r.availableQuantity} | ${r.missingQuantity} |`,
+      `| ${r.typeName} | ${categoryGroup} | ${r.unitVolumeM3 ?? "unknown"} | ${r.requiredQuantity} | ${r.requiredVolumeM3 ?? "unknown"} | ${r.ownedQuantity} | ${r.ownedVolumeM3 ?? "unknown"} | ${source} | ${r.reservedQuantity} | ${r.availableQuantity} | ${r.missingQuantity} | ${r.missingVolumeM3 ?? "unknown"} |`,
     );
   }
   return lines.join("\n");
 }
 
 export function toPlainText(plan: ProductionPlan): string {
-  const lines = [TITLE, `Operation: ${plan.operationGoal}`, `Build target: ${plan.buildTargetName} × ${plan.requestedQuantity}`, ""];
+  const lines = [TITLE, `Operation: ${plan.operationGoal}`, `Build target: ${plan.buildTargetName} × ${plan.requestedQuantity}`, `Total purchase volume: ${plan.totalMissingVolumeM3 ?? "unknown"} m³`, ""];
   for (const r of rows(plan)) {
-    lines.push(`${r.typeName}: need ${r.requiredQuantity}, have ${r.ownedQuantity} (${r.ownedQuantity > 0 ? r.ownedSource : "none"}), missing ${r.missingQuantity}`);
+    lines.push(`${r.typeName}: need ${r.requiredQuantity} (${r.requiredVolumeM3 ?? "unknown"} m³), have ${r.ownedQuantity} (${r.ownedVolumeM3 ?? "unknown"} m³; ${r.ownedQuantity > 0 ? r.ownedSource : "none"}), missing ${r.missingQuantity} (${r.missingVolumeM3 ?? "unknown"} m³)`);
   }
   return lines.join("\n");
 }

@@ -346,6 +346,16 @@ impl<'a> ProductionRepository<'a> {
             .map_err(|e| format!("type {type_id} not found in imported static data: {e}"))
     }
 
+    fn unit_volume_m3(&self, type_id: i64) -> Result<Option<f64>, String> {
+        self.conn
+            .query_row(
+                "SELECT volume_m3 FROM eve_types WHERE type_id = ?1",
+                [type_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| format!("type {type_id} volume unavailable: {error}"))
+    }
+
     /// The blueprint that produces `product_type_id`, if any. Foundation
     /// assumption: at most one manufacturing blueprint per product (the
     /// first match wins if the imported data has more than one) — real
@@ -532,6 +542,7 @@ impl<'a> ProductionRepository<'a> {
         // is not the same as it being usable for this build.
         let available_quantity = (owned_quantity - reserved_quantity).max(0);
         let missing_quantity = (needed_quantity - available_quantity).max(0);
+        let unit_volume_m3 = self.unit_volume_m3(type_id)?;
         let coverage_fraction = if needed_quantity > 0 {
             (available_quantity as f64 / needed_quantity as f64).min(1.0)
         } else {
@@ -545,12 +556,16 @@ impl<'a> ProductionRepository<'a> {
             runs,
             produced_quantity,
             needed_quantity,
+            unit_volume_m3,
+            required_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, needed_quantity),
             per_run_quantity: product_quantity,
             owned_quantity,
+            owned_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, owned_quantity),
             owned_source: owned_source.to_string(),
             reserved_quantity,
             available_quantity,
             missing_quantity,
+            missing_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, missing_quantity),
             coverage_fraction,
             is_satisfied: available_quantity >= needed_quantity,
             me_applied: me,
@@ -580,6 +595,7 @@ impl<'a> ProductionRepository<'a> {
         let reserved_quantity = self.reserved_quantity(operation_id, type_name)?;
         let available_quantity = (owned_quantity - reserved_quantity).max(0);
         let missing_quantity = (needed_quantity - available_quantity).max(0);
+        let unit_volume_m3 = self.unit_volume_m3(type_id)?;
         let coverage_fraction = if needed_quantity > 0 {
             (available_quantity as f64 / needed_quantity as f64).min(1.0)
         } else {
@@ -593,12 +609,16 @@ impl<'a> ProductionRepository<'a> {
             runs: 0,
             produced_quantity: 0,
             needed_quantity,
+            unit_volume_m3,
+            required_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, needed_quantity),
             per_run_quantity: 0,
             owned_quantity,
+            owned_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, owned_quantity),
             owned_source: owned_source.to_string(),
             reserved_quantity,
             available_quantity,
             missing_quantity,
+            missing_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, missing_quantity),
             coverage_fraction,
             is_satisfied: available_quantity >= needed_quantity,
             me_applied: 0,
@@ -699,6 +719,7 @@ impl<'a> ProductionRepository<'a> {
                 1.0
             };
             let (group_name, category_name) = self.group_and_category_for(leaf_type_id);
+            let unit_volume_m3 = self.unit_volume_m3(leaf_type_id)?;
             leaf_totals.push(LeafTotal {
                 group_name,
                 category_name,
@@ -706,16 +727,28 @@ impl<'a> ProductionRepository<'a> {
                 type_id: leaf_type_id,
                 type_name: leaf_name,
                 required_quantity,
+                unit_volume_m3,
+                required_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, required_quantity),
                 owned_quantity,
+                owned_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, owned_quantity),
                 owned_source: owned_source.to_string(),
                 reserved_quantity,
                 available_quantity,
                 missing_quantity,
+                missing_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, missing_quantity),
                 coverage_fraction,
                 is_satisfied: available_quantity >= required_quantity,
             });
         }
         leaf_totals.sort_by(|a, b| a.type_name.cmp(&b.type_name));
+        let total_required_volume_m3 = crate::volume::aggregate_volume(
+            leaf_totals.iter().map(|leaf| leaf.required_volume_m3),
+        );
+        let total_owned_volume_m3 =
+            crate::volume::aggregate_volume(leaf_totals.iter().map(|leaf| leaf.owned_volume_m3));
+        let total_missing_volume_m3 = crate::volume::aggregate_volume(
+            leaf_totals.iter().map(|leaf| leaf.missing_volume_m3),
+        );
 
         let mut bp_stmt=self.conn.prepare(
             "SELECT cb.item_id,c.name,cb.runs != -1,cb.material_efficiency,cb.time_efficiency,CASE WHEN cb.runs=-1 THEN NULL ELSE cb.runs END
@@ -740,6 +773,9 @@ impl<'a> ProductionRepository<'a> {
             inventory_scope,
             tree,
             leaf_totals,
+            total_required_volume_m3,
+            total_owned_volume_m3,
+            total_missing_volume_m3,
             warnings,
             synchronized_blueprints,
         })
@@ -773,6 +809,7 @@ mod tests {
         include_str!("../../migrations/0011_esi_character_auth.sql"),
         include_str!("../../migrations/0012_character_asset_sync.sql"),
         include_str!("../../migrations/0013_character_blueprint_sync.sql"),
+        include_str!("../../migrations/0016_type_volume.sql"),
     ];
 
     fn test_db() -> Connection {
@@ -1175,6 +1212,7 @@ mod tests {
     fn inventory_coverage_and_exact_shortage() {
         let conn = test_db();
         seed_fixture(&conn);
+        conn.execute_batch("UPDATE eve_types SET volume_m3=2.0 WHERE type_id=10; UPDATE eve_types SET volume_m3=3.0 WHERE type_id=30;").unwrap();
         let op_id = seed_operation_with_target(&conn, 5, 10, 20);
 
         // Demo inventory (inventory_items) — must NOT contribute to a real
@@ -1225,11 +1263,19 @@ mod tests {
         assert_eq!(material_a.reserved_quantity, 0);
         assert_eq!(material_a.available_quantity, 200);
         assert_eq!(material_a.missing_quantity, 115); // exact shortage: 315 - 200
+        assert_eq!(material_a.unit_volume_m3, Some(2.0));
+        assert_eq!(material_a.required_volume_m3, Some(630.0));
+        assert_eq!(material_a.owned_volume_m3, Some(400.0));
+        assert_eq!(material_a.missing_volume_m3, Some(230.0));
         assert!(!material_a.is_satisfied);
 
         let material_c = plan.leaf_totals.iter().find(|l| l.type_id == 30).unwrap();
         assert_eq!(material_c.owned_quantity, 0);
         assert_eq!(material_c.missing_quantity, 63);
+        assert_eq!(material_c.required_volume_m3, Some(189.0));
+        assert_eq!(plan.total_required_volume_m3, Some(819.0));
+        assert_eq!(plan.total_owned_volume_m3, Some(400.0));
+        assert_eq!(plan.total_missing_volume_m3, Some(419.0));
     }
 
     #[test]

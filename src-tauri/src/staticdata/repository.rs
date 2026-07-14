@@ -65,6 +65,8 @@ struct CsvType {
     #[serde(rename = "groupID")]
     group_id: i64,
     published: i64,
+    #[serde(default)]
+    volume: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -162,6 +164,7 @@ impl<'a> StaticDataRepository<'a> {
                 name: t.type_name.clone(),
                 group_id: Some(t.group_id),
                 published: t.published != 0,
+                volume_m3: t.volume.filter(|value| value.is_finite() && *value >= 0.0),
             })
             .collect();
         let products: Vec<ParsedProduct> = raw_products
@@ -272,11 +275,11 @@ impl<'a> StaticDataRepository<'a> {
             for t in types {
                 self.conn
                     .execute(
-                        "INSERT INTO eve_types (type_id, name, group_id, published, is_manufacturable)
-                         VALUES (?1, ?2, ?3, ?4, 0)
+                        "INSERT INTO eve_types (type_id, name, group_id, published, is_manufacturable, volume_m3)
+                         VALUES (?1, ?2, ?3, ?4, 0, ?5)
                          ON CONFLICT(type_id) DO UPDATE SET
-                             name = excluded.name, group_id = excluded.group_id, published = excluded.published",
-                        (t.type_id, &t.name, t.group_id, t.published as i64),
+                             name = excluded.name, group_id = excluded.group_id, published = excluded.published, volume_m3 = excluded.volume_m3",
+                        (t.type_id, &t.name, t.group_id, t.published as i64, t.volume_m3),
                     )
                     .map_err(|e| format!("failed to upsert type {}: {e}", t.type_id))?;
             }
@@ -531,7 +534,7 @@ impl<'a> StaticDataRepository<'a> {
             .conn
             .prepare(
                 "SELECT t.type_id, t.name, g.name AS group_name, c.name AS category_name,
-                        t.is_manufacturable,
+                        t.is_manufacturable, t.volume_m3,
                         (SELECT bp.blueprint_type_id FROM blueprint_products bp
                          WHERE bp.product_type_id = t.type_id LIMIT 1) AS producing_blueprint_type_id
                  FROM eve_types t
@@ -551,7 +554,8 @@ impl<'a> StaticDataRepository<'a> {
                     group_name: row.get(2).unwrap_or_else(|_| "Unknown".to_string()),
                     category_name: row.get(3).unwrap_or_else(|_| "Unknown".to_string()),
                     is_manufacturable: is_manufacturable != 0,
-                    producing_blueprint_type_id: row.get(5)?,
+                    unit_volume_m3: row.get(5)?,
+                    producing_blueprint_type_id: row.get(6)?,
                 })
             })
             .map_err(|e| e.to_string())?;

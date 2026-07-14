@@ -20,8 +20,11 @@ pub struct RequirementTreeNode {
     pub runs: i64,
     pub produced_quantity: i64,
     pub needed_quantity: i64,
+    pub unit_volume_m3: Option<f64>,
+    pub required_volume_m3: Option<f64>,
     pub per_run_quantity: i64,
     pub owned_quantity: i64,
+    pub owned_volume_m3: Option<f64>,
     /// Which inventory source contributed `owned_quantity` — "Manual
     /// Inventory" today; a future ESI-backed source would extend this
     /// label set, not replace it. Demo inventory never contributes to a
@@ -30,6 +33,7 @@ pub struct RequirementTreeNode {
     pub reserved_quantity: i64,
     pub available_quantity: i64,
     pub missing_quantity: i64,
+    pub missing_volume_m3: Option<f64>,
     pub coverage_fraction: f64,
     pub is_satisfied: bool,
     pub me_applied: i64,
@@ -72,11 +76,15 @@ pub struct LeafTotal {
     /// than one entry here; the required_quantity below is their sum.
     pub calculation_paths: Vec<String>,
     pub required_quantity: i64,
+    pub unit_volume_m3: Option<f64>,
+    pub required_volume_m3: Option<f64>,
     pub owned_quantity: i64,
+    pub owned_volume_m3: Option<f64>,
     pub owned_source: String,
     pub reserved_quantity: i64,
     pub available_quantity: i64,
     pub missing_quantity: i64,
+    pub missing_volume_m3: Option<f64>,
     pub coverage_fraction: f64,
     pub is_satisfied: bool,
 }
@@ -105,6 +113,9 @@ pub struct ProductionPlan {
     pub inventory_scope: String,
     pub tree: RequirementTreeNode,
     pub leaf_totals: Vec<LeafTotal>,
+    pub total_required_volume_m3: Option<f64>,
+    pub total_owned_volume_m3: Option<f64>,
+    pub total_missing_volume_m3: Option<f64>,
     pub warnings: Vec<String>,
     pub synchronized_blueprints: Vec<OwnedBlueprintInfo>,
 }

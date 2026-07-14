@@ -22,6 +22,8 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (12, include_str!("../migrations/0012_character_asset_sync.sql")),
     (13, include_str!("../migrations/0013_character_blueprint_sync.sql")),
     (14, include_str!("../migrations/0014_location_resolution.sql")),
+    (15, include_str!("../migrations/0015_market_valuation.sql")),
+    (16, include_str!("../migrations/0016_type_volume.sql")),
 ];
 
 pub struct Db {

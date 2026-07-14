@@ -410,6 +410,7 @@ export interface TypeSearchResult {
   groupName: string;
   categoryName: string;
   isManufacturable: boolean;
+  unitVolumeM3: number | null;
   producingBlueprintTypeId: number | null;
 }
 
@@ -455,13 +456,17 @@ export interface RequirementTreeNode {
   runs: number;
   producedQuantity: number;
   neededQuantity: number;
+  unitVolumeM3: number | null;
+  requiredVolumeM3: number | null;
   perRunQuantity: number;
   ownedQuantity: number;
+  ownedVolumeM3: number | null;
   /** Which inventory source contributed ownedQuantity — "Manual Inventory" today; demo inventory never contributes. */
   ownedSource: string;
   reservedQuantity: number;
   availableQuantity: number;
   missingQuantity: number;
+  missingVolumeM3: number | null;
   coverageFraction: number;
   isSatisfied: boolean;
   meApplied: number;
@@ -483,11 +488,15 @@ export interface LeafTotal {
   /** Validation Mode (Sprint 009) — every distinct ancestor chain that contributed to this leaf's total. */
   calculationPaths: string[];
   requiredQuantity: number;
+  unitVolumeM3: number | null;
+  requiredVolumeM3: number | null;
   ownedQuantity: number;
+  ownedVolumeM3: number | null;
   ownedSource: string;
   reservedQuantity: number;
   availableQuantity: number;
   missingQuantity: number;
+  missingVolumeM3: number | null;
   coverageFraction: number;
   isSatisfied: boolean;
 }
@@ -507,6 +516,9 @@ export interface ProductionPlan {
   inventoryScope: string;
   tree: RequirementTreeNode;
   leafTotals: LeafTotal[];
+  totalRequiredVolumeM3: number | null;
+  totalOwnedVolumeM3: number | null;
+  totalMissingVolumeM3: number | null;
   warnings: string[];
   synchronizedBlueprints: Array<{itemId:number;ownerName:string;isCopy:boolean;me:number;te:number;runsRemaining:number|null;source:string}>;
 }
@@ -519,6 +531,8 @@ export interface ManualInventoryEntry {
   typeId: number;
   typeName: string;
   quantity: number;
+  unitVolumeM3: number | null;
+  stackVolumeM3: number | null;
   locationName: string;
   createdAt: string;
   updatedAt: string;
@@ -1005,6 +1019,12 @@ export function formatQty(value: number): string {
   return value.toLocaleString();
 }
 
+export function formatVolume(value: number | null): string {
+  return value == null
+    ? "Unknown m³"
+    : `${value.toLocaleString(undefined, { maximumFractionDigits: 6 })} m³`;
+}
+
 // ---------------------------------------------------------------------------
 // Sprint 011A — EVE SSO Character Authentication Foundation. Authentication
 // only. See docs/ESI_INTEGRATION.md and docs/SPRINT_011A_SETUP.md.
@@ -1036,10 +1056,22 @@ export interface AssetSyncResult { characterId: number; status: string; assetCou
 export interface ResolvedLocation { rawLocationId:number; displayName:string; locationKind:string; solarSystemName:string|null; constellationName:string|null; regionName:string|null; containerPath:string[]; fullPath:string[]; resolutionStatus:string; resolutionSource:string; lastResolved:string|null; }
 export interface SyncedAsset {
   characterId: number; characterOwner: string; typeId: number; typeName: string; quantity: number;
+  unitVolumeM3:number|null; stackVolumeM3:number|null;
   itemId: number; locationId: number; locationType: string; locationFlag: string; singleton: boolean;
   source: string; lastSynced: string; resolvedLocation: ResolvedLocation;
 }
 export interface LocationRefreshResult { resolved:number; inaccessible:number; errors:string[]; }
+export interface WeightedFill { unitPrice:number|null; totalPrice:number|null; requested:number; filled:number; availableVolume:number; sufficient:boolean; }
+export interface MarketQuote { typeId:number; quantity:number; unitVolumeM3:number|null; requestedVolumeM3:number|null; acquisition:WeightedFill; liquidation:WeightedFill; marketProfile:string; fetchedAt:string|null; expiresAt:string|null; stale:boolean; source:string; }
+export interface MarketProfile { profileId:number; displayName:string; regionId:number; locationId:number; refreshIntervalSeconds:number; status:string; fetchedAt:string|null; expiresAt:string|null; orderCount:number; pageCount:number; lastError:string|null; stale:boolean; }
+export interface InventorySearchInput { text?:string|null; character?:string|null; source?:string|null; category?:string|null; group?:string|null; region?:string|null; system?:string|null; location?:string|null; resolved?:boolean|null; positiveOnly?:boolean|null; sort?:string|null; }
+export interface InventorySearchRow { stackKey:string; typeId:number; typeName:string; quantity:number; unitVolumeM3:number|null; stackVolumeM3:number|null; owner:string; source:string; groupName:string|null; categoryName:string|null; locationName:string; systemName:string|null; constellationName:string|null; regionName:string|null; containerPath:string[]; locationFlag:string|null; resolved:boolean; lastSynced:string; quote:MarketQuote; }
+export interface InventorySearchResult { rows:InventorySearchRow[]; matchingStacks:number; matchingUnits:number; totalVolumeM3:number|null; totalReplacementValue:number|null; totalLiquidationValue:number|null; }
+export interface CostAssumptions { salesTaxPercent:number; brokerFeePercent:number; manufacturingJobCost:number; haulingCost:number; otherCost:number; }
+export interface CostAssumptionState { assumptions:CostAssumptions; savedAt:string|null; }
+export type RevenueBasis = "immediate" | "listed";
+export interface MaterialCostLine { typeId:number; typeName:string; requiredQuantity:number; ownedQuantity:number; shortageQuantity:number; unitVolumeM3:number|null; requiredVolumeM3:number|null; ownedVolumeM3:number|null; purchaseVolumeM3:number|null; unitAcquisitionPrice:number|null; replacementValue:number|null; ownedOpportunityCost:number|null; shortageCashCost:number|null; availableVolume:number; }
+export interface OperationEconomics { operationId:number; marketProfile:string; materials:MaterialCostLine[]; totalMaterialReplacementCost:number|null; ownedMaterialOpportunityCost:number|null; cashRequired:number|null; totalMaterialVolumeM3:number|null; totalPurchaseVolumeM3:number|null; outputImmediateSaleValue:number|null; outputListedSaleValue:number|null; revenueBasis:RevenueBasis; revenueBasisMessage:string|null; grossProfit:number|null; salesTax:number|null; brokerFee:number|null; manufacturingJobCost:number; haulingCost:number; otherCost:number; estimatedNetProfit:number|null; margin:number|null; roi:number|null; stale:boolean; priceTimestamp:string|null; }
 export interface BlueprintSyncResult { characterId:number; status:string; blueprintCount:number; pageCount:number; error:string|null; }
 
 /** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
@@ -1078,6 +1110,15 @@ export async function listSyncedAssets(): Promise<SyncedAsset[]> {
   return invoke<SyncedAsset[]>("list_synced_assets");
 }
 export async function refreshAssetLocations(clientId:string):Promise<LocationRefreshResult>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<LocationRefreshResult>("refresh_asset_locations",{clientId});}
+export async function getMarketProfile():Promise<MarketProfile>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<MarketProfile>("get_market_profile");}
+export async function refreshMarketPrices():Promise<{orderCount:number;pageCount:number;fetchedAt:string;expiresAt:string}>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("refresh_market_prices");}
+export async function searchInventoryMarket(input:InventorySearchInput):Promise<InventorySearchResult>{if(!inTauri())return {rows:[],matchingStacks:0,matchingUnits:0,totalVolumeM3:null,totalReplacementValue:null,totalLiquidationValue:null};return invoke<InventorySearchResult>("search_inventory_market",{input});}
+export async function getMarketQuote(typeId:number,quantity:number):Promise<MarketQuote>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<MarketQuote>("get_market_quote",{typeId,quantity});}
+export async function searchMarketTypes(query:string,limit=25):Promise<TypeSearchResult[]>{if(!inTauri())return [];return invoke<TypeSearchResult[]>("search_eve_types",{query,limit});}
+export async function getOperationCostAssumptions(operationId:number):Promise<CostAssumptionState>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<CostAssumptionState>("get_operation_cost_assumptions",{operationId});}
+export async function saveOperationCostAssumptions(operationId:number,assumptions:CostAssumptions):Promise<CostAssumptionState>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<CostAssumptionState>("save_operation_cost_assumptions",{operationId,assumptions});}
+export async function resetOperationCostAssumptions(operationId:number):Promise<CostAssumptionState>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<CostAssumptionState>("reset_operation_cost_assumptions",{operationId});}
+export async function getOperationEconomics(operationId:number,revenueBasis:RevenueBasis|null=null):Promise<OperationEconomics>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<OperationEconomics>("get_operation_economics",{operationId,revenueBasis});}
 
 export async function syncCharacterBlueprints(clientId:string,characterId:number):Promise<BlueprintSyncResult>{
   if(!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);

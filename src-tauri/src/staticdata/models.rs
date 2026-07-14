@@ -35,6 +35,9 @@ pub struct ParsedType {
     /// warnings, once blueprints.jsonl referenced those same IDs).
     pub group_id: Option<i64>,
     pub published: bool,
+    /// CCP invTypes/type volume in cubic metres. Missing source values
+    /// remain unknown; RenderNorth never invents or derives unit volume.
+    pub volume_m3: Option<f64>,
 }
 
 pub struct ParsedProduct {
@@ -81,8 +84,8 @@ pub struct TypeSearchResult {
     pub group_name: String,
     pub category_name: String,
     pub is_manufacturable: bool,
+    pub unit_volume_m3: Option<f64>,
     /// Present when a blueprint produces this type — the blueprint's own
     /// type_id, so the caller can immediately look up its materials.
     pub producing_blueprint_type_id: Option<i64>,
 }
-

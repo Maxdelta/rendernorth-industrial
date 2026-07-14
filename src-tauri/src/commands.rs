@@ -754,6 +754,81 @@ pub async fn refresh_asset_locations(
 }
 
 #[tauri::command]
+pub fn get_market_profile(db: State<'_, Db>) -> Result<crate::market::MarketProfile, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::market::selected_profile(&conn)
+}
+
+#[tauri::command]
+pub async fn refresh_market_prices(
+    db: State<'_, Db>,
+) -> Result<crate::market::RefreshResult, String> {
+    let path = db.path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let conn = rusqlite::Connection::open(path).map_err(|e| e.to_string())?;
+        crate::market::refresh(&conn)
+    })
+    .await
+    .map_err(|e| format!("market refresh worker failed: {e}"))?
+}
+
+#[tauri::command]
+pub fn search_inventory_market(
+    db: State<'_, Db>,
+    input: crate::market::InventorySearchInput,
+) -> Result<crate::market::InventorySearchResult, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::market::search_inventory(&conn, &input)
+}
+
+#[tauri::command]
+pub fn get_market_quote(db: State<'_, Db>, type_id: i64, quantity: i64) -> Result<crate::market::MarketQuote, String> {
+    if quantity < 1 {
+        return Err("requested market quantity must be at least 1".to_string());
+    }
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::market::quote(&conn, type_id, quantity)
+}
+
+#[tauri::command]
+pub fn get_operation_cost_assumptions(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<crate::market::CostAssumptionState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::market::load_cost_assumptions(&conn, operation_id)
+}
+
+#[tauri::command]
+pub fn save_operation_cost_assumptions(
+    db: State<'_, Db>,
+    operation_id: i64,
+    assumptions: crate::market::CostAssumptions,
+) -> Result<crate::market::CostAssumptionState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::market::save_cost_assumptions(&conn, operation_id, &assumptions)
+}
+
+#[tauri::command]
+pub fn reset_operation_cost_assumptions(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<crate::market::CostAssumptionState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::market::reset_cost_assumptions(&conn, operation_id)
+}
+
+#[tauri::command]
+pub fn get_operation_economics(
+    db: State<'_, Db>,
+    operation_id: i64,
+    revenue_basis: Option<String>,
+) -> Result<crate::market::OperationEconomics, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::market::operation_economics(&conn, operation_id, revenue_basis.as_deref())
+}
+
+#[tauri::command]
 pub fn sync_character_blueprints(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<blueprint::sync::BlueprintSyncResult, String> {
     let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
     blueprint::sync::sync_one(&conn,&client_id,character_id)

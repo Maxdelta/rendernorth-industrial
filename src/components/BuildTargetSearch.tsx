@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { searchEveTypes, getLatestImport, type TypeSearchResult } from "../lib/backend";
+import { searchEveTypes, getLatestImport, formatVolume, type TypeSearchResult } from "../lib/backend";
 
 interface BuildTargetSearchProps {
   onSelect: (result: TypeSearchResult | null) => void;
@@ -54,7 +54,7 @@ export function BuildTargetSearch({ onSelect, selected }: BuildTargetSearchProps
           <div className="bts-selected-name">{selected.name}</div>
           <div className="bts-selected-meta">
             {selected.categoryName} &rsaquo; {selected.groupName}
-            {selected.isManufacturable ? " · manufacturable" : " · not manufacturable"}
+            {selected.isManufacturable ? " · manufacturable" : " · not manufacturable"} · {formatVolume(selected.unitVolumeM3)} per unit
           </div>
         </div>
         <button className="target-select enabled" onClick={() => onSelect(null)}>
@@ -88,7 +88,7 @@ export function BuildTargetSearch({ onSelect, selected }: BuildTargetSearchProps
               >
                 <span className="bts-result-name">{r.name}</span>
                 <span className="bts-result-meta">
-                  {r.categoryName} &rsaquo; {r.groupName}
+                  {r.categoryName} &rsaquo; {r.groupName} · {formatVolume(r.unitVolumeM3)} per unit
                 </span>
                 <span className={r.isManufacturable ? "op-status nominal" : "op-status coolant"}>
                   {r.isManufacturable ? "Manufacturable" : "Not manufacturable"}

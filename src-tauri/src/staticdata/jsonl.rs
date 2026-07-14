@@ -76,6 +76,26 @@ fn get_i64(v: &Value, candidates: &[&str]) -> Option<i64> {
     None
 }
 
+fn get_f64(v: &Value, candidates: &[&str]) -> Option<f64> {
+    for key in candidates {
+        if let Some(found) = v.get(key) {
+            if let Some(number) = found.as_f64() {
+                if number.is_finite() {
+                    return Some(number);
+                }
+            }
+            if let Some(text) = found.as_str() {
+                if let Ok(number) = text.parse::<f64>() {
+                    if number.is_finite() {
+                        return Some(number);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn get_bool(v: &Value, candidates: &[&str], default: bool) -> bool {
     for key in candidates {
         if let Some(found) = v.get(key) {
@@ -206,8 +226,10 @@ fn parse_types_with_diagnostics(path: &Path, errors: &mut Vec<String>) -> Vec<Pa
         // allows null, so a type without one is still imported.
         let group_id = get_i64(&v, &["group_id", "groupID"]);
         let published = get_bool(&v, &["published"], true);
+        let volume_m3 = get_f64(&v, &["volume", "volume_m3", "volumeM3"])
+            .filter(|value| *value >= 0.0);
 
-        out.push(ParsedType { type_id, name, group_id, published });
+        out.push(ParsedType { type_id, name, group_id, published, volume_m3 });
     }
 
     let imported = out.len() as i64;
@@ -361,6 +383,7 @@ mod tests {
         include_str!("../../migrations/0011_esi_character_auth.sql"),
         include_str!("../../migrations/0012_character_asset_sync.sql"),
         include_str!("../../migrations/0013_character_blueprint_sync.sql"),
+        include_str!("../../migrations/0016_type_volume.sql"),
     ];
 
     fn test_db() -> Connection {
@@ -397,8 +420,8 @@ mod tests {
         fs::write(dir.join("groups.jsonl"), r#"{"group_id": 1, "name": {"en": "Sample Component"}, "category_id": 1, "published": true}"#).unwrap();
         fs::write(
             dir.join("types.jsonl"),
-            "{\"type_id\": 100, \"name\": {\"en\": \"Sample Widget\"}, \"group_id\": 1, \"published\": true}\n\
-             {\"typeID\": 10, \"typeName\": \"Sample Material A\", \"groupID\": 1, \"published\": 1}",
+            "{\"type_id\": 100, \"name\": {\"en\": \"Sample Widget\"}, \"group_id\": 1, \"published\": true, \"volume\": 12.5}\n\
+             {\"typeID\": 10, \"typeName\": \"Sample Material A\", \"groupID\": 1, \"published\": 1, \"volumeM3\": 0.01}",
         )
         .unwrap();
         fs::write(
@@ -423,6 +446,12 @@ mod tests {
             .query_row("SELECT name FROM eve_types WHERE type_id = 10", [], |r| r.get(0))
             .unwrap();
         assert_eq!(material_name, "Sample Material A");
+        let volumes: (f64, f64) = conn.query_row(
+            "SELECT (SELECT volume_m3 FROM eve_types WHERE type_id=100), (SELECT volume_m3 FROM eve_types WHERE type_id=10)",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap();
+        assert_eq!(volumes, (12.5, 0.01));
 
         let _ = fs::remove_dir_all(&dir);
     }
