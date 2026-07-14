@@ -829,6 +829,33 @@ pub fn get_operation_economics(
 }
 
 #[tauri::command]
+pub fn get_operation_shopping_list(
+    db: State<'_, Db>,
+    operation_id: i64,
+) -> Result<crate::procurement::OperationShoppingList, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::procurement::shopping_list(&conn, operation_id)
+}
+
+#[tauri::command]
+pub fn update_procurement_line(
+    db: State<'_, Db>,
+    operation_id: i64,
+    type_id: i64,
+    status: String,
+    notes: String,
+) -> Result<crate::procurement::ProcurementState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::procurement::save_state(&conn, operation_id, type_id, &status, &notes)
+}
+
+#[tauri::command]
+pub fn reset_procurement_state(db: State<'_, Db>, operation_id: i64) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::procurement::reset_state(&conn, operation_id)
+}
+
+#[tauri::command]
 pub fn sync_character_blueprints(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<blueprint::sync::BlueprintSyncResult, String> {
     let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
     blueprint::sync::sync_one(&conn,&client_id,character_id)

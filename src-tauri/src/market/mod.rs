@@ -184,7 +184,6 @@ pub fn quote(conn: &Connection, type_id: i64, quantity: i64) -> Result<MarketQuo
         source: "CCP ESI Market Orders".into(),
     })
 }
-#[allow(dead_code)] // Public domain service reserved for the RNI-153 doctrine seeder.
 pub fn bulk_quote(conn: &Connection, requests: &[(i64, i64)]) -> Result<Vec<MarketQuote>, String> {
     requests.iter().map(|(t, q)| quote(conn, *t, *q)).collect()
 }

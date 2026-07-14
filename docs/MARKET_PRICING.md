@@ -16,8 +16,8 @@ represented by `None`, never zero ISK.
 The reusable backend interfaces are independent of Production:
 
 - `quote(connection, type_id, quantity)` — one local cached quote.
-- `bulk_quote(connection, &[(type_id, quantity)])` — deduplicatable bulk
-  contract intended for RNI-153 doctrine demand.
+- `bulk_quote(connection, &[(type_id, quantity)])` — bulk cached quotes used
+  by the RNI-153 operation procurement list without row-level ESI requests.
 - `weighted_sell_fill(order_levels, quantity)` — acquisition depth.
 - `weighted_buy_fill(order_levels, quantity)` — liquidation depth.
 - `selected_profile(connection)` — market identity, freshness, and errors.

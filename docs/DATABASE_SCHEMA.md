@@ -139,7 +139,12 @@ Coverage, shortage, and cross-operation "critical bottleneck" detection (a mater
 - **production_plan_snapshots**(id PK, operation_id FK operations, sde_import_id FK sde_imports nullable, calculated_at, requested_quantity, inputs_json, result_json) — optional audit record of a calculated plan. Never the source of truth for a live view, which always recalculates.
 - **operations.is_demo** (additive `ALTER TABLE`, same pattern as migration 0005's `inventory_reservations.operation_id`) — defaults existing seeded rows to `1`; the real Sprint 008 `create_operation` mutation inserts `0`.
 
-See docs/REAL_PRODUCTION_PLANNER.md for the full CSV format, calculation rules, and data ownership boundaries.
+  See docs/REAL_PRODUCTION_PLANNER.md for the full CSV format, calculation rules, and data ownership boundaries.
+
+### Procurement workflow (migration 0017, live now)
+
+- **operation_procurement_lines**(operation_id, type_id, status, notes, updated_at) — mutable operation-specific workflow state only. Required, owned, and shortage quantities are never copied here; the shopping list derives them from the live production plan.
+- **operation_procurement_events**(event_id, operation_id, type_id, previous_status, new_status, notes, event_type, created_at) — append-only status/note and reset history. Reset removes current line state while preserving these audit events. Neither table mutates synchronized or manual inventory.
 
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)

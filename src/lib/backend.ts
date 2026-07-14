@@ -1072,6 +1072,12 @@ export interface CostAssumptionState { assumptions:CostAssumptions; savedAt:stri
 export type RevenueBasis = "immediate" | "listed";
 export interface MaterialCostLine { typeId:number; typeName:string; requiredQuantity:number; ownedQuantity:number; shortageQuantity:number; unitVolumeM3:number|null; requiredVolumeM3:number|null; ownedVolumeM3:number|null; purchaseVolumeM3:number|null; unitAcquisitionPrice:number|null; replacementValue:number|null; ownedOpportunityCost:number|null; shortageCashCost:number|null; availableVolume:number; }
 export interface OperationEconomics { operationId:number; marketProfile:string; materials:MaterialCostLine[]; totalMaterialReplacementCost:number|null; ownedMaterialOpportunityCost:number|null; cashRequired:number|null; totalMaterialVolumeM3:number|null; totalPurchaseVolumeM3:number|null; outputImmediateSaleValue:number|null; outputListedSaleValue:number|null; revenueBasis:RevenueBasis; revenueBasisMessage:string|null; grossProfit:number|null; salesTax:number|null; brokerFee:number|null; manufacturingJobCost:number; haulingCost:number; otherCost:number; estimatedNetProfit:number|null; margin:number|null; roi:number|null; stale:boolean; priceTimestamp:string|null; }
+export type ProcurementStatus = "Needed" | "Planned" | "Purchased" | "Skipped" | "Fulfilled Manually";
+export interface ShoppingLine { typeId:number; itemName:string; requiredQuantity:number; ownedQuantity:number; shortageQuantity:number; unitVolumeM3:number|null; totalVolumeM3:number|null; acquisitionUnitPrice:number|null; totalAcquisitionCost:number|null; availableMarketVolume:number; marketStatus:string; priceTimestamp:string|null; procurementStatus:ProcurementStatus; notes:string; lastUpdated:string|null; }
+export interface ShoppingSummary { missingItemTypes:number; totalMissingUnits:number; totalPurchaseCost:number|null; totalPurchaseVolumeM3:number|null; pricedLines:number; unpricedLines:number; insufficientVolumeLines:number; }
+export interface ShoppingExports { eveMultiBuy:string; discordReport:string; csv:string; }
+export interface OperationShoppingList { operationId:number; operationName:string; marketProfile:string; lines:ShoppingLine[]; summary:ShoppingSummary; exports:ShoppingExports; }
+export interface ProcurementState { operationId:number; typeId:number; status:ProcurementStatus; notes:string; updatedAt:string; }
 export interface BlueprintSyncResult { characterId:number; status:string; blueprintCount:number; pageCount:number; error:string|null; }
 
 /** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
@@ -1119,6 +1125,9 @@ export async function getOperationCostAssumptions(operationId:number):Promise<Co
 export async function saveOperationCostAssumptions(operationId:number,assumptions:CostAssumptions):Promise<CostAssumptionState>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<CostAssumptionState>("save_operation_cost_assumptions",{operationId,assumptions});}
 export async function resetOperationCostAssumptions(operationId:number):Promise<CostAssumptionState>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<CostAssumptionState>("reset_operation_cost_assumptions",{operationId});}
 export async function getOperationEconomics(operationId:number,revenueBasis:RevenueBasis|null=null):Promise<OperationEconomics>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<OperationEconomics>("get_operation_economics",{operationId,revenueBasis});}
+export async function getOperationShoppingList(operationId:number):Promise<OperationShoppingList>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<OperationShoppingList>("get_operation_shopping_list",{operationId});}
+export async function updateProcurementLine(operationId:number,typeId:number,status:ProcurementStatus,notes:string):Promise<ProcurementState>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<ProcurementState>("update_procurement_line",{operationId,typeId,status,notes});}
+export async function resetProcurementState(operationId:number):Promise<number>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<number>("reset_procurement_state",{operationId});}
 
 export async function syncCharacterBlueprints(clientId:string,characterId:number):Promise<BlueprintSyncResult>{
   if(!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);

@@ -17,6 +17,7 @@ import {
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
 import { TreeNodeRow } from "../components/TreeNodeRow";
+import { ShoppingProcurement } from "../components/ShoppingProcurement";
 import { toCsv, toMarkdown, copyToClipboard, downloadFile } from "../lib/materialListExport";
 
 const ZERO_COST_ASSUMPTIONS: CostAssumptions = { salesTaxPercent: 0, brokerFeePercent: 0, manufacturingJobCost: 0, haulingCost: 0, otherCost: 0 };
@@ -288,6 +289,7 @@ function RealProductionPlanSection() {
           </div>
 
           <CostProfitPanel operationId={opId} plan={plan} />
+          <ShoppingProcurement operationId={opId} plan={plan} />
 
           {plan.warnings.length > 0 && (
             <div className="tree-warning-list">

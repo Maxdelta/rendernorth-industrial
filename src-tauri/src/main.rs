@@ -17,6 +17,7 @@ mod volume;
 mod models;
 mod operation;
 mod production;
+mod procurement;
 mod reservation;
 mod staticdata;
 
@@ -96,6 +97,9 @@ fn main() {
             commands::save_operation_cost_assumptions,
             commands::reset_operation_cost_assumptions,
             commands::get_operation_economics,
+            commands::get_operation_shopping_list,
+            commands::update_procurement_line,
+            commands::reset_procurement_state,
             commands::sync_character_blueprints,
             commands::sync_all_character_blueprints
         ])
