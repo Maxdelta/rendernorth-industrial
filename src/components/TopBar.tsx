@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { NAV_ITEMS } from "./Sidebar";
+import { ROUTE_ITEMS } from "./Sidebar";
+import { SHOW_DEVELOPMENT_UI } from "../lib/runtimeMode";
 
 function titleFor(pathname: string): string {
-  const hit = NAV_ITEMS.find((i) => i.to === pathname);
+  const hit = ROUTE_ITEMS.find((i) => i.to === pathname);
   return hit ? hit.label : "RenderNorth Industrial";
 }
 
@@ -24,8 +25,10 @@ export function TopBar() {
   return (
     <header className="topbar">
       <h1 className="topbar-title">{titleFor(pathname)}</h1>
-      <span className="badge">Demo data</span>
-      <span className="badge cyan">Sprint 002</span>
+      {SHOW_DEVELOPMENT_UI && <>
+        <span className="badge">Demo data</span>
+        <span className="badge cyan">Sprint 002</span>
+      </>}
       <div className="topbar-clock">{clock}</div>
     </header>
   );

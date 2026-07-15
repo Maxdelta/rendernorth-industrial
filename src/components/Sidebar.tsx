@@ -12,13 +12,18 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/blueprints", label: "Blueprints" },
   { to: "/production", label: "Production" },
   { to: "/quartermaster", label: "Quartermaster" },
+  { to: "/settings", label: "Settings" },
+];
+
+// Routes remain available while unfinished modules stay out of beta navigation.
+export const ROUTE_ITEMS: NavItem[] = [
+  ...NAV_ITEMS,
   { to: "/industry", label: "Industry" },
   { to: "/logistics", label: "Logistics" },
   { to: "/market", label: "Market Intelligence" },
   { to: "/planning", label: "Planning" },
   { to: "/intelligence", label: "Intelligence" },
   { to: "/reports", label: "Reports" },
-  { to: "/settings", label: "Settings" },
 ];
 
 function BrandGlyph() {

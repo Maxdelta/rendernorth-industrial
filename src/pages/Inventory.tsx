@@ -74,7 +74,7 @@ function ManualInventorySection() {
       }
     >
       <p className="ph-mission">
-        Real, user-entered stock — kept entirely separate from the demo inventory below. Requires static data to be
+        Real, user-entered stock — kept entirely separate from synchronized character inventory. Static data must be
         imported (Settings → Static Data) so a type can be searched by name.
       </p>
 

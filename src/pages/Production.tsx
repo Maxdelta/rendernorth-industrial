@@ -229,7 +229,7 @@ function RealProductionPlanSection() {
     <Panel title="Real Production Plan" keel={plan && plan.warnings.length > 0 ? "furnace" : "coolant"} className="dash-hero">
       <p className="ph-mission">
         Calculated recursively from imported static blueprint data, owned/assumed ME &amp; TE, and current inventory —
-        never a hardcoded demo quantity. Select a real operation with a build target below.
+        never a placeholder quantity. Select an operation with a build target below.
       </p>
       <div className="new-op-mode-toggle" style={{ flexWrap: "wrap", marginBottom: 14 }}>
         {operations.map((op) => (

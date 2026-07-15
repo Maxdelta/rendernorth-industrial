@@ -73,7 +73,7 @@ export function CharactersPanel() {
   async function handleToggleEnabled(c: CharacterSummary) { await setCharacterEnabled(c.characterId, !c.enabled); refresh(); }
   async function handleRemove(characterId: number) { await removeCharacter(characterId); setConfirmRemove(null); refresh(); }
 
-  return <Panel title="Characters & ESI Sync" keel="coolant">
+  return <Panel title="Characters & ESI Sync" keel="coolant" className="dash-hero">
     <p className="ph-mission">
       Connect characters through official EVE SSO and synchronize read-only personal assets and blueprints. Characters
       missing <code>esi-characters.read_blueprints.v1</code> must use Add / Reauthorize Character again; the existing

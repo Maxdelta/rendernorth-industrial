@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { importStaticData, importOfficialSde, getLatestImport, type ImportSummary } from "../lib/backend";
 import { Panel } from "../components/Panel";
 import { CharactersPanel } from "../components/CharactersPanel";
+import { SHOW_DEVELOPMENT_UI } from "../lib/runtimeMode";
 
 type ImportMode = "sample" | "official";
 
@@ -43,27 +44,25 @@ export function SettingsPage() {
         <p className="ph-mission">
           The Build Target Selector, real requirement calculation, and manual inventory all depend on static EVE
           data — type names, groups, categories, and blueprint manufacturing data. No network access is used either
-          way; both paths read a local directory you point at.
+          way; the importer reads a local directory you point at.
         </p>
 
         <div className="new-op-mode-toggle" style={{ marginBottom: 14 }}>
           <button className={mode === "official" ? "target-select enabled active" : "target-select enabled"} onClick={() => setMode("official")}>
             Import Official CCP SDE
           </button>
-          <button className={mode === "sample" ? "target-select enabled active" : "target-select enabled"} onClick={() => setMode("sample")}>
+          {SHOW_DEVELOPMENT_UI && <button className={mode === "sample" ? "target-select enabled active" : "target-select enabled"} onClick={() => setMode("sample")}>
             Import Sample Fixture
-          </button>
+          </button>}
         </div>
 
         {mode === "official" ? (
           <div className="sd-mode-detail">
             <p className="ph-mission">
-              Reads an already-<strong>extracted</strong> official CCP JSON Lines SDE directory (this sprint does not
-              open the ZIP directly — extract it first) containing <code>categories.jsonl</code>,{" "}
-              <code>groups.jsonl</code>, <code>types.jsonl</code>, and <code>blueprints.jsonl</code>. This path has
-              not been verified against a real CCP export in the environment this was built in — field-name matching
-              is tolerant and best-effort. If a record type doesn't match, the import will report exactly which file
-              and line, not fail silently. See <code>docs/REAL_PRODUCTION_PLANNER.md</code> for full details.
+              Reads an already-<strong>extracted</strong> official CCP JSON Lines SDE directory. ZIP archives are not
+              opened directly, so extract the archive first. The directory must contain <code>categories.jsonl</code>,{" "}
+              <code>groups.jsonl</code>, <code>types.jsonl</code>, and <code>blueprints.jsonl</code>. Field-name matching
+              is tolerant; an incompatible record reports its source file and line instead of failing silently.
             </p>
           </div>
         ) : (
@@ -154,12 +153,12 @@ export function SettingsPage() {
 
       <CharactersPanel />
 
-      <Panel title="Other Settings" keel="coolant">
+      {SHOW_DEVELOPMENT_UI && <Panel title="Other Settings" keel="coolant">
         <p className="ph-mission">
           Notification preferences remain planned. Blueprint jobs and industry job tracking are separate future
           scopes, not covered by the character connection above.
         </p>
-      </Panel>
+      </Panel>}
     </div>
   );
 }

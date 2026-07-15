@@ -18,6 +18,7 @@ import {
   type ProductionPlan,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
+import { SHOW_DEVELOPMENT_UI } from "../lib/runtimeMode";
 import { NewBuildForm } from "../components/NewBuildForm";
 
 function statusTone(status: string, isBlocked: boolean): "nominal" | "furnace" | "alert" | "coolant" {
@@ -438,7 +439,7 @@ export function OperationsWorkspacePage() {
               </>
             )}
 
-            <Panel title="Reserved for future sprints" keel="coolant">
+            {SHOW_DEVELOPMENT_UI && <Panel title="Reserved Capacity" keel="coolant">
               <p className="ph-mission">
                 Every operation will eventually carry an inventory view scoped to what it has reserved, a generated
                 shopping list, and running cost tracking. These sections exist as architectural placeholders
@@ -452,7 +453,7 @@ export function OperationsWorkspacePage() {
                   </div>
                 ))}
               </div>
-            </Panel>
+            </Panel>}
           </div>
         )}
         </div>
