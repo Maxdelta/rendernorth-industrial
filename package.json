@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "package:beta": "powershell -ExecutionPolicy Bypass -File scripts/package-private-beta.ps1"
+    "package:beta": "powershell -ExecutionPolicy Bypass -File scripts/package-open-beta.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",

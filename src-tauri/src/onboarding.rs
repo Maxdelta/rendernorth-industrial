@@ -1,7 +1,7 @@
 use rusqlite::{Connection, OptionalExtension};
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, io::{BufRead, BufReader}, path::{Path, PathBuf}};
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
@@ -10,6 +10,11 @@ pub const GITHUB_URL: &str = "https://github.com/Maxdelta/rendernorth-industrial
 pub const ISSUES_URL: &str = "https://github.com/Maxdelta/rendernorth-industrial/issues";
 pub const SUPPORT_URL: &str = "https://buymeacoffee.com/maxdelta";
 pub const DISCORD_INVITE_URL: &str = "https://discord.gg/XycCz6ppx";
+pub const SDE_DOWNLOAD_URL: &str = "https://developers.eveonline.com/static-data";
+pub const SETUP_GUIDE_URL: &str = "https://github.com/Maxdelta/rendernorth-industrial/blob/main/docs/OPEN_BETA_ONBOARDING.md";
+pub const OFFICIAL_CLIENT_ID: &str = "f6321a78ea0e4ed78fc52ab2ba85d502";
+pub const OPEN_BETA_STATUS: &str = "Open Beta 0.1";
+pub const DISCORD_USERNAME: &str = "maxdelta0089";
 pub const REQUIRED_SDE_FILES: [&str; 4] = [
     "categories.jsonl",
     "groups.jsonl",
@@ -29,6 +34,7 @@ pub struct SdeFileStatus {
 pub struct SdeInspection {
     pub path: String,
     pub valid: bool,
+    pub status: String,
     pub source_build: Option<String>,
     pub files: Vec<SdeFileStatus>,
     pub error: Option<String>,
@@ -49,6 +55,9 @@ pub struct AboutInfo {
     pub issues: String,
     pub support: String,
     pub discord_invite: String,
+    pub setup_guide: String,
+    pub release_status: String,
+    pub discord_username: String,
 }
 
 fn value_as_label(value: &Value) -> Option<String> {
@@ -106,34 +115,90 @@ pub fn inspect_sde(path: &str) -> SdeInspection {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return SdeInspection {
-            path: String::new(), valid: false, source_build: None, files: Vec::new(),
+            path: String::new(), valid: false, status: "not_selected".into(), source_build: None, files: Vec::new(),
             error: Some("Select an extracted CCP JSONL SDE directory.".into()),
         };
     }
     let directory = Path::new(trimmed);
-    if !directory.is_dir() {
+    let extension = directory.extension().and_then(|value| value.to_str()).unwrap_or("");
+    if extension.eq_ignore_ascii_case("zip") {
         return SdeInspection {
-            path: trimmed.into(), valid: false, source_build: None, files: Vec::new(),
-            error: Some("The selected path is not a readable directory.".into()),
+            path: trimmed.into(), valid: false, status: "archive_selected".into(), source_build: None, files: required_file_status(directory),
+            error: Some("This appears to be the downloaded archive. Extract the ZIP, then select the extracted folder.".into()),
         };
+    }
+    if !directory.exists() || !directory.is_dir() || fs::read_dir(directory).is_err() {
+        return SdeInspection { path: trimmed.into(), valid: false, status: "inaccessible".into(), source_build: None,
+            files: required_file_status(directory), error: Some("The selected folder cannot be accessed or no longer exists.".into()) };
     }
     let files: Vec<SdeFileStatus> = REQUIRED_SDE_FILES.iter().map(|name| SdeFileStatus {
         name: (*name).into(), present: directory.join(name).is_file(),
     }).collect();
     let missing: Vec<&str> = files.iter().filter(|file| !file.present).map(|file| file.name.as_str()).collect();
+    let present_count = files.iter().filter(|file| file.present).count();
+    let invalid_jsonl = if missing.is_empty() { REQUIRED_SDE_FILES.iter().any(|name| !first_record_is_json(&directory.join(name))) } else { false };
+    let (status, error) = if present_count == 0 {
+        ("wrong_folder", Some("This does not appear to be the supported CCP JSONL static-data folder.".into()))
+    } else if !missing.is_empty() {
+        ("incomplete_extraction", Some(format!("Incomplete extraction. Missing required files: {}", missing.join(", "))))
+    } else if invalid_jsonl {
+        ("unsupported_format", Some("The required filenames are present, but this is not a supported CCP JSONL static-data export.".into()))
+    } else { ("valid", None) };
     SdeInspection {
         path: trimmed.into(),
-        valid: missing.is_empty(),
+        valid: status == "valid",
+        status: status.into(),
         source_build: detect_source_build(directory),
-        error: if missing.is_empty() { None } else { Some(format!("Missing required files: {}", missing.join(", "))) },
+        error,
         files,
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthenticationInfo { pub mode: String, pub client_id: String, pub application_name: String }
+
+pub fn authentication_info(conn: &Connection) -> Result<AuthenticationInfo, String> {
+    let custom: Option<String> = conn.query_row("SELECT value FROM app_meta WHERE key='esi_custom_client_id' AND trim(value)<>''", [], |row| row.get(0)).optional().map_err(|error| error.to_string())?;
+    Ok(match custom {
+        Some(client_id) => AuthenticationInfo { mode: "custom".into(), client_id, application_name: "Custom CCP Application".into() },
+        None => AuthenticationInfo { mode: "official".into(), client_id: OFFICIAL_CLIENT_ID.into(), application_name: "Official RenderNorth Industrial".into() },
+    })
+}
+
+pub fn save_custom_authentication(conn: &Connection, client_id: &str) -> Result<AuthenticationInfo, String> {
+    let value = client_id.trim();
+    if value.len() < 16 || !value.chars().all(|character| character.is_ascii_alphanumeric() || character == '_' || character == '-') {
+        return Err("Enter a valid CCP application Client ID. Never enter a Client Secret.".into());
+    }
+    conn.execute("INSERT INTO app_meta(key,value) VALUES('esi_custom_client_id',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [value]).map_err(|error| error.to_string())?;
+    authentication_info(conn)
+}
+
+pub fn restore_official_authentication(conn: &Connection) -> Result<AuthenticationInfo, String> {
+    conn.execute("DELETE FROM app_meta WHERE key='esi_custom_client_id'", []).map_err(|error| error.to_string())?;
+    authentication_info(conn)
+}
+
+fn required_file_status(path: &Path) -> Vec<SdeFileStatus> {
+    REQUIRED_SDE_FILES.iter().map(|name| SdeFileStatus { name: (*name).into(), present: path.join(name).is_file() }).collect()
+}
+
+fn first_record_is_json(path: &Path) -> bool {
+    let Ok(file) = fs::File::open(path) else { return false };
+    BufReader::new(file).lines().map_while(Result::ok).find(|line| !line.trim().is_empty())
+        .is_some_and(|line| serde_json::from_str::<Value>(&line).is_ok())
 }
 
 pub fn pick_sde_directory(app: &AppHandle) -> Option<String> {
     app.dialog().file().blocking_pick_folder()
         .and_then(|path| path.into_path().ok())
         .map(|path| path.to_string_lossy().to_string())
+}
+
+pub fn pick_sde_archive(app: &AppHandle) -> Option<String> {
+    app.dialog().file().add_filter("CCP static-data ZIP", &["zip"]).blocking_pick_file()
+        .and_then(|path| path.into_path().ok()).map(|path| path.to_string_lossy().to_string())
 }
 
 pub fn about_info(conn: &Connection) -> Result<AboutInfo, String> {
@@ -150,11 +215,18 @@ pub fn about_info(conn: &Connection) -> Result<AboutInfo, String> {
         rust_version: option_env!("RENDERNORTH_RUST_VERSION").unwrap_or("unknown").into(),
         website: WEBSITE_URL.into(), github: GITHUB_URL.into(), issues: ISSUES_URL.into(),
         support: SUPPORT_URL.into(), discord_invite: DISCORD_INVITE_URL.into(),
+        setup_guide: SETUP_GUIDE_URL.into(),
+        release_status: OPEN_BETA_STATUS.into(), discord_username: DISCORD_USERNAME.into(),
     })
+}
+
+pub fn external_url_allowed(url: &str) -> bool {
+    [WEBSITE_URL, GITHUB_URL, ISSUES_URL, SUPPORT_URL, DISCORD_INVITE_URL, SDE_DOWNLOAD_URL, SETUP_GUIDE_URL].contains(&url)
 }
 
 fn diagnostics_value(conn: &Connection) -> Result<Value, String> {
     let about = about_info(conn)?;
+    let authentication = authentication_info(conn)?;
     let characters = {
         let mut statement = conn.prepare(
             "SELECT c.character_id,c.name,c.enabled,c.authorization_status,c.scopes_granted,
@@ -192,6 +264,7 @@ fn diagnostics_value(conn: &Connection) -> Result<Value, String> {
     ).optional().map_err(|error| format!("failed to read diagnostics SDE state: {error}"))?;
     Ok(json!({
         "privacy": "No access tokens, refresh tokens, Client IDs, credential material, or app secrets are included.",
+        "authentication": { "mode": authentication.application_name },
         "os": { "family": std::env::consts::OS, "architecture": std::env::consts::ARCH },
         "application": about,
         "staticData": latest_sde,
@@ -232,9 +305,52 @@ mod tests {
         fs::write(path.join("types.jsonl"), "{}\n").unwrap();
         let result = inspect_sde(path.to_str().unwrap());
         assert!(!result.valid);
+        assert_eq!(result.status, "incomplete_extraction");
         assert_eq!(result.files.len(), 4);
         assert!(result.error.unwrap().contains("categories.jsonl"));
         fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn official_authentication_is_the_default_public_client() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE app_meta(key TEXT PRIMARY KEY,value TEXT)", []).unwrap();
+        let official = authentication_info(&conn).unwrap();
+        assert_eq!(official.client_id, "f6321a78ea0e4ed78fc52ab2ba85d502");
+        assert_eq!(official.mode, "official");
+        let custom = save_custom_authentication(&conn, "custom-client-id-123456").unwrap();
+        assert_eq!(custom.mode, "custom");
+        assert_eq!(authentication_info(&conn).unwrap().client_id, "custom-client-id-123456");
+        assert_eq!(restore_official_authentication(&conn).unwrap().mode, "official");
+    }
+
+    #[test]
+    fn official_download_and_open_beta_help_values_are_allowlisted() {
+        assert!(external_url_allowed(SDE_DOWNLOAD_URL));
+        assert_eq!(OPEN_BETA_STATUS, "Open Beta 0.1");
+        assert_eq!(DISCORD_USERNAME, "maxdelta0089");
+        assert_eq!(SUPPORT_URL, "https://buymeacoffee.com/maxdelta");
+        assert!(!OPEN_BETA_STATUS.to_ascii_lowercase().contains("ad-free"));
+    }
+
+    #[test]
+    fn sde_validation_distinguishes_archive_wrong_folder_and_unsupported_format() {
+        let root = temp_dir("states");
+        let archive = root.join("eve-online-static-data.zip");
+        fs::write(&archive, "zip").unwrap();
+        assert_eq!(inspect_sde(archive.to_str().unwrap()).status, "archive_selected");
+        assert_eq!(inspect_sde(root.to_str().unwrap()).status, "wrong_folder");
+        for file in REQUIRED_SDE_FILES { fs::write(root.join(file), "not-json\n").unwrap(); }
+        assert_eq!(inspect_sde(root.to_str().unwrap()).status, "unsupported_format");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sde_validation_reports_inaccessible_remembered_path() {
+        let path = std::env::temp_dir().join("rni-path-that-does-not-exist");
+        let result = inspect_sde(path.to_str().unwrap());
+        assert!(!result.valid);
+        assert_eq!(result.status, "inaccessible");
     }
 
     #[test]
@@ -253,6 +369,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "CREATE TABLE schema_migrations(version INTEGER); INSERT INTO schema_migrations VALUES(18);
+             CREATE TABLE app_meta(key TEXT PRIMARY KEY,value TEXT);
              CREATE TABLE characters(character_id INTEGER,name TEXT,enabled INTEGER,authorization_status TEXT,scopes_granted TEXT,is_demo INTEGER);
              CREATE TABLE character_asset_sync_state(character_id INTEGER,last_success_at TEXT,status TEXT);
              CREATE TABLE character_blueprint_sync_state(character_id INTEGER,last_success_at TEXT,status TEXT);

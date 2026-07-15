@@ -117,7 +117,12 @@ fn main() {
             commands::sync_all_character_blueprints
             ,commands::inspect_sde_directory
             ,commands::pick_sde_directory
+            ,commands::pick_sde_archive
+            ,commands::open_selected_folder
             ,commands::get_about_info
+            ,commands::get_authentication_info
+            ,commands::save_custom_authentication
+            ,commands::restore_official_authentication
             ,commands::export_diagnostics
             ,commands::open_external_url
             ,commands::set_application_section

@@ -30,6 +30,7 @@ export function AboutPrivacy() {
     <Panel title="About RenderNorth Industrial" keel="coolant" className="dash-hero">
       {error && <div className="sd-error"><div className="conflict-desc">{error}</div></div>}
       <div className="about-grid">
+        <div><span>Release status</span><strong>{about?.releaseStatus ?? "Open Beta 0.1"}</strong></div>
         <div><span>Version</span><strong>{about?.version ?? "Loading…"}</strong></div>
         <div><span>Build</span><strong>{about?.build && about.build !== "unknown" ? new Date(Number(about.build) * 1000).toLocaleString() : "Unknown"}</strong></div>
         <div><span>Git commit</span><strong>{about?.gitCommit ?? "Loading…"}</strong></div>
@@ -37,7 +38,7 @@ export function AboutPrivacy() {
         <div><span>Migration</span><strong>{about?.migrationVersion ?? "—"}</strong></div>
         <div><span>Rust</span><strong>{about?.rustVersion ?? "Loading…"}</strong></div>
       </div>
-      <div className="new-op-actions setup-wrap">{link("RenderNorth Website", about?.website)}{link("GitHub", about?.github)}{link("Report an Issue", about?.issues)}<button className="target-select enabled" onClick={diagnostics}>Export Diagnostics</button></div>
+      <div className="new-op-actions setup-wrap">{link("RenderNorth Website", about?.website)}{link("Open Setup Guide", about?.setupGuide)}{link("GitHub", about?.github)}{link("Report a Bug", about?.issues)}{link("Join Discord", about?.discordInvite)}<button className="target-select enabled" onClick={diagnostics}>Export Diagnostics</button></div>
       <p className="ph-mission">Diagnostics include OS, build, database and migration versions, connected-character names and enabled scopes, last synchronization times, and market refresh state. They never include access tokens, refresh tokens, Client IDs, or credentials.</p>
       {feedback && <div className="setup-feedback">{feedback}</div>}
     </Panel>
@@ -60,7 +61,7 @@ export function AboutPrivacy() {
       <p className="ph-mission">For beta feedback, bug reports, setup help, and feature suggestions, contact Maxdelta on Discord.</p>
       <div className="about-contact-card">
         <strong>Contact Maxdelta directly</strong>
-        <span>Discord username: <code>maxdelta0089</code></span>
+        <span>Discord username: <code>{about?.discordUsername ?? "maxdelta0089"}</code></span>
         <span>Server: <code>https://discord.gg/XycCz6ppx</code></span>
         <div className="new-op-actions setup-wrap">
           <button className="target-select enabled" onClick={copyDiscordUsername}>Copy Discord Username</button>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  addCharacter, getAppSetting, listCharacters, refreshAssetLocations, removeCharacter,
-  setAppSetting, setCharacterEnabled, syncAllCharacterAssets, syncAllCharacterBlueprints,
+  addCharacter, listCharacters, refreshAssetLocations, removeCharacter,
+  setCharacterEnabled, syncAllCharacterAssets, syncAllCharacterBlueprints,
   syncCharacterAssets, syncCharacterBlueprints, type CharacterSummary,
 } from "../lib/backend";
+import { getAuthenticationConfig, restoreOfficialAuthentication, saveCustomClientId, type AuthenticationConfig } from "../lib/authentication";
 import { Panel } from "./Panel";
 
 function statusTone(character: CharacterSummary): "nominal" | "furnace" | "alert" {
@@ -14,6 +15,9 @@ function statusTone(character: CharacterSummary): "nominal" | "furnace" | "alert
 
 export function CharactersPanel() {
   const [clientId, setClientId] = useState("");
+  const [customClientId, setCustomClientId] = useState("");
+  const [auth, setAuth] = useState<AuthenticationConfig | null>(null);
+  const [advanced, setAdvanced] = useState(false);
   const [characters, setCharacters] = useState<CharacterSummary[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,11 +29,11 @@ export function CharactersPanel() {
 
   function refresh() { listCharacters().then(setCharacters).catch(cause => setError(String(cause))); }
   useEffect(refresh, []);
-  useEffect(() => { getAppSetting("esi_client_id").then(saved => { if (saved) setClientId(saved); }); }, []);
-
-  function handleClientIdChange(value: string) { setClientId(value); setAppSetting("esi_client_id", value).catch(() => undefined); }
+  useEffect(() => { getAuthenticationConfig().then(config => { setAuth(config); setClientId(config.clientId); setCustomClientId(config.mode === "custom" ? config.clientId : ""); }); }, []);
+  async function saveCustom() { try { const config = await saveCustomClientId(customClientId); setAuth(config); setClientId(config.clientId); } catch (cause) { setError(String(cause)); } }
+  async function restoreOfficial() { const config = await restoreOfficialAuthentication(); setAuth(config); setClientId(config.clientId); setCustomClientId(""); }
   async function handleAddCharacter() {
-    if (!clientId.trim()) { setError("Enter your EVE Developer application's Client ID first."); return; }
+    if (!clientId.trim()) { setError("Authentication configuration is unavailable."); return; }
     setAdding(true); setError(null);
     try { await addCharacter(clientId.trim()); refresh(); } catch (cause) { setError(String(cause)); }
     finally { setAdding(false); }
@@ -69,7 +73,9 @@ export function CharactersPanel() {
 
   return <Panel title="Characters & ESI Sync" keel="coolant" className="dash-hero">
     <p className="ph-mission">Connect characters through official EVE SSO and synchronize read-only personal assets and blueprints. Tokens remain in Windows Credential Manager and are never exposed to the frontend.</p>
-    <label className="new-op-field"><span className="ops-field-label">EVE Developer application Client ID</span><input className="sd-path-input" value={clientId} onChange={event => setClientId(event.target.value)} onBlur={event => handleClientIdChange(event.target.value)} placeholder="Client ID only — never enter a client secret" /></label>
+    <div className="setup-feedback">Current Application: <strong>{auth?.applicationName ?? "Loading…"}</strong>{auth?.mode === "official" && <> · <code>{auth.clientId}</code></>}</div>
+    <button className="target-select" onClick={() => setAdvanced(value => !value)}>Advanced Authentication</button>
+    {advanced && <div className="setup-advanced"><p>Use a custom CCP Developer Application only if you intentionally manage one. Enter a public Client ID; never enter a Client Secret.</p><label className="new-op-field"><span className="ops-field-label">Custom CCP Client ID</span><input className="sd-path-input" value={customClientId} onChange={event => setCustomClientId(event.target.value)} /></label><div className="new-op-actions setup-wrap"><button className="target-select enabled" onClick={saveCustom}>Use Custom Application</button><button className="target-select enabled" disabled={auth?.mode === "official"} onClick={restoreOfficial}>Restore Official RenderNorth Client ID</button></div></div>}
     {error && <div className="sd-error"><div className="conflict-desc">{error}</div></div>}
     <div className="new-op-actions setup-wrap">
       <button className="target-select enabled" onClick={handleAddCharacter} disabled={adding || syncing !== null}>{adding ? "Waiting for browser login…" : "Add / Reauthorize Character"}</button>

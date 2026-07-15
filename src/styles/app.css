@@ -1018,7 +1018,7 @@
   .res-summary-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ---------- Private beta onboarding ---------- */
+/* ---------- Open Beta onboarding ---------- */
 .setup-loading { min-height: 100%; display: grid; place-items: center; background: var(--void); color: var(--coolant); font-family: var(--font-mono); }
 .setup-shell { min-height: 100%; display: grid; grid-template-columns: 260px minmax(0, 1fr); background: radial-gradient(900px 500px at 90% 0, rgba(78,198,220,.07), transparent 60%), var(--void); }
 .setup-rail { background: var(--deck); border-right: 1px solid var(--bulkhead); padding: 28px 18px; display: flex; flex-direction: column; gap: 5px; }

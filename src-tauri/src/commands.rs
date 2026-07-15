@@ -41,7 +41,7 @@ use crate::reservation::{
     },
 };
 use crate::staticdata::{self, models::{ImportSummary, TypeSearchResult}};
-use crate::onboarding::{AboutInfo, SdeInspection};
+use crate::onboarding::{AboutInfo, AuthenticationInfo, SdeInspection};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -564,9 +564,39 @@ pub fn pick_sde_directory(app: tauri::AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
+pub fn pick_sde_archive(app: tauri::AppHandle) -> Option<String> {
+    crate::onboarding::pick_sde_archive(&app)
+}
+
+#[tauri::command]
+pub fn open_selected_folder(path: String) -> Result<(), String> {
+    let selected = std::path::Path::new(&path);
+    if !selected.is_dir() { return Err("The selected folder cannot be opened.".into()); }
+    open::that(selected).map_err(|error| format!("failed to open selected folder: {error}"))
+}
+
+#[tauri::command]
 pub fn get_about_info(db: State<'_, Db>) -> Result<AboutInfo, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     crate::onboarding::about_info(&conn)
+}
+
+#[tauri::command]
+pub fn get_authentication_info(db: State<'_, Db>) -> Result<AuthenticationInfo, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::onboarding::authentication_info(&conn)
+}
+
+#[tauri::command]
+pub fn save_custom_authentication(db: State<'_, Db>, client_id: String) -> Result<AuthenticationInfo, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::onboarding::save_custom_authentication(&conn, &client_id)
+}
+
+#[tauri::command]
+pub fn restore_official_authentication(db: State<'_, Db>) -> Result<AuthenticationInfo, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::onboarding::restore_official_authentication(&conn)
 }
 
 #[tauri::command]
@@ -577,14 +607,7 @@ pub fn export_diagnostics(app: tauri::AppHandle, db: State<'_, Db>) -> Result<Op
 
 #[tauri::command]
 pub fn open_external_url(url: String) -> Result<(), String> {
-    let allowed = [
-        crate::onboarding::WEBSITE_URL,
-        crate::onboarding::GITHUB_URL,
-        crate::onboarding::ISSUES_URL,
-        crate::onboarding::SUPPORT_URL,
-        crate::onboarding::DISCORD_INVITE_URL,
-    ];
-    if !allowed.contains(&url.as_str()) {
+    if !crate::onboarding::external_url_allowed(&url) {
         return Err("external URL is not in the RenderNorth allowlist".into());
     }
     open::that(url).map_err(|error| format!("failed to open link: {error}"))

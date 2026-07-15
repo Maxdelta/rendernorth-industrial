@@ -21,7 +21,7 @@ if (Test-Path -LiteralPath $PortableFolder) { Remove-Item -LiteralPath $Portable
 New-Item -ItemType Directory -Force -Path $PortableFolder | Out-Null
 Copy-Item -LiteralPath $Executable -Destination $PortableFolder
 Copy-Item -LiteralPath (Join-Path $Root "README.md") -Destination $PortableFolder
-Copy-Item -LiteralPath (Join-Path $Root "docs\PRIVATE_BETA_ONBOARDING.md") -Destination $PortableFolder
+Copy-Item -LiteralPath (Join-Path $Root "docs\OPEN_BETA_ONBOARDING.md") -Destination $PortableFolder
 
 $Zip = "$PortableFolder.zip"
 if (Test-Path -LiteralPath $Zip) { Remove-Item -LiteralPath $Zip -Force }

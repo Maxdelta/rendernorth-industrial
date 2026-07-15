@@ -408,6 +408,7 @@ export interface SdeFileStatus { name: string; present: boolean; }
 export interface SdeInspection {
   path: string;
   valid: boolean;
+  status: string;
   sourceBuild: string | null;
   files: SdeFileStatus[];
   error: string | null;
@@ -426,6 +427,9 @@ export interface AboutInfo {
   issues: string;
   support: string;
   discordInvite: string;
+  setupGuide: string;
+  releaseStatus: string;
+  discordUsername: string;
 }
 
 export interface TypeSearchResult {
@@ -1021,7 +1025,7 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
 
 export async function inspectSdeDirectory(dirPath: string): Promise<SdeInspection> {
   if (!inTauri()) {
-    return { path: dirPath, valid: false, sourceBuild: null, files: [], error: BROWSER_PREVIEW_ERROR };
+    return { path: dirPath, valid: false, status: "browser_preview", sourceBuild: null, files: [], error: BROWSER_PREVIEW_ERROR };
   }
   return invoke<SdeInspection>("inspect_sde_directory", { dirPath });
 }
@@ -1031,11 +1035,38 @@ export async function pickSdeDirectory(): Promise<string | null> {
   return invoke<string | null>("pick_sde_directory");
 }
 
+export interface AuthenticationInfo { mode: "official" | "custom"; clientId: string; applicationName: string; }
+
+export async function pickSdeArchive(): Promise<string | null> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<string | null>("pick_sde_archive");
+}
+
+export async function openSelectedFolder(path: string): Promise<void> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<void>("open_selected_folder", { path });
+}
+
 export async function getAboutInfo(): Promise<AboutInfo> {
   if (!inTauri()) {
-    return { applicationName: "RenderNorth Industrial", version: "browser preview", build: "development", gitCommit: "unavailable", databaseVersion: "unavailable", migrationVersion: 0, rustVersion: "unavailable", website: "https://rendernorth.com", github: "https://github.com/Maxdelta/rendernorth-industrial", issues: "https://github.com/Maxdelta/rendernorth-industrial/issues", support: "https://buymeacoffee.com/maxdelta", discordInvite: "https://discord.gg/XycCz6ppx" };
+    return { applicationName: "RenderNorth Industrial", version: "browser preview", build: "development", gitCommit: "unavailable", databaseVersion: "unavailable", migrationVersion: 0, rustVersion: "unavailable", website: "https://rendernorth.com", github: "https://github.com/Maxdelta/rendernorth-industrial", issues: "https://github.com/Maxdelta/rendernorth-industrial/issues", support: "https://buymeacoffee.com/maxdelta", discordInvite: "https://discord.gg/XycCz6ppx", setupGuide: "https://github.com/Maxdelta/rendernorth-industrial/blob/main/docs/OPEN_BETA_ONBOARDING.md", releaseStatus: "Open Beta 0.1", discordUsername: "maxdelta0089" };
   }
   return invoke<AboutInfo>("get_about_info");
+}
+
+export async function getAuthenticationInfo(): Promise<AuthenticationInfo> {
+  if (!inTauri()) return { mode: "official", clientId: "f6321a78ea0e4ed78fc52ab2ba85d502", applicationName: "Official RenderNorth Industrial" };
+  return invoke<AuthenticationInfo>("get_authentication_info");
+}
+
+export async function saveCustomAuthentication(clientId: string): Promise<AuthenticationInfo> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<AuthenticationInfo>("save_custom_authentication", { clientId });
+}
+
+export async function restoreOfficialAuthenticationConfig(): Promise<AuthenticationInfo> {
+  if (!inTauri()) return getAuthenticationInfo();
+  return invoke<AuthenticationInfo>("restore_official_authentication");
 }
 
 export async function exportDiagnostics(): Promise<string | null> {

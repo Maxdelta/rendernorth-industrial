@@ -1,6 +1,6 @@
 # RenderNorth Industrial
 
-Private-beta first launch is guided by an in-app setup wizard covering CCP Developer Client ID, official static data, character authorization, assets, locations, blueprints, and market refresh. See [Private Beta Onboarding](docs/PRIVATE_BETA_ONBOARDING.md) and the [Release Checklist](docs/PRIVATE_BETA_RELEASE_CHECKLIST.md).
+Open Beta 0.1 first launch is guided by an in-app setup wizard using the official RenderNorth Industrial CCP application, official CCP JSONL static data, character synchronization, and market refresh. See [Open Beta Onboarding](docs/OPEN_BETA_ONBOARDING.md) and the [Open Beta Release Checklist](docs/OPEN_BETA_RELEASE_CHECKLIST.md).
 
 Desktop-first EVE Online industrial command center for capital-scale production of **any selected build target**  dreads, FAX, carriers, supers, Titans, structures, components, anything EVE industry data can manufacture. No ship is special-cased; the Avatar Titan is the first validation scenario, driven by a generic Build Target Engine pipeline: Select Build Target → Load Blueprint Requirements → Calculate Materials → Compare Inventory → Identify Missing Inputs → Recommend Next Action.
 

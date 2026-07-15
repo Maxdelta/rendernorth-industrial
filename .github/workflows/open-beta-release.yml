@@ -1,4 +1,4 @@
-name: Private Beta Release
+name: Open Beta Release
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run tauri build -- --bundles nsis
       - shell: powershell
-        run: ./scripts/package-private-beta.ps1 -SkipBuild
+        run: ./scripts/package-open-beta.ps1 -SkipBuild
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
