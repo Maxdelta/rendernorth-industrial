@@ -41,6 +41,7 @@ use crate::reservation::{
     },
 };
 use crate::staticdata::{self, models::{ImportSummary, TypeSearchResult}};
+use crate::onboarding::{AboutInfo, SdeInspection};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -553,6 +554,43 @@ pub fn get_latest_import(db: State<'_, Db>) -> Result<Option<ImportSummary>, Str
 }
 
 #[tauri::command]
+pub fn inspect_sde_directory(dir_path: String) -> SdeInspection {
+    crate::onboarding::inspect_sde(&dir_path)
+}
+
+#[tauri::command]
+pub fn pick_sde_directory(app: tauri::AppHandle) -> Option<String> {
+    crate::onboarding::pick_sde_directory(&app)
+}
+
+#[tauri::command]
+pub fn get_about_info(db: State<'_, Db>) -> Result<AboutInfo, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::onboarding::about_info(&conn)
+}
+
+#[tauri::command]
+pub fn export_diagnostics(app: tauri::AppHandle, db: State<'_, Db>) -> Result<Option<String>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::onboarding::export_diagnostics(&app, &conn)
+}
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    let allowed = [
+        crate::onboarding::WEBSITE_URL,
+        crate::onboarding::GITHUB_URL,
+        crate::onboarding::ISSUES_URL,
+        crate::onboarding::SUPPORT_URL,
+        crate::onboarding::DISCORD_INVITE_URL,
+    ];
+    if !allowed.contains(&url.as_str()) {
+        return Err("external URL is not in the RenderNorth allowlist".into());
+    }
+    open::that(url).map_err(|error| format!("failed to open link: {error}"))
+}
+
+#[tauri::command]
 pub fn search_eve_types(
     db: State<'_, Db>,
     query: String,
@@ -876,4 +914,66 @@ pub fn sync_character_blueprints(db: State<'_, Db>, client_id: String, character
 pub fn sync_all_character_blueprints(db: State<'_, Db>, client_id: String) -> Result<Vec<blueprint::sync::BlueprintSyncResult>, String> {
     let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
     blueprint::sync::sync_all(&conn,&client_id)
+}
+
+const APPLICATION_NAME: &str = "RenderNorth Industrial";
+const APPLICATION_SECTIONS: &[&str] = &[
+    "Mission Control",
+    "Operations",
+    "Inventory",
+    "Blueprints",
+    "Production",
+    "Quartermaster",
+    "Settings",
+    "Industry",
+    "Logistics",
+    "Market Intelligence",
+    "Planning",
+    "Intelligence",
+    "Reports",
+    "First-Run Setup",
+];
+
+fn application_title(section: &str) -> Result<String, String> {
+    if !APPLICATION_SECTIONS.contains(&section) {
+        return Err(format!("unsupported application section: {section}"));
+    }
+    Ok(format!("{APPLICATION_NAME} — {section}"))
+}
+
+#[tauri::command]
+pub fn set_application_section(
+    window: tauri::WebviewWindow,
+    section: String,
+) -> Result<(), String> {
+    let title = application_title(&section)?;
+    window.set_title(&title).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod application_title_tests {
+    use super::application_title;
+
+    #[test]
+    fn completed_sections_use_the_rendernorth_industrial_title() {
+        for section in [
+            "Mission Control",
+            "Operations",
+            "Inventory",
+            "Blueprints",
+            "Production",
+            "Quartermaster",
+            "Settings",
+        ] {
+            assert_eq!(
+                application_title(section).unwrap(),
+                format!("RenderNorth Industrial — {section}")
+            );
+        }
+    }
+
+    #[test]
+    fn arbitrary_window_titles_are_rejected() {
+        assert!(application_title("Unauthorized Section").is_err());
+    }
 }

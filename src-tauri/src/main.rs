@@ -13,6 +13,7 @@ mod esi;
 mod inventory;
 mod location;
 mod market;
+mod onboarding;
 mod volume;
 mod models;
 mod operation;
@@ -26,6 +27,7 @@ use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -113,6 +115,12 @@ fn main() {
             commands::analyze_doctrine,
             commands::sync_character_blueprints,
             commands::sync_all_character_blueprints
+            ,commands::inspect_sde_directory
+            ,commands::pick_sde_directory
+            ,commands::get_about_info
+            ,commands::export_diagnostics
+            ,commands::open_external_url
+            ,commands::set_application_section
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

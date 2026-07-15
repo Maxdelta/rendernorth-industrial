@@ -352,7 +352,8 @@ pub fn import_official_sde(
 
     let error_summary = if errors.is_empty() { None } else { Some(errors.join("\n")) };
 
-    repo.apply_parsed_import(dir_path, "jsonl_official", None, &categories, &groups, &types, &products, &materials, error_summary)
+    let source_build = crate::onboarding::detect_source_build(dir);
+    repo.apply_parsed_import(dir_path, "jsonl_official", source_build.as_deref(), &categories, &groups, &types, &products, &materials, error_summary)
 }
 
 // ============================================================

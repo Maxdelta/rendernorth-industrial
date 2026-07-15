@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { HashRouter, Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -8,6 +9,9 @@ import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
 import { ProductionPage } from "./pages/Production";
 import { SettingsPage } from "./pages/Settings";
 import { QuartermasterPage } from "./pages/Quartermaster";
+import { FirstRunWizard } from "./components/FirstRunWizard";
+import { getAppSetting, setApplicationSectionTitle } from "./lib/backend";
+import { SHOW_DEVELOPMENT_UI } from "./lib/runtimeMode";
 import {
   IndustryPage,
   LogisticsPage,
@@ -26,6 +30,17 @@ import {
 // legacy UI surface is retired here; nothing about the concept is deleted.
 
 export default function App() {
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  useEffect(() => { getAppSetting("onboarding_completed").then(value => setOnboardingComplete(value === "true")); }, []);
+  useEffect(() => {
+    if (onboardingComplete === false && !SHOW_DEVELOPMENT_UI) {
+      void setApplicationSectionTitle("First-Run Setup").catch((error) => {
+        console.error("failed to update application title", error);
+      });
+    }
+  }, [onboardingComplete]);
+  if (onboardingComplete === null) return <div className="setup-loading">Loading RenderNorth configuration…</div>;
+  if (!onboardingComplete && !SHOW_DEVELOPMENT_UI) return <FirstRunWizard onComplete={() => setOnboardingComplete(true)} />;
   return (
     <HashRouter>
       <div className="shell">

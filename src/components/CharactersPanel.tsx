@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import {
-  addCharacter, removeCharacter, setCharacterEnabled, listCharacters,
-  getAppSetting, setAppSetting, syncCharacterAssets, syncAllCharacterAssets,
-  syncCharacterBlueprints, syncAllCharacterBlueprints,
-  type CharacterSummary,
+  addCharacter, getAppSetting, listCharacters, refreshAssetLocations, removeCharacter,
+  setAppSetting, setCharacterEnabled, syncAllCharacterAssets, syncAllCharacterBlueprints,
+  syncCharacterAssets, syncCharacterBlueprints, type CharacterSummary,
 } from "../lib/backend";
 import { Panel } from "./Panel";
 
-function statusTone(c: CharacterSummary): "nominal" | "furnace" | "alert" {
-  if (c.authorizationStatus === "revoked" || c.syncStatus === "error") return "alert";
-  if (!c.assetScopeGranted || !c.blueprintScopeGranted || !c.structureScopeGranted || c.authorizationStatus === "expired") return "furnace";
+function statusTone(character: CharacterSummary): "nominal" | "furnace" | "alert" {
+  if (character.authorizationStatus === "revoked" || character.syncStatus === "error") return "alert";
+  if (!character.assetScopeGranted || !character.blueprintScopeGranted || !character.structureScopeGranted || character.authorizationStatus === "expired") return "furnace";
   return "nominal";
 }
 
@@ -21,108 +20,78 @@ export function CharactersPanel() {
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null);
   const [syncing, setSyncing] = useState<number | "all" | null>(null);
   const [blueprintSyncing, setBlueprintSyncing] = useState<number | "all" | null>(null);
+  const [locationSyncing, setLocationSyncing] = useState(false);
+  const [locationFeedback, setLocationFeedback] = useState<string | null>(null);
 
-  function refresh() { listCharacters().then(setCharacters); }
+  function refresh() { listCharacters().then(setCharacters).catch(cause => setError(String(cause))); }
   useEffect(refresh, []);
-  useEffect(() => { getAppSetting("esi_client_id").then((saved) => { if (saved) setClientId(saved); }); }, []);
+  useEffect(() => { getAppSetting("esi_client_id").then(saved => { if (saved) setClientId(saved); }); }, []);
 
-  function handleClientIdChange(value: string) {
-    setClientId(value);
-    setAppSetting("esi_client_id", value).catch(() => undefined);
-  }
-
+  function handleClientIdChange(value: string) { setClientId(value); setAppSetting("esi_client_id", value).catch(() => undefined); }
   async function handleAddCharacter() {
-    if (!clientId.trim()) { setError("Enter your EVE Developer application's client ID first."); return; }
+    if (!clientId.trim()) { setError("Enter your EVE Developer application's Client ID first."); return; }
     setAdding(true); setError(null);
-    try { await addCharacter(clientId.trim()); refresh(); } catch (err) { setError(String(err)); }
+    try { await addCharacter(clientId.trim()); refresh(); } catch (cause) { setError(String(cause)); }
     finally { setAdding(false); }
   }
-
   async function handleSyncOne(characterId: number) {
-    if (!clientId.trim()) { setError("Enter your EVE Developer application's client ID first."); return; }
+    if (!clientId.trim()) { setError("Enter your EVE Developer application's Client ID first."); return; }
     setSyncing(characterId); setError(null);
     try { const result = await syncCharacterAssets(clientId.trim(), characterId); if (result.error) setError(result.error); }
-    catch (err) { setError(String(err)); }
-    finally { setSyncing(null); refresh(); }
+    catch (cause) { setError(String(cause)); } finally { setSyncing(null); refresh(); }
   }
-
   async function handleSyncAll() {
-    if (!clientId.trim()) { setError("Enter your EVE Developer application's client ID first."); return; }
+    if (!clientId.trim()) { setError("Enter your EVE Developer application's Client ID first."); return; }
     setSyncing("all"); setError(null);
-    try {
-      const results = await syncAllCharacterAssets(clientId.trim());
-      const failures = results.filter((r) => r.error).map((r) => r.error).join("; ");
-      if (failures) setError(failures);
-    } catch (err) { setError(String(err)); }
-    finally { setSyncing(null); refresh(); }
+    try { const results = await syncAllCharacterAssets(clientId.trim()); const failures = results.filter(result => result.error).map(result => result.error).join("; "); if (failures) setError(failures); }
+    catch (cause) { setError(String(cause)); } finally { setSyncing(null); refresh(); }
   }
-
-  async function handleBlueprintSyncOne(characterId:number){
-    if(!clientId.trim()){setError("Enter your EVE Developer application's client ID first.");return;}
-    setBlueprintSyncing(characterId);setError(null);
-    try{const result=await syncCharacterBlueprints(clientId.trim(),characterId);if(result.error)setError(result.error);}
-    catch(err){setError(String(err));}finally{setBlueprintSyncing(null);refresh();}
+  async function handleBlueprintSyncOne(characterId: number) {
+    if (!clientId.trim()) { setError("Enter your EVE Developer application's Client ID first."); return; }
+    setBlueprintSyncing(characterId); setError(null);
+    try { const result = await syncCharacterBlueprints(clientId.trim(), characterId); if (result.error) setError(result.error); }
+    catch (cause) { setError(String(cause)); } finally { setBlueprintSyncing(null); refresh(); }
   }
-  async function handleBlueprintSyncAll(){
-    if(!clientId.trim()){setError("Enter your EVE Developer application's client ID first.");return;}
-    setBlueprintSyncing("all");setError(null);
-    try{const results=await syncAllCharacterBlueprints(clientId.trim());const failures=results.filter(r=>r.error).map(r=>r.error).join("; ");if(failures)setError(failures);}
-    catch(err){setError(String(err));}finally{setBlueprintSyncing(null);refresh();}
+  async function handleBlueprintSyncAll() {
+    if (!clientId.trim()) { setError("Enter your EVE Developer application's Client ID first."); return; }
+    setBlueprintSyncing("all"); setError(null);
+    try { const results = await syncAllCharacterBlueprints(clientId.trim()); const failures = results.filter(result => result.error).map(result => result.error).join("; "); if (failures) setError(failures); }
+    catch (cause) { setError(String(cause)); } finally { setBlueprintSyncing(null); refresh(); }
   }
-
-  async function handleToggleEnabled(c: CharacterSummary) { await setCharacterEnabled(c.characterId, !c.enabled); refresh(); }
+  async function handleLocations() {
+    if (!clientId.trim()) { setError("Enter your EVE Developer application's Client ID first."); return; }
+    setLocationSyncing(true); setError(null); setLocationFeedback(null);
+    try { const result = await refreshAssetLocations(clientId.trim()); setLocationFeedback(`${result.resolved} resolved · ${result.inaccessible} inaccessible · ${result.errors.length} errors`); }
+    catch (cause) { setError(String(cause)); } finally { setLocationSyncing(false); }
+  }
+  async function handleToggleEnabled(character: CharacterSummary) { await setCharacterEnabled(character.characterId, !character.enabled); refresh(); }
   async function handleRemove(characterId: number) { await removeCharacter(characterId); setConfirmRemove(null); refresh(); }
 
   return <Panel title="Characters & ESI Sync" keel="coolant" className="dash-hero">
-    <p className="ph-mission">
-      Connect characters through official EVE SSO and synchronize read-only personal assets and blueprints. Characters
-      missing <code>esi-characters.read_blueprints.v1</code> must use Add / Reauthorize Character again; the existing
-      <code> esi-assets.read_assets.v1</code> permission remains requested. Player structures additionally require
-      <code> esi-universe.read_structures.v1</code>.
-      Tokens remain in Windows Credential Manager and are never exposed here.
-    </p>
-    <label className="new-op-field" style={{ marginTop: 10 }}>
-      <span className="ops-field-label">EVE Developer application client ID</span>
-      <input className="sd-path-input" value={clientId} onChange={(e) => setClientId(e.target.value)}
-        onBlur={(e) => handleClientIdChange(e.target.value)} placeholder="Paste your application's client ID" />
-    </label>
-    {error && <div className="sd-error" style={{ marginTop: 8 }}><div className="conflict-desc">{error}</div></div>}
-    <div className="new-op-actions" style={{ marginTop: 10 }}>
-      <button className="target-select enabled" onClick={handleAddCharacter} disabled={adding || syncing !== null}>
-        {adding ? "Waiting for browser login…" : "Add / Reauthorize Character"}
-      </button>
-      <button className="target-select enabled" onClick={handleSyncAll} disabled={adding || syncing !== null}>
-        {syncing === "all" ? "Syncing enabled characters…" : "Sync All Enabled Characters"}
-      </button>
-      <button className="target-select enabled" onClick={handleBlueprintSyncAll} disabled={adding || blueprintSyncing !== null}>
-        {blueprintSyncing === "all" ? "Syncing blueprints…" : "Sync All Blueprints"}
-      </button>
+    <p className="ph-mission">Connect characters through official EVE SSO and synchronize read-only personal assets and blueprints. Tokens remain in Windows Credential Manager and are never exposed to the frontend.</p>
+    <label className="new-op-field"><span className="ops-field-label">EVE Developer application Client ID</span><input className="sd-path-input" value={clientId} onChange={event => setClientId(event.target.value)} onBlur={event => handleClientIdChange(event.target.value)} placeholder="Client ID only — never enter a client secret" /></label>
+    {error && <div className="sd-error"><div className="conflict-desc">{error}</div></div>}
+    <div className="new-op-actions setup-wrap">
+      <button className="target-select enabled" onClick={handleAddCharacter} disabled={adding || syncing !== null}>{adding ? "Waiting for browser login…" : "Add / Reauthorize Character"}</button>
+      <button className="target-select enabled" onClick={handleSyncAll} disabled={adding || syncing !== null}>{syncing === "all" ? "Syncing enabled characters…" : "Sync All Assets"}</button>
+      <button className="target-select enabled" onClick={handleBlueprintSyncAll} disabled={adding || blueprintSyncing !== null}>{blueprintSyncing === "all" ? "Syncing blueprints…" : "Sync All Blueprints"}</button>
+      <button className="target-select enabled" onClick={handleLocations} disabled={adding || locationSyncing || characters?.length === 0}>{locationSyncing ? "Resolving locations…" : "Resolve Locations"}</button>
     </div>
-    {characters?.length === 0 && <p className="ph-mission" style={{ marginTop: 14 }}>No characters connected yet.</p>}
-    {characters && characters.length > 0 && <div className="inv-table" style={{ marginTop: 14 }}>
-      <div className="inv-row inv-head"><div>Character</div><div>Authorization</div><div>Enabled</div><div>ESI Sync</div><div>Actions</div></div>
-      {characters.map((c) => <div className="inv-row" key={c.characterId}>
-        <div className="inv-name">{c.name}</div>
-        <div className={`inv-status ${statusTone(c)}`}>{c.authorizationStatus}{(!c.assetScopeGranted || !c.blueprintScopeGranted || !c.structureScopeGranted) && <><br />reauthorize</>}</div>
-        <div><button className="target-select enabled" onClick={() => handleToggleEnabled(c)}>{c.enabled ? "ON" : "OFF"}</button></div>
-        <div className="bts-result-meta">
-          {c.syncStatus} · {c.assetCount.toLocaleString()} assets · {c.pageCount} pages<br />
-          {c.lastSyncAt ? new Date(c.lastSyncAt).toLocaleString() : "Never synced"}
-          {c.syncError && <><br />{c.syncError}</>}
-          <br />Blueprints: {c.blueprintSyncStatus} · {c.blueprintCount.toLocaleString()} · {c.blueprintPageCount} pages
-          <br />{c.blueprintLastSyncAt ? new Date(c.blueprintLastSyncAt).toLocaleString() : "Never synced"}
-          {c.blueprintSyncError && <><br />{c.blueprintSyncError}</>}
+    {locationFeedback && <div className="setup-feedback">Locations: {locationFeedback}</div>}
+    {characters?.length === 0 && <p className="ph-mission">No characters connected. Add a character to continue setup.</p>}
+    {characters && characters.length > 0 && <div className="character-setup-list">
+      {characters.map(character => <div className="character-setup-card" key={character.characterId}>
+        <div className="character-setup-head"><div className="inv-name">{character.name}</div><div className={`inv-status ${statusTone(character)}`}>{character.authorizationStatus}</div><button className="target-select enabled" onClick={() => handleToggleEnabled(character)}>{character.enabled ? "Enabled" : "Disabled"}</button></div>
+        <div className="character-progress">
+          <div className={character.authorizationStatus === "authorized" ? "complete" : "incomplete"}><span>{character.authorizationStatus === "authorized" ? "✓" : "!"}</span>Authorized</div>
+          <div className={character.syncStatus === "success" ? "complete" : "incomplete"}><span>{character.syncStatus === "success" ? "✓" : "!"}</span>Assets · {character.assetCount.toLocaleString()}</div>
+          <div className={character.blueprintSyncStatus === "success" ? "complete" : "incomplete"}><span>{character.blueprintSyncStatus === "success" ? "✓" : "!"}</span>Blueprints · {character.blueprintCount.toLocaleString()}</div>
+          <div className={character.structureScopeGranted ? "complete" : "incomplete"}><span>{character.structureScopeGranted ? "✓" : "!"}</span>Locations permission</div>
         </div>
-        <div>
-          <button className="target-select enabled" disabled={!c.assetScopeGranted || syncing !== null}
-            onClick={() => handleSyncOne(c.characterId)}>{syncing === c.characterId ? "Syncing…" : "Sync"}</button>{" "}
-          <button className="target-select enabled" disabled={!c.blueprintScopeGranted || blueprintSyncing !== null}
-            onClick={() => handleBlueprintSyncOne(c.characterId)}>{blueprintSyncing === c.characterId ? "Syncing BP…" : "Sync BP"}</button>{" "}
-          {confirmRemove === c.characterId ? <>
-            <button className="target-select destructive" onClick={() => handleRemove(c.characterId)}>Confirm</button>{" "}
-            <button className="target-select" onClick={() => setConfirmRemove(null)}>Cancel</button>
-          </> : <button className="target-select destructive" onClick={() => setConfirmRemove(c.characterId)}>Remove</button>}
-        </div>
+        <div className="data-source">Assets: {character.syncStatus} · {character.lastSyncAt ? new Date(character.lastSyncAt).toLocaleString() : "never"} · {character.pageCount} pages<br />Blueprints: {character.blueprintSyncStatus} · {character.blueprintLastSyncAt ? new Date(character.blueprintLastSyncAt).toLocaleString() : "never"} · {character.blueprintPageCount} pages</div>
+        {(character.syncError || character.blueprintSyncError) && <div className="sd-error"><div className="conflict-desc">{character.syncError || character.blueprintSyncError}</div></div>}
+        {(!character.assetScopeGranted || !character.blueprintScopeGranted || !character.structureScopeGranted) && <div className="setup-scope-explanation"><strong>Reauthorization adds missing read-only permissions:</strong>{!character.assetScopeGranted && <span><code>esi-assets.read_assets.v1</code> — personal asset types, quantities, and locations.</span>}{!character.blueprintScopeGranted && <span><code>esi-characters.read_blueprints.v1</code> — owned BPO/BPC records, ME, TE, and runs.</span>}{!character.structureScopeGranted && <span><code>esi-universe.read_structures.v1</code> — names of accessible player structures; inaccessible structures remain raw IDs.</span>}<span>Existing working read-only permissions remain requested during reauthorization.</span></div>}
+        <div className="new-op-actions setup-wrap"><button className="target-select enabled" disabled={!character.assetScopeGranted || syncing !== null} onClick={() => handleSyncOne(character.characterId)}>{syncing === character.characterId ? "Syncing…" : "Sync Assets"}</button><button className="target-select enabled" disabled={!character.blueprintScopeGranted || blueprintSyncing !== null} onClick={() => handleBlueprintSyncOne(character.characterId)}>{blueprintSyncing === character.characterId ? "Syncing…" : "Sync Blueprints"}</button>{confirmRemove === character.characterId ? <><button className="target-select destructive" onClick={() => handleRemove(character.characterId)}>Confirm Remove</button><button className="target-select" onClick={() => setConfirmRemove(null)}>Cancel</button></> : <button className="target-select destructive" onClick={() => setConfirmRemove(character.characterId)}>Remove</button>}</div>
       </div>)}
     </div>}
   </Panel>;

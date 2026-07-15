@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "RenderNorth Industrial — Titan Production Command",
+        "title": "RenderNorth Industrial",
         "width": 1440,
         "height": 900,
         "minWidth": 1080,
@@ -27,7 +27,16 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "icon": ["icons/icon.png", "icons/icon.ico"]
+    "targets": ["nsis"],
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "shortDescription": "Local-first EVE Online industrial intelligence",
+    "longDescription": "RenderNorth Industrial provides local-first inventory, production, market, procurement, and doctrine intelligence using CCP-authorized read-only data.",
+    "copyright": "Copyright © 2026 RenderNorth",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
   }
 }

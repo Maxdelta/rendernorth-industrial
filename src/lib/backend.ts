@@ -404,6 +404,30 @@ export interface ImportSummary {
   errorSummary: string | null;
 }
 
+export interface SdeFileStatus { name: string; present: boolean; }
+export interface SdeInspection {
+  path: string;
+  valid: boolean;
+  sourceBuild: string | null;
+  files: SdeFileStatus[];
+  error: string | null;
+}
+
+export interface AboutInfo {
+  applicationName: string;
+  version: string;
+  build: string;
+  gitCommit: string;
+  databaseVersion: string;
+  migrationVersion: number;
+  rustVersion: string;
+  website: string;
+  github: string;
+  issues: string;
+  support: string;
+  discordInvite: string;
+}
+
 export interface TypeSearchResult {
   typeId: number;
   name: string;
@@ -993,6 +1017,41 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
     return;
   }
   await invoke<void>("set_app_setting", { key, value });
+}
+
+export async function inspectSdeDirectory(dirPath: string): Promise<SdeInspection> {
+  if (!inTauri()) {
+    return { path: dirPath, valid: false, sourceBuild: null, files: [], error: BROWSER_PREVIEW_ERROR };
+  }
+  return invoke<SdeInspection>("inspect_sde_directory", { dirPath });
+}
+
+export async function pickSdeDirectory(): Promise<string | null> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<string | null>("pick_sde_directory");
+}
+
+export async function getAboutInfo(): Promise<AboutInfo> {
+  if (!inTauri()) {
+    return { applicationName: "RenderNorth Industrial", version: "browser preview", build: "development", gitCommit: "unavailable", databaseVersion: "unavailable", migrationVersion: 0, rustVersion: "unavailable", website: "https://rendernorth.com", github: "https://github.com/Maxdelta/rendernorth-industrial", issues: "https://github.com/Maxdelta/rendernorth-industrial/issues", support: "https://buymeacoffee.com/maxdelta", discordInvite: "https://discord.gg/XycCz6ppx" };
+  }
+  return invoke<AboutInfo>("get_about_info");
+}
+
+export async function exportDiagnostics(): Promise<string | null> {
+  if (!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
+  return invoke<string | null>("export_diagnostics");
+}
+
+export async function openExternalUrl(url: string): Promise<void> {
+  if (!inTauri()) { window.open(url, "_blank", "noopener,noreferrer"); return; }
+  return invoke<void>("open_external_url", { url });
+}
+
+export async function setApplicationSectionTitle(section: string): Promise<void> {
+  document.title = `RenderNorth Industrial — ${section}`;
+  if (!inTauri()) return;
+  return invoke<void>("set_application_section", { section });
 }
 
 export async function healthCheck(): Promise<DbHealth | null> {
