@@ -18,6 +18,7 @@ mod models;
 mod operation;
 mod production;
 mod procurement;
+mod quartermaster;
 mod reservation;
 mod staticdata;
 
@@ -100,6 +101,16 @@ fn main() {
             commands::get_operation_shopping_list,
             commands::update_procurement_line,
             commands::reset_procurement_state,
+            commands::list_doctrines,
+            commands::create_doctrine,
+            commands::update_doctrine,
+            commands::list_doctrine_fits,
+            commands::import_doctrine_eft_text,
+            commands::import_doctrine_eft_file,
+            commands::import_doctrine_eft_folder,
+            commands::set_doctrine_fit_quantity,
+            commands::delete_doctrine_fit,
+            commands::analyze_doctrine,
             commands::sync_character_blueprints,
             commands::sync_all_character_blueprints
         ])

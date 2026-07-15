@@ -855,6 +855,17 @@ pub fn reset_procurement_state(db: State<'_, Db>, operation_id: i64) -> Result<i
     crate::procurement::reset_state(&conn, operation_id)
 }
 
+#[tauri::command] pub fn list_doctrines(db:State<'_,Db>)->Result<Vec<crate::quartermaster::Doctrine>,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::list(&c)}
+#[tauri::command] pub fn create_doctrine(db:State<'_,Db>,input:crate::quartermaster::DoctrineInput)->Result<crate::quartermaster::Doctrine,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::create(&c,&input)}
+#[tauri::command] pub fn update_doctrine(db:State<'_,Db>,doctrine_id:i64,input:crate::quartermaster::DoctrineInput)->Result<crate::quartermaster::Doctrine,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::update(&c,doctrine_id,&input)}
+#[tauri::command] pub fn list_doctrine_fits(db:State<'_,Db>,doctrine_id:i64)->Result<Vec<crate::quartermaster::DoctrineFit>,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::fits(&c,doctrine_id)}
+#[tauri::command] pub fn import_doctrine_eft_text(db:State<'_,Db>,doctrine_id:i64,text:String,source_name:String)->Result<crate::quartermaster::DoctrineFit,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::import_text(&c,doctrine_id,&text,&source_name)}
+#[tauri::command] pub fn import_doctrine_eft_file(db:State<'_,Db>,doctrine_id:i64,path:String)->Result<crate::quartermaster::DoctrineFit,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::import_file(&c,doctrine_id,&path)}
+#[tauri::command] pub fn import_doctrine_eft_folder(db:State<'_,Db>,doctrine_id:i64,path:String)->Result<Vec<crate::quartermaster::DoctrineFit>,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::import_folder(&c,doctrine_id,&path)}
+#[tauri::command] pub fn set_doctrine_fit_quantity(db:State<'_,Db>,fit_id:i64,quantity:i64)->Result<crate::quartermaster::DoctrineFit,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::set_quantity(&c,fit_id,quantity)}
+#[tauri::command] pub fn delete_doctrine_fit(db:State<'_,Db>,fit_id:i64)->Result<(),String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::delete_fit(&c,fit_id)}
+#[tauri::command] pub fn analyze_doctrine(db:State<'_,Db>,doctrine_id:i64)->Result<crate::quartermaster::DoctrineAnalysis,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::analyze(&c,doctrine_id)}
+
 #[tauri::command]
 pub fn sync_character_blueprints(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<blueprint::sync::BlueprintSyncResult, String> {
     let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;

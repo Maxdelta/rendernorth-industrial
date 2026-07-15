@@ -1078,6 +1078,19 @@ export interface ShoppingSummary { missingItemTypes:number; totalMissingUnits:nu
 export interface ShoppingExports { eveMultiBuy:string; discordReport:string; csv:string; }
 export interface OperationShoppingList { operationId:number; operationName:string; marketProfile:string; lines:ShoppingLine[]; summary:ShoppingSummary; exports:ShoppingExports; }
 export interface ProcurementState { operationId:number; typeId:number; status:ProcurementStatus; notes:string; updatedAt:string; }
+export interface DoctrineInput { name:string; description:string; category:string; fleetNotes:string; isActive:boolean; version:number; }
+export interface Doctrine { doctrineId:number; name:string; description:string; category:string; fleetNotes:string; isActive:boolean; version:number; fitCount:number; updatedAt:string; }
+export interface DoctrineFitItem { typeId:number; itemName:string; itemKind:string; quantity:number; }
+export interface DoctrineFit { fitId:number; doctrineId:number; name:string; hullTypeId:number; hullName:string; desiredQuantity:number; originalEftText:string; sourceName:string; items:DoctrineFitItem[]; }
+export interface FitReadiness { fitId:number; name:string; hullName:string; desired:number; readyNow:number; readyAfterBuild:number; stillMissing:number; coveragePercent:number; status:string; }
+export interface DoctrineItem { typeId:number; itemName:string; itemKind:string; required:number; owned:number; reserved:number; available:number; missing:number; manufacturable:boolean; ownedBlueprint:boolean; action:string; unitVolumeM3:number|null; totalMissingVolumeM3:number|null; purchaseUnitPrice:number|null; purchaseCost:number|null; marketStatus:string; blockedReason:string|null; blockedDetail:string|null; }
+export interface BuildMaterialDetail { typeId:number; itemName:string; requiredQuantity:number; ownedQuantity:number; missingQuantity:number; unitVolumeM3:number|null; missingVolumeM3:number|null; acquisitionUnitPrice:number|null; totalAcquisitionCost:number|null; marketStatus:string; }
+export interface BuildDetail { typeId:number; itemName:string; missingQuantity:number; manufacturingRuns:number; outputQuantity:number; blueprintSource:string|null; blueprintOwner:string|null; me:number|null; te:number|null; rawMaterialCost:number|null; rawMaterialVolumeM3:number|null; missingBlueprintWarning:string|null; unmanufacturableWarning:string|null; warnings:string[]; rawMaterials:BuildMaterialDetail[]; }
+export interface ReasonCount { reason:string; count:number; }
+export interface ActionSummary { readyItemTypes:number; buildItemTypes:number; buyItemTypes:number; blockedItemTypes:number; missingBlueprints:number; unpricedLines:number; insufficientVolumeLines:number; }
+export interface QuartermasterExports { buyFinishedGoods:ShoppingExports; buyManufacturingInputs:ShoppingExports; combinedPurchaseList:ShoppingExports; }
+export interface QuartermasterSummary { buyCost:number; buyVolumeM3:number; buildInputCost:number; buildInputVolumeM3:number; totalCompletionCost:number; totalHaulingVolumeM3:number; totalsComplete:boolean; excludedLines:number; readyNow:number; readyAfterBuild:number; stillMissingAfterBuild:number; target:number; coverageNowPercent:number; coverageAfterBuildPercent:number; overallStatus:string; canFullyField:boolean; blockingComponents:string[]; shoppingReady:boolean; productionReady:boolean; actionSummary:ActionSummary; blockedReasons:ReasonCount[]; partialReasons:ReasonCount[]; }
+export interface DoctrineAnalysis { doctrine:Doctrine; fits:FitReadiness[]; items:DoctrineItem[]; buildDetails:BuildDetail[]; buyLines:ShoppingLine[]; buildInputLines:ShoppingLine[]; summary:QuartermasterSummary; shopping:QuartermasterExports; }
 export interface BlueprintSyncResult { characterId:number; status:string; blueprintCount:number; pageCount:number; error:string|null; }
 
 /** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
@@ -1128,6 +1141,16 @@ export async function getOperationEconomics(operationId:number,revenueBasis:Reve
 export async function getOperationShoppingList(operationId:number):Promise<OperationShoppingList>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<OperationShoppingList>("get_operation_shopping_list",{operationId});}
 export async function updateProcurementLine(operationId:number,typeId:number,status:ProcurementStatus,notes:string):Promise<ProcurementState>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<ProcurementState>("update_procurement_line",{operationId,typeId,status,notes});}
 export async function resetProcurementState(operationId:number):Promise<number>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<number>("reset_procurement_state",{operationId});}
+export async function listDoctrines():Promise<Doctrine[]>{if(!inTauri())return [];return invoke<Doctrine[]>("list_doctrines");}
+export async function createDoctrine(input:DoctrineInput):Promise<Doctrine>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<Doctrine>("create_doctrine",{input});}
+export async function updateDoctrine(doctrineId:number,input:DoctrineInput):Promise<Doctrine>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<Doctrine>("update_doctrine",{doctrineId,input});}
+export async function listDoctrineFits(doctrineId:number):Promise<DoctrineFit[]>{if(!inTauri())return [];return invoke<DoctrineFit[]>("list_doctrine_fits",{doctrineId});}
+export async function importDoctrineEftText(doctrineId:number,text:string,sourceName:string):Promise<DoctrineFit>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<DoctrineFit>("import_doctrine_eft_text",{doctrineId,text,sourceName});}
+export async function importDoctrineEftFile(doctrineId:number,path:string):Promise<DoctrineFit>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<DoctrineFit>("import_doctrine_eft_file",{doctrineId,path});}
+export async function importDoctrineEftFolder(doctrineId:number,path:string):Promise<DoctrineFit[]>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<DoctrineFit[]>("import_doctrine_eft_folder",{doctrineId,path});}
+export async function setDoctrineFitQuantity(fitId:number,quantity:number):Promise<DoctrineFit>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<DoctrineFit>("set_doctrine_fit_quantity",{fitId,quantity});}
+export async function deleteDoctrineFit(fitId:number):Promise<void>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<void>("delete_doctrine_fit",{fitId});}
+export async function analyzeDoctrine(doctrineId:number):Promise<DoctrineAnalysis>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<DoctrineAnalysis>("analyze_doctrine",{doctrineId});}
 
 export async function syncCharacterBlueprints(clientId:string,characterId:number):Promise<BlueprintSyncResult>{
   if(!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);

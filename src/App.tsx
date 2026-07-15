@@ -7,6 +7,7 @@ import { BlueprintsPage } from "./pages/Blueprints";
 import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
 import { ProductionPage } from "./pages/Production";
 import { SettingsPage } from "./pages/Settings";
+import { QuartermasterPage } from "./pages/Quartermaster";
 import {
   IndustryPage,
   LogisticsPage,
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/blueprints" element={<BlueprintsPage />} />
               <Route path="/production" element={<ProductionPage />} />
+              <Route path="/quartermaster" element={<QuartermasterPage />} />
               <Route path="/industry" element={<IndustryPage />} />
               <Route path="/logistics" element={<LogisticsPage />} />
               <Route path="/market" element={<MarketIntelligencePage />} />

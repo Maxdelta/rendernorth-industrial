@@ -11,6 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/inventory", label: "Inventory" },
   { to: "/blueprints", label: "Blueprints" },
   { to: "/production", label: "Production" },
+  { to: "/quartermaster", label: "Quartermaster" },
   { to: "/industry", label: "Industry" },
   { to: "/logistics", label: "Logistics" },
   { to: "/market", label: "Market Intelligence" },

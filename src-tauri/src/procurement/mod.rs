@@ -272,6 +272,19 @@ pub fn shopping_list(
             last_updated: state.map(|value| value.updated_at),
         });
     }
+    let summary = summary_for_lines(&lines);
+    let exports = exports_for_lines(&plan.operation_goal, &market_profile, &summary, &lines);
+    Ok(OperationShoppingList {
+        operation_id,
+        operation_name: plan.operation_goal,
+        market_profile,
+        lines,
+        summary,
+        exports,
+    })
+}
+
+pub fn summary_for_lines(lines: &[ShoppingLine]) -> ShoppingSummary {
     let priced_lines = lines
         .iter()
         .filter(|line| line.total_acquisition_cost.is_some())
@@ -288,7 +301,7 @@ pub fn shopping_list(
         .iter()
         .filter_map(|line| line.total_acquisition_cost)
         .sum::<f64>();
-    let summary = ShoppingSummary {
+    ShoppingSummary {
         missing_item_types: lines.len() as i64,
         total_missing_units: lines.iter().map(|line| line.shortage_quantity).sum(),
         total_purchase_cost: (priced_lines > 0).then_some(priced_total),
@@ -298,20 +311,20 @@ pub fn shopping_list(
         priced_lines,
         unpriced_lines,
         insufficient_volume_lines,
-    };
-    let exports = ShoppingExports {
+    }
+}
+
+pub fn exports_for_lines(
+    name: &str,
+    market_profile: &str,
+    summary: &ShoppingSummary,
+    lines: &[ShoppingLine],
+) -> ShoppingExports {
+    ShoppingExports {
         eve_multi_buy: eve_multi_buy(&lines),
-        discord_report: discord_report(&plan.operation_goal, &market_profile, &summary, &lines),
-        csv: csv_export(&plan.operation_goal, &lines),
-    };
-    Ok(OperationShoppingList {
-        operation_id,
-        operation_name: plan.operation_goal,
-        market_profile,
-        lines,
-        summary,
-        exports,
-    })
+        discord_report: discord_report(name, market_profile, summary, lines),
+        csv: csv_export(name, lines),
+    }
 }
 
 fn eve_multi_buy(lines: &[ShoppingLine]) -> String {

@@ -146,6 +146,12 @@ Coverage, shortage, and cross-operation "critical bottleneck" detection (a mater
 - **operation_procurement_lines**(operation_id, type_id, status, notes, updated_at) — mutable operation-specific workflow state only. Required, owned, and shortage quantities are never copied here; the shopping list derives them from the live production plan.
 - **operation_procurement_events**(event_id, operation_id, type_id, previous_status, new_status, notes, event_type, created_at) — append-only status/note and reset history. Reset removes current line state while preserving these audit events. Neither table mutates synchronized or manual inventory.
 
+### Quartermaster doctrine domain (migration 0018, live now)
+
+- **doctrine_groups** — doctrine identity, description, category, fleet notes, active state, and version.
+- **doctrine_fits** — imported EFT fits, desired fleet quantity, normalized hull reference, source, and original EFT text.
+- **doctrine_fit_items** — normalized CCP type references, detected item kind, and per-fit quantity. Fleet demand and readiness remain live derived results rather than stored totals.
+
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)
 - **sync_state**(resource, character_id, etag, last_success_at, next_allowed_at, last_error, PRIMARY KEY(resource, character_id))

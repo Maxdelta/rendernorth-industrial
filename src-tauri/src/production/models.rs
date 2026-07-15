@@ -120,6 +120,36 @@ pub struct ProductionPlan {
     pub synchronized_blueprints: Vec<OwnedBlueprintInfo>,
 }
 
+/// Operation-independent manufacturing expansion used by consumers such
+/// as Quartermaster. The recursive tree, run rounding, blueprint selection,
+/// and ME behavior are produced by the same engine as an operation plan;
+/// consumers remain responsible for allocating their own inventory scope.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionTargetPlan {
+    pub type_id: i64,
+    pub type_name: String,
+    pub requested_quantity: i64,
+    pub me: i64,
+    pub te: i64,
+    pub total_runs: i64,
+    pub produced_quantity: i64,
+    pub tree: RequirementTreeNode,
+    pub leaf_requirements: Vec<ProductionInputRequirement>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionInputRequirement {
+    pub type_id: i64,
+    pub type_name: String,
+    pub required_quantity: i64,
+    pub unit_volume_m3: Option<f64>,
+    pub required_volume_m3: Option<f64>,
+    pub calculation_paths: Vec<String>,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnedBlueprintInfo {

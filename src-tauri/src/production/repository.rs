@@ -10,8 +10,9 @@
 
 use super::models::{
     CategoryCoverage, CriticalBottleneck, LeafTotal, OperationRequirementBreakdown,
-    ProductionPlan, RequirementCategory, RequirementLine, RequirementShortage, RequirementSource,
-    RequirementSummary, RequirementTreeNode,
+    ProductionInputRequirement, ProductionPlan, ProductionTargetPlan, RequirementCategory,
+    RequirementLine, RequirementShortage, RequirementSource, RequirementSummary,
+    RequirementTreeNode,
 };
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
@@ -93,10 +94,14 @@ impl<'a> ProductionRepository<'a> {
         let rows = stmt
             .query_map((operation_id, category_key), Self::map_line)
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
-    pub fn get_detail(&self, requirement_id: i64) -> Result<super::models::RequirementDetail, String> {
+    pub fn get_detail(
+        &self,
+        requirement_id: i64,
+    ) -> Result<super::models::RequirementDetail, String> {
         let sql = format!("{} WHERE r.id = ?1", Self::LINE_SELECT);
         let line = self
             .conn
@@ -151,7 +156,8 @@ impl<'a> ProductionRepository<'a> {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn summary(&self) -> Result<RequirementSummary, String> {
@@ -250,9 +256,10 @@ impl<'a> ProductionRepository<'a> {
 
         let mut by_category: HashMap<&str, (String, i64, i64, i64)> = HashMap::new();
         for l in &lines {
-            let entry = by_category
-                .entry(&l.category_key)
-                .or_insert((l.category_label.clone(), 0, 0, 0));
+            let entry =
+                by_category
+                    .entry(&l.category_key)
+                    .or_insert((l.category_label.clone(), 0, 0, 0));
             entry.1 += l.required_quantity;
             entry.2 += l.owned_quantity.min(l.required_quantity);
             if !l.is_satisfied {
@@ -262,21 +269,23 @@ impl<'a> ProductionRepository<'a> {
 
         let mut categories: Vec<CategoryCoverage> = by_category
             .into_iter()
-            .map(|(key, (label, required_total, covered_total, missing_count))| {
-                let coverage_fraction = if required_total > 0 {
-                    covered_total as f64 / required_total as f64
-                } else {
-                    1.0
-                };
-                CategoryCoverage {
-                    category_key: key.to_string(),
-                    category_label: label,
-                    required_total,
-                    owned_total: covered_total,
-                    coverage_fraction,
-                    missing_count,
-                }
-            })
+            .map(
+                |(key, (label, required_total, covered_total, missing_count))| {
+                    let coverage_fraction = if required_total > 0 {
+                        covered_total as f64 / required_total as f64
+                    } else {
+                        1.0
+                    };
+                    CategoryCoverage {
+                        category_key: key.to_string(),
+                        category_label: label,
+                        required_total,
+                        owned_total: covered_total,
+                        coverage_fraction,
+                        missing_count,
+                    }
+                },
+            )
             .collect();
         categories.sort_by(|a, b| a.category_key.cmp(&b.category_key));
 
@@ -365,14 +374,16 @@ impl<'a> ProductionRepository<'a> {
         self.conn
             .query_row(
                 "SELECT blueprint_type_id, quantity FROM blueprint_products
-                 WHERE product_type_id = ?1 LIMIT 1",
+                 WHERE product_type_id = ?1 ORDER BY blueprint_type_id LIMIT 1",
                 [product_type_id],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .map(Some)
             .or_else(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                other => Err(format!("blueprint lookup failed for type {product_type_id}: {other}")),
+                other => Err(format!(
+                    "blueprint lookup failed for type {product_type_id}: {other}"
+                )),
             })
     }
 
@@ -384,7 +395,8 @@ impl<'a> ProductionRepository<'a> {
         let rows = stmt
             .query_map([blueprint_type_id], |row| Ok((row.get(0)?, row.get(1)?)))
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     /// ME/TE for a blueprint encountered mid-recursion: use an owned
@@ -399,7 +411,8 @@ impl<'a> ProductionRepository<'a> {
             Ok(n) => n,
             Err(_) => return Ok(None),
         };
-        let manual = self.conn
+        let manual = self
+            .conn
             .query_row(
                 "SELECT me_level FROM blueprints WHERE type_name = ?1 LIMIT 1",
                 [type_name],
@@ -410,19 +423,25 @@ impl<'a> ProductionRepository<'a> {
                 rusqlite::Error::QueryReturnedNoRows => Ok(None),
                 other => Err(format!("owned-blueprint ME lookup failed: {other}")),
             })?;
-        if manual.is_some() { return Ok(manual); }
+        if manual.is_some() {
+            return Ok(manual);
+        }
         // An ESI fallback is unambiguous only when exactly one enabled
         // synchronized blueprint item exists for the producing blueprint
         // type. Multiple candidates are displayed to the user but are not
         // auto-selected by RNI-150.
-        let (count,me):(i64,Option<i64>)=self.conn.query_row(
-            "SELECT COUNT(*),MAX(cb.material_efficiency) FROM character_blueprints cb
+        let (count, me): (i64, Option<i64>) = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*),MAX(cb.material_efficiency) FROM character_blueprints cb
              JOIN characters c ON c.character_id=cb.character_id
              WHERE c.enabled=1 AND c.is_demo=0 AND cb.type_id IN
                (SELECT blueprint_type_id FROM blueprint_products WHERE product_type_id=?1)",
-            [product_type_id],|r|Ok((r.get(0)?,r.get(1)?))
-        ).map_err(|e|format!("synchronized blueprint ME lookup failed: {e}"))?;
-        Ok(if count==1 { me } else { None })
+                [product_type_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(|e| format!("synchronized blueprint ME lookup failed: {e}"))?;
+        Ok(if count == 1 { me } else { None })
     }
 
     /// On-hand quantity for a type, for the real (non-demo) production
@@ -467,7 +486,9 @@ impl<'a> ProductionRepository<'a> {
         warnings: &mut Vec<String>,
         path_prefix: &str,
     ) -> Result<RequirementTreeNode, String> {
-        let type_name = self.type_name(type_id).unwrap_or_else(|_| format!("Unknown type {type_id}"));
+        let type_name = self
+            .type_name(type_id)
+            .unwrap_or_else(|_| format!("Unknown type {type_id}"));
         let calculation_path = if path_prefix.is_empty() {
             type_name.clone()
         } else {
@@ -475,21 +496,53 @@ impl<'a> ProductionRepository<'a> {
         };
 
         if depth > MAX_DEPTH {
-            warnings.push(format!("maximum recursion depth exceeded at {type_name} ({type_id})"));
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
+            warnings.push(format!(
+                "maximum recursion depth exceeded at {type_name} ({type_id})"
+            ));
+            return self.leaf_node(
+                type_id,
+                &type_name,
+                needed_quantity,
+                operation_id,
+                leaves,
+                &calculation_path,
+            );
         }
         if path.contains(&type_id) {
-            warnings.push(format!("cycle detected at {type_name} ({type_id}) — stopped expanding this branch"));
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
+            warnings.push(format!(
+                "cycle detected at {type_name} ({type_id}) — stopped expanding this branch"
+            ));
+            return self.leaf_node(
+                type_id,
+                &type_name,
+                needed_quantity,
+                operation_id,
+                leaves,
+                &calculation_path,
+            );
         }
 
         let blueprint = self.blueprint_for_product(type_id)?;
         let Some((blueprint_type_id, product_quantity)) = blueprint else {
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
+            return self.leaf_node(
+                type_id,
+                &type_name,
+                needed_quantity,
+                operation_id,
+                leaves,
+                &calculation_path,
+            );
         };
         if product_quantity <= 0 {
             warnings.push(format!("{type_name} ({type_id}) has a non-positive blueprint output quantity — treated as a leaf"));
-            return self.leaf_node(type_id, &type_name, needed_quantity, operation_id, leaves, &calculation_path);
+            return self.leaf_node(
+                type_id,
+                &type_name,
+                needed_quantity,
+                operation_id,
+                leaves,
+                &calculation_path,
+            );
         }
 
         let me = if depth == 0 {
@@ -587,7 +640,9 @@ impl<'a> ProductionRepository<'a> {
         leaves: &mut HashMap<i64, (String, i64, Vec<String>)>,
         calculation_path: &str,
     ) -> Result<RequirementTreeNode, String> {
-        let entry = leaves.entry(type_id).or_insert_with(|| (type_name.to_string(), 0, Vec::new()));
+        let entry = leaves
+            .entry(type_id)
+            .or_insert_with(|| (type_name.to_string(), 0, Vec::new()));
         entry.1 += needed_quantity;
         entry.2.push(calculation_path.to_string());
 
@@ -627,6 +682,79 @@ impl<'a> ProductionRepository<'a> {
             activity: "manufacturing".to_string(),
             calculation_path: calculation_path.to_string(),
             children: Vec::new(),
+        })
+    }
+
+    /// Expand an arbitrary finished type through the same deterministic
+    /// recursive Production Engine used by operation plans. Inventory is
+    /// deliberately not allocated here: callers such as Quartermaster have
+    /// a doctrine-wide inventory pool and must subtract it once after all
+    /// build requirements have been aggregated.
+    pub fn calculate_target_plan(
+        &self,
+        type_id: i64,
+        requested_quantity: i64,
+        me: i64,
+        te: i64,
+    ) -> Result<ProductionTargetPlan, String> {
+        if requested_quantity <= 0 {
+            return Err("manufacturing target quantity must be positive".into());
+        }
+        let type_name = self.type_name(type_id)?;
+        if self.blueprint_for_product(type_id)?.is_none() {
+            return Err(format!(
+                "no manufacturing blueprint path exists for {type_name} ({type_id})"
+            ));
+        }
+        let mut path = HashSet::new();
+        let mut leaves: HashMap<i64, (String, i64, Vec<String>)> = HashMap::new();
+        let mut warnings = Vec::new();
+        let tree = self.expand(
+            type_id,
+            requested_quantity,
+            me,
+            0,
+            &mut path,
+            0,
+            &mut leaves,
+            &mut warnings,
+            "",
+        )?;
+        let mut leaf_requirements = leaves
+            .into_iter()
+            .map(
+                |(leaf_type_id, (leaf_name, required_quantity, calculation_paths))| {
+                    let unit_volume_m3 = self.unit_volume_m3(leaf_type_id)?;
+                    Ok(ProductionInputRequirement {
+                        type_id: leaf_type_id,
+                        type_name: leaf_name,
+                        required_quantity,
+                        unit_volume_m3,
+                        required_volume_m3: crate::volume::volume_for_quantity(
+                            unit_volume_m3,
+                            required_quantity,
+                        ),
+                        calculation_paths,
+                    })
+                },
+            )
+            .collect::<Result<Vec<_>, String>>()?;
+        leaf_requirements.sort_by(|a, b| {
+            a.type_name
+                .cmp(&b.type_name)
+                .then(a.type_id.cmp(&b.type_id))
+        });
+        Ok(ProductionTargetPlan {
+            type_id,
+            type_name,
+            requested_quantity,
+            me,
+            te,
+            total_runs: tree.runs,
+            produced_quantity: tree.produced_quantity,
+            tree,
+            leaf_requirements,
+            warnings,
         })
     }
 
@@ -685,7 +813,11 @@ impl<'a> ProductionRepository<'a> {
                         |row| Ok((row.get(0)?, row.get(1)?)),
                     )
                     .map_err(|e| format!("owned blueprint {bp_id} not found: {e}"))?,
-                None => return Err("blueprint_mode is 'owned' but no owned_blueprint_id was set".into()),
+                None => {
+                    return Err(
+                        "blueprint_mode is 'owned' but no owned_blueprint_id was set".into(),
+                    )
+                }
             }
         } else {
             (assumed_me, assumed_te)
@@ -728,27 +860,31 @@ impl<'a> ProductionRepository<'a> {
                 type_name: leaf_name,
                 required_quantity,
                 unit_volume_m3,
-                required_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, required_quantity),
+                required_volume_m3: crate::volume::volume_for_quantity(
+                    unit_volume_m3,
+                    required_quantity,
+                ),
                 owned_quantity,
                 owned_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, owned_quantity),
                 owned_source: owned_source.to_string(),
                 reserved_quantity,
                 available_quantity,
                 missing_quantity,
-                missing_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, missing_quantity),
+                missing_volume_m3: crate::volume::volume_for_quantity(
+                    unit_volume_m3,
+                    missing_quantity,
+                ),
                 coverage_fraction,
                 is_satisfied: available_quantity >= required_quantity,
             });
         }
         leaf_totals.sort_by(|a, b| a.type_name.cmp(&b.type_name));
-        let total_required_volume_m3 = crate::volume::aggregate_volume(
-            leaf_totals.iter().map(|leaf| leaf.required_volume_m3),
-        );
+        let total_required_volume_m3 =
+            crate::volume::aggregate_volume(leaf_totals.iter().map(|leaf| leaf.required_volume_m3));
         let total_owned_volume_m3 =
             crate::volume::aggregate_volume(leaf_totals.iter().map(|leaf| leaf.owned_volume_m3));
-        let total_missing_volume_m3 = crate::volume::aggregate_volume(
-            leaf_totals.iter().map(|leaf| leaf.missing_volume_m3),
-        );
+        let total_missing_volume_m3 =
+            crate::volume::aggregate_volume(leaf_totals.iter().map(|leaf| leaf.missing_volume_m3));
 
         let mut bp_stmt=self.conn.prepare(
             "SELECT cb.item_id,c.name,cb.runs != -1,cb.material_efficiency,cb.time_efficiency,CASE WHEN cb.runs=-1 THEN NULL ELSE cb.runs END
@@ -757,7 +893,21 @@ impl<'a> ProductionRepository<'a> {
                (SELECT blueprint_type_id FROM blueprint_products WHERE product_type_id=?1)
              ORDER BY c.name,cb.item_id"
         ).map_err(|e|format!("owned synchronized blueprint lookup failed: {e}"))?;
-        let synchronized_blueprints=bp_stmt.query_map([type_id],|r|Ok(super::models::OwnedBlueprintInfo{item_id:r.get(0)?,owner_name:r.get(1)?,is_copy:r.get::<_,i64>(2)?!=0,me:r.get(3)?,te:r.get(4)?,runs_remaining:r.get(5)?,source:"ESI Character Blueprints".into()})).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;
+        let synchronized_blueprints = bp_stmt
+            .query_map([type_id], |r| {
+                Ok(super::models::OwnedBlueprintInfo {
+                    item_id: r.get(0)?,
+                    owner_name: r.get(1)?,
+                    is_copy: r.get::<_, i64>(2)? != 0,
+                    me: r.get(3)?,
+                    te: r.get(4)?,
+                    runs_remaining: r.get(5)?,
+                    source: "ESI Character Blueprints".into(),
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
 
         Ok(ProductionPlan {
             operation_id,
@@ -938,10 +1088,18 @@ mod tests {
 
         // Material A is needed by both the Widget branch (270) and the
         // Gadget branch (45) -> must sum to 315, not overwrite.
-        let material_a = plan.leaf_totals.iter().find(|l| l.type_id == 10).expect("material A present");
+        let material_a = plan
+            .leaf_totals
+            .iter()
+            .find(|l| l.type_id == 10)
+            .expect("material A present");
         assert_eq!(material_a.required_quantity, 315);
 
-        let material_c = plan.leaf_totals.iter().find(|l| l.type_id == 30).expect("material C present");
+        let material_c = plan
+            .leaf_totals
+            .iter()
+            .find(|l| l.type_id == 30)
+            .expect("material C present");
         assert_eq!(material_c.required_quantity, 63);
 
         assert!(plan.warnings.is_empty());
@@ -955,31 +1113,53 @@ mod tests {
         let repo = ProductionRepository::new(&conn);
         let plan = repo.calculate_plan(op_id).expect("calculate_plan");
 
-        let gadget_node = plan.tree.children.iter().find(|c| c.type_id == 20).expect("gadget child present");
+        let gadget_node = plan
+            .tree
+            .children
+            .iter()
+            .find(|c| c.type_id == 20)
+            .expect("gadget child present");
         assert_eq!(gadget_node.needed_quantity, 9);
         assert_eq!(gadget_node.runs, 9);
         assert_eq!(gadget_node.produced_quantity, 9);
         // No owned blueprint exists for the Gadget in this fixture, so its
         // ME defaults to 0 regardless of the top-level assumption (10).
         assert_eq!(gadget_node.me_applied, 0);
-        assert!(plan.synchronized_blueprints.is_empty(), "no synchronized ownership must leave existing production behavior unchanged");
+        assert!(
+            plan.synchronized_blueprints.is_empty(),
+            "no synchronized ownership must leave existing production behavior unchanged"
+        );
     }
 
     #[test]
     fn production_detects_synchronized_owned_blueprint() {
-        let conn=test_db();seed_fixture(&conn);let op_id=seed_operation_with_target(&conn,1,0,0);
+        let conn = test_db();
+        seed_fixture(&conn);
+        let op_id = seed_operation_with_target(&conn, 1, 0, 0);
         conn.execute("INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled) VALUES(1,'Maxdelta',0,'esi-assets.read_assets.v1 esi-characters.read_blueprints.v1',1)",[]).unwrap();
         conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(1,9001,100,600,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now')",[]).unwrap();
-        let plan=ProductionRepository::new(&conn).calculate_plan(op_id).unwrap();
-        assert_eq!(plan.synchronized_blueprints.len(),1);let bp=&plan.synchronized_blueprints[0];assert_eq!(bp.owner_name,"Maxdelta");assert!(!bp.is_copy);assert_eq!((bp.me,bp.te,bp.runs_remaining),(10,20,None));
+        let plan = ProductionRepository::new(&conn)
+            .calculate_plan(op_id)
+            .unwrap();
+        assert_eq!(plan.synchronized_blueprints.len(), 1);
+        let bp = &plan.synchronized_blueprints[0];
+        assert_eq!(bp.owner_name, "Maxdelta");
+        assert!(!bp.is_copy);
+        assert_eq!((bp.me, bp.te, bp.runs_remaining), (10, 20, None));
     }
 
     #[test]
     fn exactly_one_synchronized_intermediate_blueprint_applies_its_me() {
-        let conn=test_db();seed_fixture(&conn);let op_id=seed_operation_with_target(&conn,1,0,0);
+        let conn = test_db();
+        seed_fixture(&conn);
+        let op_id = seed_operation_with_target(&conn, 1, 0, 0);
         conn.execute("INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled) VALUES(1,'Maxdelta',0,'esi-characters.read_blueprints.v1',1)",[]).unwrap();
         conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(1,9002,20,600,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now')",[]).unwrap();
-        let plan=ProductionRepository::new(&conn).calculate_plan(op_id).unwrap();let gadget=plan.tree.children.iter().find(|c|c.type_id==20).unwrap();assert_eq!(gadget.me_applied,10);
+        let plan = ProductionRepository::new(&conn)
+            .calculate_plan(op_id)
+            .unwrap();
+        let gadget = plan.tree.children.iter().find(|c| c.type_id == 20).unwrap();
+        assert_eq!(gadget.me_applied, 10);
     }
 
     #[test]
@@ -1019,7 +1199,10 @@ mod tests {
         let plan = repo.calculate_plan(op_id).expect("calculate_plan");
 
         let material_a = plan.leaf_totals.iter().find(|l| l.type_id == 10).unwrap();
-        assert_eq!(material_a.owned_quantity, 0, "a large demo row with zero manual entries must give Owned = 0, not the demo quantity");
+        assert_eq!(
+            material_a.owned_quantity, 0,
+            "a large demo row with zero manual entries must give Owned = 0, not the demo quantity"
+        );
         assert_eq!(material_a.available_quantity, 0);
         assert!(!material_a.is_satisfied);
     }
@@ -1071,7 +1254,6 @@ mod tests {
         assert_eq!(material_a.owned_source, "Manual Inventory");
     }
 
-
     #[test]
     fn three_level_recursion_reaches_correct_depth_and_sums_shared_leaf_across_levels() {
         // Sprint 009 audit (Task 2 & 4): the original tests only exercised
@@ -1107,12 +1289,21 @@ mod tests {
         assert_eq!(plan.produced_quantity, 5);
 
         // Depth 1: Capital Component, needed=3*5=15, runs=15 (1/run).
-        let capital_component = plan.tree.children.iter().find(|c| c.type_id == 500).expect("capital component present");
+        let capital_component = plan
+            .tree
+            .children
+            .iter()
+            .find(|c| c.type_id == 500)
+            .expect("capital component present");
         assert_eq!(capital_component.needed_quantity, 15);
         assert_eq!(capital_component.runs, 15);
 
         // Depth 2: Component, needed=2*15=30, runs=ceil(30/5)=6, produced=30.
-        let component = capital_component.children.iter().find(|c| c.type_id == 200).expect("component present");
+        let component = capital_component
+            .children
+            .iter()
+            .find(|c| c.type_id == 200)
+            .expect("component present");
         assert_eq!(component.needed_quantity, 30);
         assert_eq!(component.runs, 6);
         assert_eq!(component.produced_quantity, 30);
@@ -1120,23 +1311,47 @@ mod tests {
         // Leaf totals: Mineral A must sum BOTH contributions (1000 direct
         // at depth 1, plus 600 via the component at depth 3) to 1600 —
         // not overwrite, not double-count, not stop at just one branch.
-        let mineral_a = plan.leaf_totals.iter().find(|l| l.type_id == 10).expect("mineral A present");
-        assert_eq!(mineral_a.required_quantity, 1600, "Mineral A must sum its depth-1 and depth-3 contributions: 200*5 + 100*6 = 1600");
-        assert_eq!(mineral_a.calculation_paths.len(), 2, "Mineral A must record both contributing paths, Validation Mode's whole point");
-        assert!(mineral_a.calculation_paths.iter().any(|p| p == "Test Capital Ship > Mineral A"));
+        let mineral_a = plan
+            .leaf_totals
+            .iter()
+            .find(|l| l.type_id == 10)
+            .expect("mineral A present");
+        assert_eq!(
+            mineral_a.required_quantity, 1600,
+            "Mineral A must sum its depth-1 and depth-3 contributions: 200*5 + 100*6 = 1600"
+        );
+        assert_eq!(
+            mineral_a.calculation_paths.len(),
+            2,
+            "Mineral A must record both contributing paths, Validation Mode's whole point"
+        );
         assert!(mineral_a
             .calculation_paths
             .iter()
-            .any(|p| p == "Test Capital Ship > Test Capital Component > Test Component > Mineral A"));
+            .any(|p| p == "Test Capital Ship > Mineral A"));
+        assert!(mineral_a.calculation_paths.iter().any(
+            |p| p == "Test Capital Ship > Test Capital Component > Test Component > Mineral A"
+        ));
 
         assert_eq!(capital_component.blueprint_type_id, Some(500));
         assert_eq!(capital_component.activity, "manufacturing");
-        assert_eq!(capital_component.calculation_path, "Test Capital Ship > Test Capital Component");
+        assert_eq!(
+            capital_component.calculation_path,
+            "Test Capital Ship > Test Capital Component"
+        );
 
-        let mineral_b = plan.leaf_totals.iter().find(|l| l.type_id == 20).expect("mineral B present");
+        let mineral_b = plan
+            .leaf_totals
+            .iter()
+            .find(|l| l.type_id == 20)
+            .expect("mineral B present");
         assert_eq!(mineral_b.required_quantity, 750, "50 * 15 runs = 750");
 
-        let mineral_c = plan.leaf_totals.iter().find(|l| l.type_id == 30).expect("mineral C present");
+        let mineral_c = plan
+            .leaf_totals
+            .iter()
+            .find(|l| l.type_id == 30)
+            .expect("mineral C present");
         assert_eq!(mineral_c.required_quantity, 180, "30 * 6 runs = 180");
 
         assert!(plan.warnings.is_empty());
@@ -1183,7 +1398,12 @@ mod tests {
         // Sanity check: the demo ledger really is present in this same
         // database (proves this test would actually catch a leak, not
         // just pass vacuously because there was nothing to leak).
-        let demo_names: Vec<String> = repo.lines(None, None).unwrap().iter().map(|l| l.type_name.clone()).collect();
+        let demo_names: Vec<String> = repo
+            .lines(None, None)
+            .unwrap()
+            .iter()
+            .map(|l| l.type_name.clone())
+            .collect();
         assert!(
             demo_names.iter().any(|n| n == "Fixture Demo Mineral"),
             "demo ledger fixture must be present for this test to be meaningful"
@@ -1311,7 +1531,9 @@ mod tests {
 
         let repo = ProductionRepository::new(&conn);
         // Must return promptly (not hang) and report the cycle.
-        let plan = repo.calculate_plan(op_id).expect("calculate_plan should not error even on a cycle");
+        let plan = repo
+            .calculate_plan(op_id)
+            .expect("calculate_plan should not error even on a cycle");
         assert!(plan.warnings.iter().any(|w| w.contains("cycle")));
     }
 
@@ -1385,12 +1607,22 @@ mod tests {
         )
         .unwrap();
 
-        let operations_count: i64 = conn.query_row("SELECT COUNT(*) FROM operations", [], |r| r.get(0)).unwrap();
-        let manual_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM manual_inventory_entries", [], |r| r.get(0))
+        let operations_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM operations", [], |r| r.get(0))
             .unwrap();
-        assert!(operations_count >= 1, "operation survives reference-data reimport");
-        assert_eq!(manual_count, 1, "manual inventory entry survives reference-data reimport");
+        let manual_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM manual_inventory_entries", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert!(
+            operations_count >= 1,
+            "operation survives reference-data reimport"
+        );
+        assert_eq!(
+            manual_count, 1,
+            "manual inventory entry survives reference-data reimport"
+        );
         let _ = op_id;
     }
 }
