@@ -1,6 +1,55 @@
 {
-  "publicVersion": "0.1.0",
+  "publicVersion": "0.1.1",
   "releases": [
+    {
+      "version": "0.1.1",
+      "name": "RenderNorth Industrial Open Beta 0.1.1",
+      "date": "2026-07-16",
+      "channel": "Open Beta",
+      "summary": "Open Beta 0.1.1 adds user-facing release history and update-availability notifications so beta testers can see what changed and know when a newer build is available.",
+      "added": [
+        "What's New page",
+        "User-facing release history",
+        "Added, Changed, Fixed, Known Issues, and Security & Privacy sections",
+        "Persistent viewed/unviewed release indicator",
+        "Update availability checks through the public GitHub Releases API",
+        "Update Available notification",
+        "Manual Check for Updates",
+        "Daily, Weekly, and Never update-check preferences",
+        "Remind Me Later",
+        "Skip This Version",
+        "Installer and portable-package download actions",
+        "Update metadata in diagnostics"
+      ],
+      "changed": [
+        "Settings → About is organized into About, What's New, Support, and Diagnostics",
+        "Release packages use deterministic installer and portable ZIP filenames",
+        "Release and packaging documentation now defines a permanent versioning workflow"
+      ],
+      "fixed": [
+        "Users no longer need to manually discover whether a newer beta build exists",
+        "Current stable semantic versions correctly outrank prereleases with the same core version",
+        "Failed or offline checks no longer report the application as Up to Date",
+        "Cached successful update information is preserved after later failures"
+      ],
+      "knownIssues": [
+        "Corporation assets are not yet supported",
+        "Corporation blueprints and industry jobs are not yet supported",
+        "Character market-order synchronization is not yet supported",
+        "Some beta testers may encounter a BPC selection issue in Production; investigation is pending",
+        "Build-location and jump-distance scope are not yet implemented",
+        "The installer is unsigned and may trigger Windows SmartScreen",
+        "Users must manually download and extract the CCP JSONL static-data archive",
+        "Automatic update installation is not implemented",
+        "Updates open in the browser and require manual installation",
+        "Open Beta software may contain defects and incomplete workflows"
+      ],
+      "security": [
+        "Update checks use the public GitHub Releases API and send no EVE data, Client ID, tokens, credentials, diagnostics data, or machine identifier",
+        "Update diagnostics expose only safe update metadata and exclude EVE data, Client IDs, tokens, credentials, and secrets"
+      ],
+      "internalCheckpoint": "RNI-158 checkpoint ab075ee"
+    },
     {
       "version": "0.1.0",
       "name": "RenderNorth Industrial Open Beta 0.1",

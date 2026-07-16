@@ -2,6 +2,56 @@
 
 All notable user-facing changes to RenderNorth Industrial are recorded here. Releases are listed newest first and use semantic versions.
 
+## [0.1.1] — 2026-07-16
+
+### RenderNorth Industrial Open Beta 0.1.1
+
+Open Beta 0.1.1 adds user-facing release history and update-availability notifications so beta testers can see what changed and know when a newer build is available.
+
+### Added
+
+- What's New page.
+- User-facing release history with Added, Changed, Fixed, Known Issues, and Security & Privacy sections.
+- Persistent viewed/unviewed release indicator.
+- Update availability checks through the public GitHub Releases API.
+- Update Available notification.
+- Manual Check for Updates.
+- Daily, Weekly, and Never update-check preferences.
+- Remind Me Later and Skip This Version controls.
+- Installer and portable-package download actions.
+- Safe update metadata in diagnostics.
+
+### Changed
+
+- Settings → About is organized into About, What's New, Support, and Diagnostics.
+- Release packages use deterministic installer and portable ZIP filenames.
+- Release and packaging documentation now defines a permanent versioning workflow.
+
+### Fixed
+
+- Users no longer need to manually discover whether a newer beta build exists.
+- Current stable semantic versions correctly outrank prereleases with the same core version.
+- Failed or offline checks no longer report the application as Up to Date.
+- Cached successful update information is preserved after later failures.
+
+### Known Issues
+
+- Corporation assets are not yet supported.
+- Corporation blueprints and industry jobs are not yet supported.
+- Character market-order synchronization is not yet supported.
+- A reported BPC selection issue in Production remains under investigation.
+- Build-location and jump-distance scope are not implemented.
+- The installer is unsigned and may trigger Windows SmartScreen.
+- CCP JSONL static data must be downloaded and extracted manually.
+- Automatic update installation is not implemented.
+- Updates open in the browser and require manual installation.
+- Open Beta software may contain defects and incomplete workflows.
+
+### Security & Privacy
+
+- Update checks use the public GitHub Releases API and send no EVE data, Client ID, tokens, credentials, diagnostics data, or machine identifier.
+- Update diagnostics expose only safe update metadata and exclude EVE data, Client IDs, tokens, credentials, and secrets.
+
 ## [0.1.0] — 2026-07-15
 
 ### RenderNorth Industrial Open Beta 0.1

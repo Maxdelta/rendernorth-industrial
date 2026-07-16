@@ -41,7 +41,7 @@ One-paragraph user-facing summary.
 ### Known Issues
 - Verified limitation or open defect.
 
-### Security
+### Security & Privacy
 - Optional security change.
 
 ### Deprecated

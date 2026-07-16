@@ -701,14 +701,18 @@ mod tests {
     fn equal_newer_and_installed_newer_have_deterministic_states() {
         let now = Utc::now();
         for (latest, expected) in [
+            ("0.1.1", UpdateStatus::UpToDate),
+            ("0.1.2", UpdateStatus::UpdateAvailable),
             ("0.1.0", UpdateStatus::UpToDate),
-            ("0.1.1", UpdateStatus::UpdateAvailable),
-            ("0.0.9", UpdateStatus::UpToDate),
         ] {
             let mut state = UpdateState::default();
             state.latest_version = Some(latest.into());
             assert_eq!(status_for_cached(&state, now), expected);
         }
+        assert!(
+            SemanticVersion::parse("v0.1.1").unwrap()
+                > SemanticVersion::parse("0.1.0").unwrap()
+        );
     }
 
     #[test]
