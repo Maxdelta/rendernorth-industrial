@@ -6,27 +6,36 @@ All notable user-facing changes to RenderNorth Industrial are recorded here. Rel
 
 ### RenderNorth Industrial Open Beta 0.1.2
 
-Open Beta 0.1.2 fixes synchronized ESI blueprint selection in Production, including accurate blueprint identity, research values, and BPC run limits.
+Open Beta 0.1.2 fixes synchronized ESI blueprint selection in Production and adds clearer BPC run-capacity guidance.
 
 ### Added
 
-- Source-aware synchronized blueprint identity for Production operations.
+- Source-aware Production blueprint identity for manual and synchronized ESI ownership.
+- Detailed blueprint candidate information including owner, source, ME, TE, remaining runs, and location.
+- Clear guidance when no owned BPC has enough remaining runs.
 
 ### Changed
 
-- Owned blueprint matching now uses CCP blueprint-to-product relationships instead of blueprint name matching.
+- Production blueprint matching now uses CCP blueprint-to-product type relationships instead of name matching.
+- Production now validates BPC run capacity against requested output quantity.
+- Saved operations preserve explicit manual or synchronized blueprint identity.
 
 ### Fixed
 
-- Synchronized ESI BPOs and BPCs are now fully selectable in Production.
-- Production now correctly uses synchronized blueprint ME, TE, owner, source, and remaining runs.
-- Blueprint matching now uses CCP blueprint-to-product relationships instead of blueprint name matching.
-- Existing manual blueprint operations remain fully supported.
+- Synchronized ESI BPOs and BPCs can now be selected in Production.
+- Selected synchronized blueprint ME and TE now drive Production calculations.
+- Disabled-character blueprints are excluded from Production candidates.
+- Zero-run and insufficient-run BPCs are rejected correctly.
+- Existing manual-blueprint operations remain compatible.
+- Unrelated blueprints cannot be submitted for a selected product.
 
 ### Known Issues
 
+- Corporation assets are not yet supported.
+- Character market-order synchronization is not yet supported.
+- Build-location and facility selection are not yet implemented.
 - The installer is unsigned and may trigger Windows SmartScreen.
-- Automatic update installation is not implemented; updates open in the browser and require manual installation.
+- Application updates require manual download and installation.
 
 ## [0.1.1] — 2026-07-16
 
