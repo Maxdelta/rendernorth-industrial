@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { ROUTE_ITEMS } from "./Sidebar";
 import { SHOW_DEVELOPMENT_UI } from "../lib/runtimeMode";
 import { setApplicationSectionTitle } from "../lib/backend";
+import { UpdateNotification } from "./UpdateNotification";
 
 function titleFor(pathname: string): string {
   const hit = ROUTE_ITEMS.find((i) => i.to === pathname);
@@ -37,6 +38,7 @@ export function TopBar() {
         <span className="badge">Demo data</span>
         <span className="badge cyan">Sprint 002</span>
       </>}
+      <UpdateNotification />
       <div className="topbar-clock">{clock}</div>
     </header>
   );

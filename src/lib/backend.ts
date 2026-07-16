@@ -1025,6 +1025,29 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
 }
 
 export interface ReleaseViewState { currentVersion: string; lastViewedVersion: string | null; unseen: boolean; }
+export type UpdateStatus = "not_checked" | "checking" | "up_to_date" | "update_available" | "check_failed" | "offline" | "skipped" | "disabled";
+export type UpdateFrequency = "daily" | "weekly" | "never";
+export interface UpdateState {
+  installedVersion: string;
+  latestVersion: string | null;
+  latestReleaseTitle: string | null;
+  releaseDate: string | null;
+  releaseUrl: string | null;
+  installerUrl: string | null;
+  portableUrl: string | null;
+  summary: string | null;
+  lastChecked: string | null;
+  status: UpdateStatus;
+  lastError: string | null;
+  skippedVersion: string | null;
+  reminderUntil: string | null;
+  releaseInCatalog: boolean;
+}
+export interface UpdatePreferences {
+  automaticallyCheck: boolean;
+  frequency: UpdateFrequency;
+  includePrerelease: boolean;
+}
 
 export async function getReleaseViewState(): Promise<ReleaseViewState> {
   if (!inTauri()) {
@@ -1041,6 +1064,58 @@ export async function markCurrentReleaseViewed(): Promise<ReleaseViewState> {
     return getReleaseViewState();
   }
   return invoke<ReleaseViewState>("mark_current_release_viewed");
+}
+
+const browserUpdateState: UpdateState = {
+  installedVersion: RELEASE_CATALOG.publicVersion,
+  latestVersion: RELEASE_CATALOG.publicVersion,
+  latestReleaseTitle: null,
+  releaseDate: null,
+  releaseUrl: "https://github.com/Maxdelta/rendernorth-industrial/releases",
+  installerUrl: null,
+  portableUrl: null,
+  summary: null,
+  lastChecked: null,
+  status: "not_checked",
+  lastError: null,
+  skippedVersion: null,
+  reminderUntil: null,
+  releaseInCatalog: true,
+};
+
+export async function getUpdateState(): Promise<UpdateState> {
+  if (!inTauri()) return { ...browserUpdateState };
+  return invoke<UpdateState>("get_update_state");
+}
+
+export async function getUpdatePreferences(): Promise<UpdatePreferences> {
+  if (!inTauri()) return { automaticallyCheck: true, frequency: "daily", includePrerelease: RELEASE_CATALOG.releases[0]?.channel !== "Stable" };
+  return invoke<UpdatePreferences>("get_update_preferences");
+}
+
+export async function saveUpdatePreferences(preferences: UpdatePreferences): Promise<UpdatePreferences> {
+  if (!inTauri()) return preferences;
+  return invoke<UpdatePreferences>("save_update_preferences", { preferences });
+}
+
+export async function checkForUpdates(manual = false): Promise<UpdateState> {
+  if (!inTauri()) return { ...browserUpdateState, status: "up_to_date", lastChecked: new Date().toISOString() };
+  return invoke<UpdateState>("check_for_updates", { manual });
+}
+
+export async function remindUpdateLater(): Promise<UpdateState> {
+  if (!inTauri()) return { ...browserUpdateState, status: "skipped" };
+  return invoke<UpdateState>("remind_update_later");
+}
+
+export async function skipUpdateVersion(): Promise<UpdateState> {
+  if (!inTauri()) return { ...browserUpdateState, status: "skipped", skippedVersion: browserUpdateState.latestVersion };
+  return invoke<UpdateState>("skip_update_version");
+}
+
+export async function clearSkippedUpdate(): Promise<UpdateState> {
+  if (!inTauri()) return { ...browserUpdateState, skippedVersion: null };
+  return invoke<UpdateState>("clear_skipped_update");
 }
 
 export async function inspectSdeDirectory(dirPath: string): Promise<SdeInspection> {

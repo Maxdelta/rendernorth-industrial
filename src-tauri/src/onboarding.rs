@@ -223,6 +223,8 @@ pub fn about_info(conn: &Connection) -> Result<AboutInfo, String> {
 
 pub fn external_url_allowed(url: &str) -> bool {
     [WEBSITE_URL, GITHUB_URL, ISSUES_URL, FEATURE_REQUEST_URL, SUPPORT_URL, DISCORD_INVITE_URL, SDE_DOWNLOAD_URL, SETUP_GUIDE_URL].contains(&url)
+        || url == crate::update::RELEASES_PAGE_URL
+        || url.starts_with("https://github.com/Maxdelta/rendernorth-industrial/releases/")
 }
 
 fn diagnostics_value(conn: &Connection) -> Result<Value, String> {
@@ -271,6 +273,7 @@ fn diagnostics_value(conn: &Connection) -> Result<Value, String> {
         "staticData": latest_sde,
         "connectedCharacters": characters,
         "market": market,
+        "updates": crate::update::safe_diagnostics(conn)?,
     }))
 }
 
@@ -335,6 +338,9 @@ mod tests {
         assert_eq!(GITHUB_URL, "https://github.com/Maxdelta/rendernorth-industrial");
         assert_eq!(DISCORD_INVITE_URL, "https://discord.gg/XycCz6ppx");
         assert!(external_url_allowed(FEATURE_REQUEST_URL));
+        assert!(external_url_allowed(crate::update::RELEASES_PAGE_URL));
+        assert!(external_url_allowed("https://github.com/Maxdelta/rendernorth-industrial/releases/download/v0.2.0/RenderNorth-Industrial-0.2.0-Windows-Installer.exe"));
+        assert!(!external_url_allowed("https://github.com/Maxdelta/rendernorth-industrial/releases.evil.example/file.exe"));
         assert!(!OPEN_BETA_STATUS.to_ascii_lowercase().contains("ad-free"));
     }
 

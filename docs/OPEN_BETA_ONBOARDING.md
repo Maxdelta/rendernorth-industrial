@@ -10,6 +10,12 @@
 
 RenderNorth requests read-only ESI scopes, uses Authorization Code + PKCE, stores refresh tokens in Windows Credential Manager, never receives EVE credentials, and never asks for a Client Secret.
 
+## Application updates
+
+RenderNorth Industrial checks the official public GitHub Releases API shortly after startup, no more often than the selected Daily or Weekly interval. The check is non-blocking and sends no EVE, inventory, Client ID, token, diagnostics, or machine-identifying data. Settings → Updates can disable automatic checks, include or exclude pre-releases, run Check Now, and restore skipped-version notifications.
+
+Download actions open the official GitHub release or installer URL in the default browser. RenderNorth Industrial does not download or install updates internally. Offline or failed checks preserve cached release information and never prevent normal use.
+
 ## Advanced authentication
 
 Only users intentionally managing their own CCP application need this path. Create a native application in CCP's developer portal with callback `http://localhost:17117/callback`, copy its public Client ID, expand **Advanced Authentication**, and select **Use Custom Application**. Do not enter, store, or share a Client Secret. **Restore Official RenderNorth Client ID** returns to the built-in application.

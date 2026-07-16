@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { getAppSetting, getReleaseViewState } from "../lib/backend";
+import { getAppSetting, getReleaseViewState, getUpdateState } from "../lib/backend";
 import { RELEASE_CATALOG } from "../lib/releaseHistory";
 
 export interface NavItem {
@@ -42,6 +42,7 @@ function BrandGlyph() {
 
 export function Sidebar() {
   const [releaseUnseen, setReleaseUnseen] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   useEffect(() => {
     const refresh = () => Promise.all([getReleaseViewState(), getAppSetting("release_notes_indicator_enabled")])
       .then(([state, enabled]) => setReleaseUnseen(state.unseen && enabled !== "false"))
@@ -53,6 +54,15 @@ export function Sidebar() {
       window.removeEventListener("rendernorth-release-viewed", refresh);
       window.removeEventListener("rendernorth-release-preference", refresh);
     };
+  }, []);
+  useEffect(() => {
+    getUpdateState().then(state => setUpdateAvailable(state.status === "update_available")).catch(() => undefined);
+    const listener = (event: Event) => {
+      const state = (event as CustomEvent<{status: string}>).detail;
+      setUpdateAvailable(state.status === "update_available");
+    };
+    window.addEventListener("rendernorth-update-state", listener);
+    return () => window.removeEventListener("rendernorth-update-state", listener);
   }, []);
   return (
     <nav className="sidebar" aria-label="Modules">
@@ -77,7 +87,8 @@ export function Sidebar() {
             className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
           >
             {item.label}
-            {item.to === "/whats-new" && releaseUnseen && <span className="release-nav-badge">NEW</span>}
+            {item.to === "/whats-new" && updateAvailable && <span className="release-nav-badge update">UPDATE</span>}
+            {item.to === "/whats-new" && !updateAvailable && releaseUnseen && <span className="release-nav-badge">NEW</span>}
             <span className="nav-tick">◤</span>
           </NavLink>
         ))}

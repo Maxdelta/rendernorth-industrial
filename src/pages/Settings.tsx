@@ -4,6 +4,7 @@ import { CharactersPanel } from "../components/CharactersPanel";
 import { MarketSetup } from "../components/MarketSetup";
 import { Panel } from "../components/Panel";
 import { StaticDataSetup } from "../components/StaticDataSetup";
+import { UpdateSettings } from "../components/UpdateSettings";
 import { getAppSetting, setAppSetting } from "../lib/backend";
 
 export function SettingsPage() {
@@ -28,6 +29,7 @@ export function SettingsPage() {
     <StaticDataSetup />
     <CharactersPanel />
     <MarketSetup />
+    <UpdateSettings />
     <AboutPrivacy />
   </div>;
 }

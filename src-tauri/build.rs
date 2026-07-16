@@ -9,6 +9,7 @@ fn command_output(program: &str, args: &[&str]) -> String {
 }
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=RENDERNORTH_RELEASES_API_URL");
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/index");
     println!("cargo:rerun-if-changed=../.git/refs/heads/main");

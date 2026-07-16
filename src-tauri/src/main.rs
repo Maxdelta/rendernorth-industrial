@@ -23,6 +23,7 @@ mod quartermaster;
 mod reservation;
 mod release;
 mod staticdata;
+mod update;
 
 use tauri::Manager;
 
@@ -129,6 +130,13 @@ fn main() {
             ,commands::set_application_section
             ,commands::get_release_view_state
             ,commands::mark_current_release_viewed
+            ,commands::get_update_state
+            ,commands::get_update_preferences
+            ,commands::save_update_preferences
+            ,commands::check_for_updates
+            ,commands::remind_update_later
+            ,commands::skip_update_version
+            ,commands::clear_skipped_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

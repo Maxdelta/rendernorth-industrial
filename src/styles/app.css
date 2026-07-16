@@ -127,6 +127,7 @@
   letter-spacing: 0.08em;
 }
 .release-nav-badge + .nav-tick { margin-left: 0; }
+.release-nav-badge.update { border-color: var(--furnace); color: var(--furnace); }
 .nav-link.active .nav-tick { color: var(--furnace); }
 
 /* ---------- topbar ---------- */
@@ -1503,6 +1504,80 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 18px;
+}
+
+/* ---------- non-blocking update discovery ---------- */
+.update-notice {
+  position: fixed;
+  z-index: 30;
+  top: 58px;
+  right: 20px;
+  width: min(720px, calc(100vw - 280px));
+  padding: 11px 13px;
+  border: 1px solid var(--furnace);
+  background: rgba(16, 27, 39, .98);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+}
+.update-notice-copy {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  margin-bottom: 8px;
+}
+.update-notice-copy strong {
+  color: var(--furnace);
+  font-family: var(--font-display);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.update-notice-copy span { color: var(--text-dim); font-size: 11px; }
+.update-notice-message { flex-basis: 100%; }
+.update-notice-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.update-notice-actions .target-select { padding: 5px 8px; font-size: 9px; text-decoration: none; }
+.update-state-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.update-state-grid > div,
+.update-release-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--bulkhead);
+  background: var(--deck);
+}
+.update-state-grid span,
+.update-release-card span {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.update-status { color: var(--text); }
+.update-update_available { color: var(--furnace); }
+.update-up_to_date { color: var(--nominal); }
+.update-check_failed,
+.update-offline { color: var(--alert); }
+.update-preferences {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  margin: 14px 0;
+}
+.update-preferences .release-preference { margin-top: 0; }
+.update-preferences select {
+  min-width: 130px;
+  padding: 7px 9px;
+  border: 1px solid var(--bulkhead);
+  background: var(--deck);
+  color: var(--text);
+}
+@media (max-width: 900px) {
+  .update-notice { width: calc(100vw - 28px); right: 14px; }
+  .update-state-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .about-action-nav a { text-decoration: none; }
 .about-function-section {

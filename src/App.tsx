@@ -11,6 +11,7 @@ import { SettingsPage } from "./pages/Settings";
 import { QuartermasterPage } from "./pages/Quartermaster";
 import { WhatsNewPage } from "./pages/WhatsNew";
 import { FirstRunWizard } from "./components/FirstRunWizard";
+import { UpdateMonitor } from "./components/UpdateNotification";
 import { getAppSetting, setApplicationSectionTitle } from "./lib/backend";
 import { SHOW_DEVELOPMENT_UI } from "./lib/runtimeMode";
 import {
@@ -45,6 +46,7 @@ export default function App() {
   return (
     <HashRouter>
       <div className="shell">
+        <UpdateMonitor />
         <Sidebar />
         <div className="main">
           <TopBar />

@@ -10,5 +10,9 @@
 - [ ] A doctrine can be imported and analyzed.
 - [ ] About shows Open Beta 0.1, build metadata, bug reporting, Discord, and optional support.
 - [ ] Diagnostics contain no access token, refresh token, credential contents, Client Secret, or custom Client ID.
+- [ ] The release tag is valid semantic version text (`vX.Y.Z` or a valid pre-release).
+- [ ] Release assets use `RenderNorth-Industrial-<version>-Windows-Installer.exe` and `RenderNorth-Industrial-<version>-Windows-Portable.zip`.
+- [ ] Settings → Updates checks the official release endpoint, prefers the installer, and offers the portable ZIP separately.
+- [ ] Offline, rate-limited, skipped-version, remind-later, and manual-check states are live-verified.
 - [ ] `cargo build`, `cargo test`, `npm run build`, and `git diff --check` pass.
 - [ ] Installer and portable ZIP are rebuilt from the approved final commit and their SHA-256 hashes are published.

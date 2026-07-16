@@ -11,10 +11,14 @@ For every release:
 7. Commit and push only after approval.
 8. Rebuild the Windows installer and portable ZIP from the final commit.
 9. Generate SHA-256 hashes for both artifacts.
-10. Publish the GitHub Release.
-11. Update the RenderNorth website.
-12. Post the Discord announcement.
-13. Perform Memory Review only when durable product state changes.
+10. Create a semantic tag (`vX.Y.Z` or a valid pre-release such as `vX.Y.Z-beta.1`).
+11. Publish the GitHub Release with deterministic assets:
+    - `RenderNorth-Industrial-<version>-Windows-Installer.exe`
+    - `RenderNorth-Industrial-<version>-Windows-Portable.zip`
+12. Verify the public GitHub Releases API returns the new non-draft release and both expected assets.
+13. Update the RenderNorth website.
+14. Post the Discord announcement.
+15. Perform Memory Review only when durable product state changes.
 
 ## Release template
 

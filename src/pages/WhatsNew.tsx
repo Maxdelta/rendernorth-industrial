@@ -1,7 +1,7 @@
-import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Panel } from "../components/Panel";
-import { markCurrentReleaseViewed } from "../lib/backend";
+import { getUpdateState, markCurrentReleaseViewed, openExternalUrl, type UpdateState } from "../lib/backend";
 import { CURRENT_RELEASE, populatedCategories, RELEASE_CATALOG, type ReleaseEntry } from "../lib/releaseHistory";
 
 function Category({ release, category }: { release: ReleaseEntry; category: ReturnType<typeof populatedCategories>[number] }) {
@@ -22,23 +22,43 @@ function ReleaseBody({ release }: { release: ReleaseEntry }) {
 }
 
 export function WhatsNewPage() {
+  const [update, setUpdate] = useState<UpdateState | null>(null);
+  const [searchParams] = useSearchParams();
+  const requestedRelease = searchParams.get("release");
   useEffect(() => {
     markCurrentReleaseViewed().then(() => window.dispatchEvent(new Event("rendernorth-release-viewed")))
       .catch(error => console.error("failed to mark release notes viewed", error));
+    getUpdateState().then(setUpdate).catch(() => undefined);
   }, []);
 
-  const previous = RELEASE_CATALOG.releases.slice(1);
+  const selectedBundledRelease = requestedRelease
+    ? RELEASE_CATALOG.releases.find(release => release.version === requestedRelease)
+    : null;
+  const primaryRelease = selectedBundledRelease ?? CURRENT_RELEASE;
+  const previous = RELEASE_CATALOG.releases.filter(release => release.version !== primaryRelease.version);
   return <div className="dash release-page">
+    {update?.status === "update_available" && !update.releaseInCatalog && <Panel title="Update Available" keel="nominal" className="dash-hero">
+      <div className="release-hero">
+        <div>
+          <div className="release-version">Version {update.latestVersion}</div>
+          <h2>{update.latestReleaseTitle ?? "New RenderNorth Industrial release"}</h2>
+          {update.releaseDate && <div className="release-meta"><span>Published {new Date(update.releaseDate).toLocaleDateString()}</span></div>}
+        </div>
+        <button className="target-select enabled" disabled={!update.releaseUrl} onClick={() => update.releaseUrl && openExternalUrl(update.releaseUrl)}>Open Release Notes</button>
+      </div>
+      <p className="release-summary">{update.summary ?? "Detailed notes for this newer release are available on the official GitHub release page."}</p>
+      <p className="data-source">These remote notes are separate from the bundled history for the installed build.</p>
+    </Panel>}
     <Panel title="What's New" keel="furnace" className="dash-hero">
       <div className="release-hero">
         <div>
-          <div className="release-version">Version {CURRENT_RELEASE.version}</div>
-          <h2>{CURRENT_RELEASE.name}</h2>
-          <div className="release-meta"><span>{CURRENT_RELEASE.channel}</span><span>Released {CURRENT_RELEASE.date}</span></div>
+          <div className="release-version">Version {primaryRelease.version}</div>
+          <h2>{primaryRelease.name}</h2>
+          <div className="release-meta"><span>{primaryRelease.channel}</span><span>Released {primaryRelease.date}</span></div>
         </div>
         <Link className="target-select enabled release-settings-link" to="/settings">About & Support</Link>
       </div>
-      <ReleaseBody release={CURRENT_RELEASE} />
+      <ReleaseBody release={primaryRelease} />
     </Panel>
     <Panel title="Previous Releases" keel="coolant" className="dash-hero">
       {previous.length === 0

@@ -750,6 +750,53 @@ pub fn mark_current_release_viewed(db: State<'_, Db>) -> Result<crate::release::
     crate::release::mark_current_viewed(&conn)
 }
 
+#[tauri::command]
+pub fn get_update_state(db: State<'_, Db>) -> Result<crate::update::UpdateState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::update::state(&conn)
+}
+
+#[tauri::command]
+pub fn get_update_preferences(db: State<'_, Db>) -> Result<crate::update::UpdatePreferences, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::update::preferences(&conn)
+}
+
+#[tauri::command]
+pub fn save_update_preferences(
+    db: State<'_, Db>,
+    preferences: crate::update::UpdatePreferences,
+) -> Result<crate::update::UpdatePreferences, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::update::save_preferences(&conn, &preferences)
+}
+
+#[tauri::command]
+pub async fn check_for_updates(
+    db: State<'_, Db>,
+    manual: bool,
+) -> Result<crate::update::UpdateState, String> {
+    crate::update::check(&db.path, manual).await
+}
+
+#[tauri::command]
+pub fn remind_update_later(db: State<'_, Db>) -> Result<crate::update::UpdateState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::update::remind_later(&conn)
+}
+
+#[tauri::command]
+pub fn skip_update_version(db: State<'_, Db>) -> Result<crate::update::UpdateState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::update::skip_current(&conn)
+}
+
+#[tauri::command]
+pub fn clear_skipped_update(db: State<'_, Db>) -> Result<crate::update::UpdateState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::update::clear_skipped(&conn)
+}
+
 // ============================================================
 // Sprint 011A — EVE SSO Character Authentication Foundation.
 // Authentication only: Add/Remove/Enable/List a connected character.
