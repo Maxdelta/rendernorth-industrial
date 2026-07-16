@@ -9,6 +9,7 @@ import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
 import { ProductionPage } from "./pages/Production";
 import { SettingsPage } from "./pages/Settings";
 import { QuartermasterPage } from "./pages/Quartermaster";
+import { WhatsNewPage } from "./pages/WhatsNew";
 import { FirstRunWizard } from "./components/FirstRunWizard";
 import { getAppSetting, setApplicationSectionTitle } from "./lib/backend";
 import { SHOW_DEVELOPMENT_UI } from "./lib/runtimeMode";
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="/intelligence" element={<IntelligencePage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/whats-new" element={<WhatsNewPage />} />
             </Routes>
           </main>
         </div>

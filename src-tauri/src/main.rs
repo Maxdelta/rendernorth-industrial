@@ -21,6 +21,7 @@ mod production;
 mod procurement;
 mod quartermaster;
 mod reservation;
+mod release;
 mod staticdata;
 
 use tauri::Manager;
@@ -126,6 +127,8 @@ fn main() {
             ,commands::export_diagnostics
             ,commands::open_external_url
             ,commands::set_application_section
+            ,commands::get_release_view_state
+            ,commands::mark_current_release_viewed
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

@@ -1,0 +1,79 @@
+{
+  "publicVersion": "0.1.0",
+  "releases": [
+    {
+      "version": "0.1.0",
+      "name": "RenderNorth Industrial Open Beta 0.1",
+      "date": "2026-07-15",
+      "channel": "Open Beta",
+      "summary": "RenderNorth Industrial Open Beta introduces a complete local-first industrial workflow for EVE Online, from character synchronization and production planning through market valuation, procurement, and doctrine fleet readiness.",
+      "added": [
+        "Official CCP SSO through Authorization Code + PKCE",
+        "Multi-character connection and management",
+        "Character asset synchronization",
+        "Character blueprint synchronization",
+        "Human-readable station, structure, system, region, and container locations",
+        "Inventory search and filtering",
+        "Independent Jita market search",
+        "Weighted acquisition and liquidation pricing",
+        "Production requirement planning",
+        "Production cost, opportunity cost, cash requirement, profit, margin, and ROI",
+        "CCP-derived item volume calculations",
+        "Shopping and procurement workflow",
+        "EVE Multi-Buy export",
+        "Discord shopping-report export",
+        "CSV export",
+        "Quartermaster doctrine creation and EFT import",
+        "Fleet-composition targets",
+        "READY / BUILD / BUY / BLOCKED analysis",
+        "Fleet readiness and coverage",
+        "Recursive build-input expansion",
+        "Procurement cost and hauling-volume estimates",
+        "Open Beta first-run onboarding",
+        "Official RenderNorth CCP application by default",
+        "Advanced custom Client ID support",
+        "CCP static-data download guidance and validation",
+        "Windows installer and portable package support",
+        "About, privacy, diagnostics, support, and contact information"
+      ],
+      "changed": [
+        "Navigation now shows only completed workflows in normal runtime",
+        "Development badges and internal controls are hidden unless debug mode is enabled",
+        "Quartermaster layout prioritizes fleet readiness and actionable results",
+        "Inventory and market search are separated into distinct workflows",
+        "Production economics use a selectable revenue basis",
+        "Cost assumptions persist per operation"
+      ],
+      "fixed": [
+        "Inventory query failures no longer render as empty inventory",
+        "Unowned market searches no longer appear as zero-value inventory",
+        "Listed-sale unavailability no longer blocks immediate-sale profit calculations",
+        "Cost assumptions can now be applied, persisted, and reset",
+        "Resolvable raw location IDs now display as human-readable location paths",
+        "Quartermaster partial totals identify excluded or unresolved lines",
+        "Build shortages expand into manufacturing inputs without double-counting inventory",
+        "Static-data setup distinguishes ZIP selection, wrong folders, and incomplete extraction"
+      ],
+      "knownIssues": [
+        "Corporation assets are not yet supported",
+        "Corporation blueprints and industry jobs are not yet supported",
+        "Character market-order synchronization is not yet supported",
+        "Some beta testers may encounter a BPC selection issue in Production; investigation is pending",
+        "Build-location and jump-distance scope are not yet implemented",
+        "The installer is unsigned and may trigger Windows SmartScreen",
+        "Users must manually download and extract the CCP JSONL static-data archive",
+        "Automatic application updates are not yet implemented",
+        "Open Beta software may contain defects and incomplete workflows"
+      ],
+      "security": [
+        "Character authorization uses official CCP SSO with Authorization Code + PKCE",
+        "RenderNorth Industrial requests read-only ESI access and never automates gameplay",
+        "Application data remains in the local SQLite database",
+        "Refresh tokens remain in Windows Credential Manager and are never exposed to the frontend or diagnostics",
+        "The distributed official CCP application does not include a Client Secret",
+        "Exported diagnostics exclude access tokens, refresh tokens, Client IDs, and credentials"
+      ],
+      "internalCheckpoint": "RNI-156 checkpoint 5b4f6f1"
+    }
+  ]
+}

@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { getAppSetting, getReleaseViewState } from "../lib/backend";
+import { RELEASE_CATALOG } from "../lib/releaseHistory";
 
 export interface NavItem {
   to: string;
@@ -13,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/production", label: "Production" },
   { to: "/quartermaster", label: "Quartermaster" },
   { to: "/settings", label: "Settings" },
+  { to: "/whats-new", label: "What's New" },
 ];
 
 // Routes remain available while unfinished modules stay out of beta navigation.
@@ -37,6 +41,19 @@ function BrandGlyph() {
 }
 
 export function Sidebar() {
+  const [releaseUnseen, setReleaseUnseen] = useState(false);
+  useEffect(() => {
+    const refresh = () => Promise.all([getReleaseViewState(), getAppSetting("release_notes_indicator_enabled")])
+      .then(([state, enabled]) => setReleaseUnseen(state.unseen && enabled !== "false"))
+      .catch(() => setReleaseUnseen(false));
+    refresh();
+    window.addEventListener("rendernorth-release-viewed", refresh);
+    window.addEventListener("rendernorth-release-preference", refresh);
+    return () => {
+      window.removeEventListener("rendernorth-release-viewed", refresh);
+      window.removeEventListener("rendernorth-release-preference", refresh);
+    };
+  }, []);
   return (
     <nav className="sidebar" aria-label="Modules">
       <div className="brand">
@@ -48,6 +65,7 @@ export function Sidebar() {
           </div>
         </div>
         <div className="brand-sub">THE INDUSTRIAL OPERATING SYSTEM</div>
+        <div className="brand-version">v{RELEASE_CATALOG.publicVersion} · Open Beta</div>
       </div>
 
       <div className="nav-group">
@@ -59,6 +77,7 @@ export function Sidebar() {
             className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
           >
             {item.label}
+            {item.to === "/whats-new" && releaseUnseen && <span className="release-nav-badge">NEW</span>}
             <span className="nav-tick">◤</span>
           </NavLink>
         ))}

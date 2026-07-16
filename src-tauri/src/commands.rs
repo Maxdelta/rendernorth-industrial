@@ -738,6 +738,18 @@ pub fn set_app_setting(db: State<'_, Db>, key: String, value: String) -> Result<
     Ok(())
 }
 
+#[tauri::command]
+pub fn get_release_view_state(db: State<'_, Db>) -> Result<crate::release::ReleaseViewState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::release::view_state(&conn)
+}
+
+#[tauri::command]
+pub fn mark_current_release_viewed(db: State<'_, Db>) -> Result<crate::release::ReleaseViewState, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::release::mark_current_viewed(&conn)
+}
+
 // ============================================================
 // Sprint 011A — EVE SSO Character Authentication Foundation.
 // Authentication only: Add/Remove/Enable/List a connected character.
@@ -948,6 +960,7 @@ const APPLICATION_SECTIONS: &[&str] = &[
     "Production",
     "Quartermaster",
     "Settings",
+    "What's New",
     "Industry",
     "Logistics",
     "Market Intelligence",
@@ -987,6 +1000,7 @@ mod application_title_tests {
             "Production",
             "Quartermaster",
             "Settings",
+            "What's New",
         ] {
             assert_eq!(
                 application_title(section).unwrap(),

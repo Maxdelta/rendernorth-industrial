@@ -8,6 +8,7 @@ use tauri_plugin_dialog::DialogExt;
 pub const WEBSITE_URL: &str = "https://rendernorth.com";
 pub const GITHUB_URL: &str = "https://github.com/Maxdelta/rendernorth-industrial";
 pub const ISSUES_URL: &str = "https://github.com/Maxdelta/rendernorth-industrial/issues";
+pub const FEATURE_REQUEST_URL: &str = "https://github.com/Maxdelta/rendernorth-industrial/issues/new?labels=enhancement";
 pub const SUPPORT_URL: &str = "https://buymeacoffee.com/maxdelta";
 pub const DISCORD_INVITE_URL: &str = "https://discord.gg/XycCz6ppx";
 pub const SDE_DOWNLOAD_URL: &str = "https://developers.eveonline.com/static-data";
@@ -221,7 +222,7 @@ pub fn about_info(conn: &Connection) -> Result<AboutInfo, String> {
 }
 
 pub fn external_url_allowed(url: &str) -> bool {
-    [WEBSITE_URL, GITHUB_URL, ISSUES_URL, SUPPORT_URL, DISCORD_INVITE_URL, SDE_DOWNLOAD_URL, SETUP_GUIDE_URL].contains(&url)
+    [WEBSITE_URL, GITHUB_URL, ISSUES_URL, FEATURE_REQUEST_URL, SUPPORT_URL, DISCORD_INVITE_URL, SDE_DOWNLOAD_URL, SETUP_GUIDE_URL].contains(&url)
 }
 
 fn diagnostics_value(conn: &Connection) -> Result<Value, String> {
@@ -330,6 +331,10 @@ mod tests {
         assert_eq!(OPEN_BETA_STATUS, "Open Beta 0.1");
         assert_eq!(DISCORD_USERNAME, "maxdelta0089");
         assert_eq!(SUPPORT_URL, "https://buymeacoffee.com/maxdelta");
+        assert_eq!(WEBSITE_URL, "https://rendernorth.com");
+        assert_eq!(GITHUB_URL, "https://github.com/Maxdelta/rendernorth-industrial");
+        assert_eq!(DISCORD_INVITE_URL, "https://discord.gg/XycCz6ppx");
+        assert!(external_url_allowed(FEATURE_REQUEST_URL));
         assert!(!OPEN_BETA_STATUS.to_ascii_lowercase().contains("ad-free"));
     }
 

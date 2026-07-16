@@ -1,6 +1,7 @@
 // The only file allowed to touch Tauri IPC. Everywhere else imports from here.
 // In a plain browser (vite dev without the Rust shell) it falls back to mock data,
 // so frontend work never requires the Rust toolchain.
+import { RELEASE_CATALOG } from "./releaseHistory";
 
 export interface TierCoverage {
   label: string;
@@ -1023,6 +1024,25 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
   await invoke<void>("set_app_setting", { key, value });
 }
 
+export interface ReleaseViewState { currentVersion: string; lastViewedVersion: string | null; unseen: boolean; }
+
+export async function getReleaseViewState(): Promise<ReleaseViewState> {
+  if (!inTauri()) {
+    const currentVersion = RELEASE_CATALOG.publicVersion;
+    const lastViewedVersion = browserSettingsFallback.get("release_notes_last_viewed") ?? null;
+    return { currentVersion, lastViewedVersion, unseen: lastViewedVersion !== currentVersion };
+  }
+  return invoke<ReleaseViewState>("get_release_view_state");
+}
+
+export async function markCurrentReleaseViewed(): Promise<ReleaseViewState> {
+  if (!inTauri()) {
+    browserSettingsFallback.set("release_notes_last_viewed", RELEASE_CATALOG.publicVersion);
+    return getReleaseViewState();
+  }
+  return invoke<ReleaseViewState>("mark_current_release_viewed");
+}
+
 export async function inspectSdeDirectory(dirPath: string): Promise<SdeInspection> {
   if (!inTauri()) {
     return { path: dirPath, valid: false, status: "browser_preview", sourceBuild: null, files: [], error: BROWSER_PREVIEW_ERROR };
@@ -1049,7 +1069,7 @@ export async function openSelectedFolder(path: string): Promise<void> {
 
 export async function getAboutInfo(): Promise<AboutInfo> {
   if (!inTauri()) {
-    return { applicationName: "RenderNorth Industrial", version: "browser preview", build: "development", gitCommit: "unavailable", databaseVersion: "unavailable", migrationVersion: 0, rustVersion: "unavailable", website: "https://rendernorth.com", github: "https://github.com/Maxdelta/rendernorth-industrial", issues: "https://github.com/Maxdelta/rendernorth-industrial/issues", support: "https://buymeacoffee.com/maxdelta", discordInvite: "https://discord.gg/XycCz6ppx", setupGuide: "https://github.com/Maxdelta/rendernorth-industrial/blob/main/docs/OPEN_BETA_ONBOARDING.md", releaseStatus: "Open Beta 0.1", discordUsername: "maxdelta0089" };
+    return { applicationName: "RenderNorth Industrial", version: RELEASE_CATALOG.publicVersion, build: "development", gitCommit: "unavailable", databaseVersion: "unavailable", migrationVersion: 0, rustVersion: "unavailable", website: "https://rendernorth.com", github: "https://github.com/Maxdelta/rendernorth-industrial", issues: "https://github.com/Maxdelta/rendernorth-industrial/issues", support: "https://buymeacoffee.com/maxdelta", discordInvite: "https://discord.gg/XycCz6ppx", setupGuide: "https://github.com/Maxdelta/rendernorth-industrial/blob/main/docs/OPEN_BETA_ONBOARDING.md", releaseStatus: "Open Beta 0.1", discordUsername: "maxdelta0089" };
   }
   return invoke<AboutInfo>("get_about_info");
 }
