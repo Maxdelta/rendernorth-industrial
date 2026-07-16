@@ -27,11 +27,13 @@ $Zip = "$PortableFolder.zip"
 if (Test-Path -LiteralPath $Zip) { Remove-Item -LiteralPath $Zip -Force }
 Compress-Archive -Path (Join-Path $PortableFolder "*") -DestinationPath $Zip -CompressionLevel Optimal
 
-$BuiltInstaller = Get-ChildItem -Path (Join-Path $Release "bundle\nsis") -Filter "*.exe" | Select-Object -First 1
-if (-not $BuiltInstaller) { throw "NSIS installer was not produced." }
+$BuiltInstallerPath = Join-Path $Release "bundle\nsis\RenderNorth Industrial_${Version}_x64-setup.exe"
+if (-not (Test-Path -LiteralPath $BuiltInstallerPath)) {
+    throw "Version-matched NSIS installer was not produced: $BuiltInstallerPath"
+}
 $Installer = Join-Path $Artifacts "RenderNorth-Industrial-$Version-Windows-Installer.exe"
 if (Test-Path -LiteralPath $Installer) { Remove-Item -LiteralPath $Installer -Force }
-Copy-Item -LiteralPath $BuiltInstaller.FullName -Destination $Installer
+Copy-Item -LiteralPath $BuiltInstallerPath -Destination $Installer
 
 Write-Host "Windows installer: $Installer"
 Write-Host "Portable ZIP: $Zip"
