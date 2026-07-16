@@ -147,11 +147,18 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
                   className={mode === "owned" ? "target-select enabled active" : "target-select"}
                   onClick={() => setMode("owned")}
                   disabled={ownedBlueprints.length === 0}
-                  title={ownedBlueprints.length === 0 ? "No owned blueprint matches this target yet" : undefined}
+                  title={ownedBlueprints.length === 0 ? "No eligible owned blueprint" : undefined}
                 >
-                  Owned Blueprint{ownedBlueprints.length > 0 ? "" : " (none owned)"}
+                  {ownedBlueprints.length > 0 ? "Owned Blueprint" : "No eligible owned blueprint"}
                 </button>
               </div>
+              {ownedBlueprints.length === 0 && (
+                <div className="bts-empty-state">
+                  <div><strong>No eligible owned blueprint</strong></div>
+                  <div>Requested quantity exceeds the remaining runs of every owned BPC.</div>
+                  <div>Reduce the requested quantity or use Assumption mode.</div>
+                </div>
+              )}
             </div>
 
             {mode === "owned" ? (
