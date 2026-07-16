@@ -22,9 +22,84 @@ pub struct OperationRepository<'a> {
     conn: &'a Connection,
 }
 
+#[derive(Debug)]
+struct ValidatedBlueprintSelection {
+    source: String,
+    manual_blueprint_id: Option<i64>,
+    character_id: Option<i64>,
+    item_id: Option<i64>,
+}
+
 impl<'a> OperationRepository<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self { conn }
+    }
+
+    fn required_runs(&self, product_type_id:i64, requested_quantity:i64, blueprint_type_id:Option<i64>) -> Result<i64,String> {
+        let output:i64=match blueprint_type_id {
+            Some(id)=>self.conn.query_row(
+                "SELECT quantity FROM blueprint_products WHERE product_type_id=?1 AND blueprint_type_id=?2",
+                (product_type_id,id),|r|r.get(0)
+            ).map_err(|_|"selected blueprint does not produce the target product".to_string())?,
+            None=>self.conn.query_row(
+                "SELECT quantity FROM blueprint_products WHERE product_type_id=?1 ORDER BY blueprint_type_id LIMIT 1",
+                [product_type_id],|r|r.get(0)
+            ).map_err(|_|"selected blueprint does not produce the target product".to_string())?,
+        };
+        if output<=0{return Err("selected blueprint has an invalid output quantity".into())}
+        Ok((requested_quantity+output-1)/output)
+    }
+
+    fn validate_blueprint_selection(&self,input:&super::models::NewOperationInput,type_id:i64,quantity:i64)->Result<ValidatedBlueprintSelection,String>{
+        let source=input.selected_blueprint_source.as_deref()
+            .or(if input.manual_blueprint_id.is_some()||input.owned_blueprint_id.is_some(){Some("manual")}else{None})
+            .ok_or_else(||"invalid source identity: an owned blueprint source is required".to_string())?;
+        match source {
+            "manual"=>{
+                let id=input.manual_blueprint_id.or(input.owned_blueprint_id)
+                    .ok_or_else(||"invalid source identity: manual blueprint_id is required".to_string())?;
+                let (name,is_copy,runs,owner):(String,i64,Option<i64>,String)=self.conn.query_row(
+                    "SELECT b.type_name,b.is_copy,b.runs_remaining,COALESCE(c.name,'Unassigned')
+                     FROM blueprints b LEFT JOIN characters c ON c.character_id=b.character_id
+                     WHERE b.blueprint_id=?1 AND b.is_demo=0",
+                    [id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))
+                ).map_err(|_|format!("manual blueprint {id} no longer exists"))?;
+                let product_name:String=self.conn.query_row("SELECT name FROM eve_types WHERE type_id=?1",[type_id],|r|r.get(0))
+                    .map_err(|e|format!("target product {type_id} does not exist: {e}"))?;
+                let blueprint_type_id:Option<i64>=self.conn.query_row(
+                    "SELECT t.type_id FROM eve_types t JOIN blueprint_products bp ON bp.blueprint_type_id=t.type_id
+                     WHERE bp.product_type_id=?1 AND t.name=?2 LIMIT 1",(type_id,&name),|r|r.get(0)
+                ).ok();
+                if name!=product_name && blueprint_type_id.is_none(){
+                    return Err("selected blueprint does not produce the target product".into())
+                }
+                let required=self.required_runs(type_id,quantity,blueprint_type_id)?;
+                if is_copy!=0 {
+                    let available=runs.unwrap_or(0);
+                    if available<=0{return Err(format!("zero-run BPC cannot be selected: required {required} runs, available {available}, owner {owner}, source Manual Ownership"))}
+                    if available<required{return Err(format!("insufficient BPC runs: required {required}, available {available}, owner {owner}, source Manual Ownership"))}
+                }
+                Ok(ValidatedBlueprintSelection{source:"manual".into(),manual_blueprint_id:Some(id),character_id:None,item_id:None})
+            }
+            "esi_character"=>{
+                let character_id=input.character_blueprint_character_id.ok_or_else(||"invalid source identity: character_id is required".to_string())?;
+                let item_id=input.character_blueprint_item_id.ok_or_else(||"invalid source identity: item_id is required".to_string())?;
+                let (enabled,blueprint_type_id,runs,owner,source_label):(i64,i64,i64,String,String)=self.conn.query_row(
+                    "SELECT c.enabled,cb.type_id,cb.runs,c.name,cb.source
+                     FROM character_blueprints cb JOIN characters c ON c.character_id=cb.character_id
+                     WHERE cb.character_id=?1 AND cb.item_id=?2 AND c.is_demo=0",
+                    (character_id,item_id),|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))
+                ).map_err(|_|format!("selected ESI blueprint for character {character_id}, item {item_id} no longer exists"))?;
+                if enabled!=1{return Err(format!("selected blueprint owner {owner} is disabled"))}
+                let required=self.required_runs(type_id,quantity,Some(blueprint_type_id))?;
+                if runs!=-1 {
+                    if runs<=0{return Err(format!("zero-run BPC cannot be selected: required {required} runs, available {runs}, owner {owner}, source {source_label}"))}
+                    if runs<required{return Err(format!("insufficient BPC runs: required {required}, available {runs}, owner {owner}, source {source_label}"))}
+                }
+                Ok(ValidatedBlueprintSelection{source:"esi_character".into(),manual_blueprint_id:None,character_id:Some(character_id),item_id:Some(item_id)})
+            }
+            _=>Err(format!("invalid source identity: unsupported selected blueprint source '{source}'")),
+        }
     }
 
     fn summary_sql(where_clause: &str, order_by: &str) -> String {
@@ -249,6 +324,10 @@ impl<'a> OperationRepository<'a> {
     /// created operation can never exist. `blueprint_source` defaults to
     /// "assumed" with ME/TE 0 when not otherwise specified.
     pub fn create(&self, input: &super::models::NewOperationInput) -> Result<i64, String> {
+        let validated_selection=if input.blueprint_mode.as_deref()==Some("owned"){
+            let type_id=input.type_id.ok_or_else(||"owned blueprint selection requires a build target".to_string())?;
+            Some(self.validate_blueprint_selection(input,type_id,input.quantity_requested.unwrap_or(1))?)
+        }else{None};
         self.conn
             .execute_batch("BEGIN;")
             .map_err(|e| format!("failed to begin operation-create transaction: {e}"))?;
@@ -274,19 +353,25 @@ impl<'a> OperationRepository<'a> {
                     .execute(
                         "INSERT INTO operation_build_targets
                             (operation_id, type_id, quantity_requested, blueprint_mode,
-                             owned_blueprint_id, assumed_is_bpc, assumed_me, assumed_te, assumed_runs, inventory_scope)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                             owned_blueprint_id, assumed_is_bpc, assumed_me, assumed_te, assumed_runs, inventory_scope,
+                             selected_blueprint_source,manual_blueprint_id,
+                             character_blueprint_character_id,character_blueprint_item_id)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                         (
                             operation_id,
                             type_id,
                             input.quantity_requested.unwrap_or(1),
                             blueprint_mode,
-                            input.owned_blueprint_id,
+                            validated_selection.as_ref().and_then(|s|s.manual_blueprint_id),
                             input.assumed_is_bpc.unwrap_or(false) as i64,
                             input.assumed_me.unwrap_or(0),
                             input.assumed_te.unwrap_or(0),
                             input.assumed_runs,
                             input.inventory_scope.as_deref().unwrap_or("all_included_inventory"),
+                            validated_selection.as_ref().map(|s|s.source.as_str()),
+                            validated_selection.as_ref().and_then(|s|s.manual_blueprint_id),
+                            validated_selection.as_ref().and_then(|s|s.character_id),
+                            validated_selection.as_ref().and_then(|s|s.item_id),
                         ),
                     )
                     .map_err(|e| format!("failed to insert build target: {e}"))?;
@@ -430,6 +515,7 @@ mod tests {
         include_str!("../../migrations/0011_esi_character_auth.sql"),
         include_str!("../../migrations/0012_character_asset_sync.sql"),
         include_str!("../../migrations/0013_character_blueprint_sync.sql"),
+        include_str!("../../migrations/0019_source_aware_operation_blueprints.sql"),
     ];
 
     fn test_db() -> Connection {
@@ -542,6 +628,65 @@ mod tests {
 
     fn count(conn: &Connection, sql: &str, params: impl rusqlite::Params) -> i64 {
         conn.query_row(sql, params, |row| row.get(0)).unwrap()
+    }
+
+    fn seed_blueprint_selection_fixture(conn:&Connection) {
+        conn.execute_batch(
+            "INSERT INTO eve_categories(category_id,name) VALUES(700,'Test');
+             INSERT INTO eve_groups(group_id,category_id,name) VALUES(700,700,'Test');
+             INSERT INTO eve_types(type_id,name,group_id,is_manufacturable) VALUES
+               (700,'Test Product',700,1),(701,'Test Product Blueprint',700,0),(702,'Other Blueprint',700,0);
+             INSERT INTO blueprint_products(blueprint_type_id,product_type_id,quantity) VALUES(701,700,2);
+             INSERT INTO characters(character_id,name,is_demo,enabled) VALUES(70,'Pilot A',0,1),(71,'Pilot B',0,0);
+             INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES
+               (70,77,701,600,'Hangar',-2,8,16,3,'ESI Character Blueprints','now'),
+               (71,77,701,600,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now');"
+        ).unwrap();
+    }
+
+    fn operation_input(value:serde_json::Value)->super::super::models::NewOperationInput {
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn synchronized_bpc_creation_uses_composite_identity_and_exact_run_rounding() {
+        let conn=test_db();seed_blueprint_selection_fixture(&conn);
+        let input=operation_input(serde_json::json!({
+            "goal":"Build Test","priority":1,"typeId":700,"quantityRequested":5,
+            "blueprintMode":"owned","selectedBlueprintSource":"esi_character",
+            "characterBlueprintCharacterId":70,"characterBlueprintItemId":77
+        }));
+        let id=OperationRepository::new(&conn).create(&input).unwrap();
+        let saved:(String,i64,i64)=conn.query_row(
+            "SELECT selected_blueprint_source,character_blueprint_character_id,character_blueprint_item_id FROM operation_build_targets WHERE operation_id=?1",
+            [id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))
+        ).unwrap();
+        assert_eq!(saved,("esi_character".into(),70,77));
+    }
+
+    #[test]
+    fn insufficient_zero_disabled_and_unrelated_esi_blueprints_are_rejected_precisely() {
+        let conn=test_db();seed_blueprint_selection_fixture(&conn);
+        let repo=OperationRepository::new(&conn);
+        let insufficient=operation_input(serde_json::json!({"goal":"x","priority":1,"typeId":700,"quantityRequested":7,"blueprintMode":"owned","selectedBlueprintSource":"esi_character","characterBlueprintCharacterId":70,"characterBlueprintItemId":77}));
+        assert!(repo.create(&insufficient).unwrap_err().contains("required 4, available 3"));
+        conn.execute("UPDATE character_blueprints SET runs=0 WHERE character_id=70 AND item_id=77",[]).unwrap();
+        let zero=operation_input(serde_json::json!({"goal":"x","priority":1,"typeId":700,"quantityRequested":1,"blueprintMode":"owned","selectedBlueprintSource":"esi_character","characterBlueprintCharacterId":70,"characterBlueprintItemId":77}));
+        assert!(repo.create(&zero).unwrap_err().contains("zero-run BPC"));
+        let disabled=operation_input(serde_json::json!({"goal":"x","priority":1,"typeId":700,"quantityRequested":1,"blueprintMode":"owned","selectedBlueprintSource":"esi_character","characterBlueprintCharacterId":71,"characterBlueprintItemId":77}));
+        assert!(repo.create(&disabled).unwrap_err().contains("disabled"));
+        conn.execute("UPDATE character_blueprints SET type_id=702,runs=-1 WHERE character_id=70 AND item_id=77",[]).unwrap();
+        assert!(repo.create(&zero).unwrap_err().contains("does not produce"));
+    }
+
+    #[test]
+    fn manual_blueprint_creation_remains_supported_and_reference_identity_is_rejected() {
+        let conn=test_db();seed_blueprint_selection_fixture(&conn);
+        conn.execute("INSERT INTO blueprints(blueprint_id,type_name,is_copy,me_level,te_level,is_demo) VALUES(7000,'Test Product',0,9,18,0)",[]).unwrap();
+        let manual=operation_input(serde_json::json!({"goal":"x","priority":1,"typeId":700,"quantityRequested":100,"blueprintMode":"owned","selectedBlueprintSource":"manual","manualBlueprintId":7000}));
+        assert!(OperationRepository::new(&conn).create(&manual).is_ok());
+        let reference=operation_input(serde_json::json!({"goal":"x","priority":1,"typeId":700,"quantityRequested":1,"blueprintMode":"owned","selectedBlueprintSource":"manual","manualBlueprintId":701}));
+        assert!(OperationRepository::new(&conn).create(&reference).unwrap_err().contains("no longer exists"));
     }
 
     #[test]

@@ -117,6 +117,7 @@ pub struct ProductionPlan {
     pub total_owned_volume_m3: Option<f64>,
     pub total_missing_volume_m3: Option<f64>,
     pub warnings: Vec<String>,
+    pub selected_blueprint: Option<OwnedBlueprintInfo>,
     pub synchronized_blueprints: Vec<OwnedBlueprintInfo>,
 }
 
@@ -154,12 +155,15 @@ pub struct ProductionInputRequirement {
 #[serde(rename_all = "camelCase")]
 pub struct OwnedBlueprintInfo {
     pub item_id: i64,
+    pub character_id: Option<i64>,
+    pub blueprint_type_id: Option<i64>,
     pub owner_name: String,
     pub is_copy: bool,
     pub me: i64,
     pub te: i64,
     pub runs_remaining: Option<i64>,
     pub source: String,
+    pub resolved_location: Option<crate::location::ResolvedLocation>,
 }
 
 #[derive(Serialize, Clone)]

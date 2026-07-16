@@ -26,6 +26,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (16, include_str!("../migrations/0016_type_volume.sql")),
     (17, include_str!("../migrations/0017_operation_procurement.sql")),
     (18, include_str!("../migrations/0018_quartermaster.sql")),
+    (19, include_str!("../migrations/0019_source_aware_operation_blueprints.sql")),
 ];
 
 pub struct Db {
@@ -359,5 +360,27 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM install_state WHERE key = 'demo_cleanup_pending'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(marker, 0, "the marker must never be written for a database that already had migration history");
+    }
+
+    #[test]
+    fn migration_0019_preserves_existing_manual_blueprint_selection() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        for (_, sql) in MIGRATIONS.iter().filter(|(version, _)| *version <= 18) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute("INSERT INTO eve_categories(category_id,name) VALUES(900,'Test')",[]).unwrap();
+        conn.execute("INSERT INTO eve_groups(group_id,category_id,name) VALUES(900,900,'Test')",[]).unwrap();
+        conn.execute("INSERT INTO eve_types(type_id,name,group_id,is_manufacturable) VALUES(900,'Test Product',900,1)",[]).unwrap();
+        conn.execute("INSERT INTO operations(goal,priority,status,progress,notes,is_demo) VALUES('Legacy',1,'planned',0,'',0)",[]).unwrap();
+        let operation_id=conn.last_insert_rowid();
+        conn.execute("INSERT INTO blueprints(blueprint_id,type_name,is_copy,me_level,te_level,is_demo) VALUES(900,'Test Product',0,10,20,0)",[]).unwrap();
+        conn.execute("INSERT INTO operation_build_targets(operation_id,type_id,quantity_requested,blueprint_mode,owned_blueprint_id) VALUES(?1,900,1,'owned',900)",[operation_id]).unwrap();
+        conn.execute_batch(include_str!("../migrations/0019_source_aware_operation_blueprints.sql")).unwrap();
+        let values:(String,i64)=conn.query_row(
+            "SELECT selected_blueprint_source,manual_blueprint_id FROM operation_build_targets WHERE operation_id=?1",
+            [operation_id],|r|Ok((r.get(0)?,r.get(1)?))
+        ).unwrap();
+        assert_eq!(values,("manual".into(),900));
     }
 }

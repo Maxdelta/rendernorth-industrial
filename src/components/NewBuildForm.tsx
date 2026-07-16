@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   createRealOperation,
-  listBlueprints,
-  type BlueprintRecord,
+  listOwnedBlueprintCandidates,
+  type OwnedBlueprintCandidate,
   type TypeSearchResult,
   type CreatedOperation,
   type InventoryScope,
 } from "../lib/backend";
 import { BuildTargetSearch } from "./BuildTargetSearch";
 import { Panel } from "./Panel";
+import { LocationDisplay } from "./LocationDisplay";
 
 interface NewBuildFormProps {
   onCreated: (result: CreatedOperation) => void;
@@ -26,8 +27,8 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
   const [target, setTarget] = useState<TypeSearchResult | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [mode, setMode] = useState<"assumed" | "owned">("assumed");
-  const [ownedBlueprints, setOwnedBlueprints] = useState<BlueprintRecord[]>([]);
-  const [selectedBlueprintId, setSelectedBlueprintId] = useState<number | null>(null);
+  const [ownedBlueprints, setOwnedBlueprints] = useState<OwnedBlueprintCandidate[]>([]);
+  const [selectedBlueprintKey, setSelectedBlueprintKey] = useState<string | null>(null);
   const [assumedMe, setAssumedMe] = useState(0);
   const [assumedTe, setAssumedTe] = useState(0);
   const [assumedIsBpc, setAssumedIsBpc] = useState(false);
@@ -49,17 +50,37 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
       setMode("assumed");
       return;
     }
-    listBlueprints().then((all) => {
-      const matches = all.filter((b) => b.typeName === target.name);
+    listOwnedBlueprintCandidates(target.typeId, quantity).then((matches) => {
       setOwnedBlueprints(matches);
       if (matches.length > 0) {
         setMode("owned");
-        setSelectedBlueprintId(matches[0].blueprintId);
+        setSelectedBlueprintKey((current) =>
+          current && matches.some((candidate) => candidateKey(candidate) === current)
+            ? current
+            : candidateKey(matches[0]),
+        );
+      } else {
+        setMode("assumed");
+        setSelectedBlueprintKey(null);
       }
+    }).catch((err) => {
+      setError(String(err));
+      setOwnedBlueprints([]);
+      setMode("assumed");
+      setSelectedBlueprintKey(null);
     });
-  }, [target]);
+  }, [target, quantity]);
 
-  const canSubmit = target !== null && quantity >= 1 && !submitting;
+  function candidateKey(candidate: OwnedBlueprintCandidate): string {
+    return candidate.source === "manual"
+      ? `manual:${candidate.manualBlueprintId}`
+      : `esi:${candidate.characterId}:${candidate.itemId}`;
+  }
+
+  const selectedBlueprint =
+    ownedBlueprints.find((candidate) => candidateKey(candidate) === selectedBlueprintKey) ?? null;
+
+  const canSubmit = target !== null && quantity >= 1 && !submitting && (mode !== "owned" || selectedBlueprint !== null);
 
   async function handleSubmit() {
     if (!target) return;
@@ -75,7 +96,11 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
         typeId: target.typeId,
         quantityRequested: quantity,
         blueprintMode: mode,
-        ownedBlueprintId: mode === "owned" ? selectedBlueprintId : null,
+        ownedBlueprintId: mode === "owned" && selectedBlueprint?.source === "manual" ? selectedBlueprint.manualBlueprintId : null,
+        selectedBlueprintSource: mode === "owned" ? selectedBlueprint?.source ?? null : null,
+        manualBlueprintId: mode === "owned" && selectedBlueprint?.source === "manual" ? selectedBlueprint.manualBlueprintId : null,
+        characterBlueprintCharacterId: mode === "owned" && selectedBlueprint?.source === "esi_character" ? selectedBlueprint.characterId : null,
+        characterBlueprintItemId: mode === "owned" && selectedBlueprint?.source === "esi_character" ? selectedBlueprint.itemId : null,
         assumedMe: mode === "assumed" ? assumedMe : null,
         assumedTe: mode === "assumed" ? assumedTe : null,
         assumedIsBpc: mode === "assumed" ? assumedIsBpc : null,
@@ -132,15 +157,18 @@ export function NewBuildForm({ onCreated, onCancel }: NewBuildFormProps) {
             {mode === "owned" ? (
               <div className="new-op-field">
                 {ownedBlueprints.map((b) => (
-                  <label key={b.blueprintId} className="new-op-radio-row">
+                  <label key={candidateKey(b)} className="new-op-radio-row">
                     <input
                       type="radio"
                       name="ownedBlueprint"
-                      checked={selectedBlueprintId === b.blueprintId}
-                      onChange={() => setSelectedBlueprintId(b.blueprintId)}
+                      checked={selectedBlueprintKey === candidateKey(b)}
+                      onChange={() => setSelectedBlueprintKey(candidateKey(b))}
                     />
-                    {b.isCopy ? "BPC" : "BPO"} · ME {b.meLevel} · TE {b.teLevel}
-                    {b.runsRemaining !== null ? ` · ${b.runsRemaining} runs left` : ""}
+                    <span>
+                      {b.isCopy ? "BPC" : "BPO"} · {b.ownerName} · {b.sourceLabel} · ME {b.me} · TE {b.te}
+                      {" · "}{b.runsRemaining !== null ? `${b.runsRemaining} runs left` : "Infinite"}
+                      {b.resolvedLocation && <><br /><LocationDisplay location={b.resolvedLocation}/></>}
+                    </span>
                   </label>
                 ))}
               </div>

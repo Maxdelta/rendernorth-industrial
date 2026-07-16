@@ -751,6 +751,16 @@ pub fn mark_current_release_viewed(db: State<'_, Db>) -> Result<crate::release::
 }
 
 #[tauri::command]
+pub fn list_owned_blueprint_candidates(
+    db: State<'_, Db>,
+    product_type_id: i64,
+    requested_quantity: i64,
+) -> Result<Vec<blueprint::models::OwnedBlueprintCandidate>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::engine_for(&conn).owned_candidates(product_type_id, requested_quantity)
+}
+
+#[tauri::command]
 pub fn get_update_state(db: State<'_, Db>) -> Result<crate::update::UpdateState, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     crate::update::state(&conn)

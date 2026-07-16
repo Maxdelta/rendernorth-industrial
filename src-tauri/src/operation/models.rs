@@ -22,7 +22,14 @@ pub struct NewOperationInput {
     /// "owned" or "assumed" — meaningful only when `type_id` is set;
     /// defaults to "assumed" otherwise.
     pub blueprint_mode: Option<String>,
+    /// Legacy manual-blueprint identity. Retained so older frontend callers
+    /// and existing operations remain readable during the additive upgrade.
     pub owned_blueprint_id: Option<i64>,
+    /// "manual" or "esi_character" when blueprint_mode is "owned".
+    pub selected_blueprint_source: Option<String>,
+    pub manual_blueprint_id: Option<i64>,
+    pub character_blueprint_character_id: Option<i64>,
+    pub character_blueprint_item_id: Option<i64>,
     pub assumed_me: Option<i64>,
     pub assumed_te: Option<i64>,
     pub assumed_is_bpc: Option<bool>,

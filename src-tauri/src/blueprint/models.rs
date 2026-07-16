@@ -29,6 +29,25 @@ pub struct BlueprintRecord {
     pub resolved_location: Option<crate::location::ResolvedLocation>,
 }
 
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnedBlueprintCandidate {
+    pub source: String,
+    pub manual_blueprint_id: Option<i64>,
+    pub character_id: Option<i64>,
+    pub item_id: Option<i64>,
+    pub blueprint_type_id: Option<i64>,
+    pub product_type_id: i64,
+    pub is_copy: bool,
+    pub me: i64,
+    pub te: i64,
+    pub runs_remaining: Option<i64>,
+    pub required_runs: i64,
+    pub owner_name: String,
+    pub source_label: String,
+    pub resolved_location: Option<crate::location::ResolvedLocation>,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct BlueprintDetail {

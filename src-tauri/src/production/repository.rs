@@ -773,7 +773,8 @@ impl<'a> ProductionRepository<'a> {
             )
             .map_err(|e| format!("operation {operation_id} not found: {e}"))?;
 
-        let (type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te, inventory_scope): (
+        let (type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te, inventory_scope,
+             selected_blueprint_source,manual_blueprint_id,character_blueprint_character_id,character_blueprint_item_id): (
             i64,
             i64,
             String,
@@ -781,10 +782,16 @@ impl<'a> ProductionRepository<'a> {
             i64,
             i64,
             String,
+            Option<String>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
         ) = self
             .conn
             .query_row(
-                "SELECT type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te, inventory_scope
+                "SELECT type_id, quantity_requested, blueprint_mode, owned_blueprint_id, assumed_me, assumed_te, inventory_scope,
+                        selected_blueprint_source,manual_blueprint_id,
+                        character_blueprint_character_id,character_blueprint_item_id
                  FROM operation_build_targets WHERE operation_id = ?1",
                 [operation_id],
                 |row| {
@@ -796,6 +803,10 @@ impl<'a> ProductionRepository<'a> {
                         row.get::<_, Option<i64>>(4)?.unwrap_or(0),
                         row.get::<_, Option<i64>>(5)?.unwrap_or(0),
                         row.get(6)?,
+                        row.get(7)?,
+                        row.get(8)?,
+                        row.get(9)?,
+                        row.get(10)?,
                     ))
                 },
             )
@@ -803,21 +814,61 @@ impl<'a> ProductionRepository<'a> {
 
         let build_target_name = self.type_name(type_id)?;
 
+        let mut selected_blueprint=None;
         let (me, te) = if blueprint_mode == "owned" {
-            match owned_blueprint_id {
-                Some(bp_id) => self
-                    .conn
-                    .query_row(
-                        "SELECT me_level, te_level FROM blueprints WHERE blueprint_id = ?1",
-                        [bp_id],
-                        |row| Ok((row.get(0)?, row.get(1)?)),
-                    )
-                    .map_err(|e| format!("owned blueprint {bp_id} not found: {e}"))?,
-                None => {
-                    return Err(
-                        "blueprint_mode is 'owned' but no owned_blueprint_id was set".into(),
-                    )
+            let source=selected_blueprint_source.as_deref()
+                .or(if manual_blueprint_id.is_some()||owned_blueprint_id.is_some(){Some("manual")}else{None})
+                .ok_or_else(||"stale operation blueprint reference: selected source is missing".to_string())?;
+            match source {
+                "manual"=>{
+                    let bp_id=manual_blueprint_id.or(owned_blueprint_id)
+                        .ok_or_else(||"stale operation blueprint reference: manual blueprint ID is missing".to_string())?;
+                    let (name,is_copy,me,te,runs,owner):(String,i64,i64,i64,Option<i64>,String)=self.conn.query_row(
+                        "SELECT b.type_name,b.is_copy,b.me_level,b.te_level,b.runs_remaining,COALESCE(c.name,'Unassigned')
+                         FROM blueprints b LEFT JOIN characters c ON c.character_id=b.character_id
+                         WHERE b.blueprint_id=?1 AND b.is_demo=0",[bp_id],
+                        |r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?))
+                    ).map_err(|_|format!("manual blueprint {bp_id} no longer exists"))?;
+                    let product_name=self.type_name(type_id)?;
+                    let bp_type:Option<i64>=self.conn.query_row(
+                        "SELECT t.type_id FROM eve_types t JOIN blueprint_products bp ON bp.blueprint_type_id=t.type_id
+                         WHERE bp.product_type_id=?1 AND t.name=?2 LIMIT 1",(type_id,&name),|r|r.get(0)
+                    ).ok();
+                    if name!=product_name && bp_type.is_none(){return Err("selected blueprint does not produce the target product".into())}
+                    let output=match bp_type{Some(id)=>self.conn.query_row("SELECT quantity FROM blueprint_products WHERE product_type_id=?1 AND blueprint_type_id=?2",(type_id,id),|r|r.get::<_,i64>(0)).unwrap_or(1),None=>self.blueprint_for_product(type_id)?.map(|x|x.1).unwrap_or(1)}.max(1);
+                    let required=(quantity_requested+output-1)/output;
+                    if is_copy!=0 {
+                        let available=runs.unwrap_or(0);
+                        if available<=0{return Err(format!("zero-run BPC cannot be selected: required {required} runs, available {available}, owner {owner}, source Manual Ownership"))}
+                        if available<required{return Err(format!("insufficient BPC runs: required {required}, available {available}, owner {owner}, source Manual Ownership"))}
+                    }
+                    selected_blueprint=Some(super::models::OwnedBlueprintInfo{item_id:bp_id,character_id:None,blueprint_type_id:bp_type,owner_name:owner,is_copy:is_copy!=0,me,te,runs_remaining:runs,source:"Manual Ownership".into(),resolved_location:None});
+                    (me,te)
                 }
+                "esi_character"=>{
+                    let character_id=character_blueprint_character_id.ok_or_else(||"stale operation blueprint reference: character ID is missing".to_string())?;
+                    let item_id=character_blueprint_item_id.ok_or_else(||"stale operation blueprint reference: item ID is missing".to_string())?;
+                    let (enabled,bp_type,runs,me,te,owner,source,location_id):(i64,i64,i64,i64,i64,String,String,i64)=self.conn.query_row(
+                        "SELECT c.enabled,cb.type_id,cb.runs,cb.material_efficiency,cb.time_efficiency,c.name,cb.source,cb.location_id
+                         FROM character_blueprints cb JOIN characters c ON c.character_id=cb.character_id
+                         WHERE cb.character_id=?1 AND cb.item_id=?2 AND c.is_demo=0",(character_id,item_id),
+                        |r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?))
+                    ).map_err(|_|format!("selected ESI blueprint for character {character_id}, item {item_id} no longer exists"))?;
+                    if enabled!=1{return Err(format!("selected blueprint owner {owner} is disabled"))}
+                    let output:i64=self.conn.query_row(
+                        "SELECT quantity FROM blueprint_products WHERE product_type_id=?1 AND blueprint_type_id=?2",
+                        (type_id,bp_type),|r|r.get(0)
+                    ).map_err(|_|"selected blueprint does not produce the target product".to_string())?;
+                    let required=(quantity_requested+output.max(1)-1)/output.max(1);
+                    if runs!=-1 {
+                        if runs<=0{return Err(format!("zero-run BPC cannot be selected: required {required} runs, available {runs}, owner {owner}, source {source}"))}
+                        if runs<required{return Err(format!("insufficient BPC runs: required {required}, available {runs}, owner {owner}, source {source}"))}
+                    }
+                    let resolved=crate::location::resolve(self.conn,character_id,location_id)?;
+                    selected_blueprint=Some(super::models::OwnedBlueprintInfo{item_id,character_id:Some(character_id),blueprint_type_id:Some(bp_type),owner_name:owner,is_copy:runs!=-1,me,te,runs_remaining:if runs==-1{None}else{Some(runs)},source,resolved_location:Some(resolved)});
+                    (me,te)
+                }
+                _=>return Err(format!("invalid source identity: unsupported selected blueprint source '{source}'")),
             }
         } else {
             (assumed_me, assumed_te)
@@ -897,12 +948,15 @@ impl<'a> ProductionRepository<'a> {
             .query_map([type_id], |r| {
                 Ok(super::models::OwnedBlueprintInfo {
                     item_id: r.get(0)?,
+                    character_id:None,
+                    blueprint_type_id:None,
                     owner_name: r.get(1)?,
                     is_copy: r.get::<_, i64>(2)? != 0,
                     me: r.get(3)?,
                     te: r.get(4)?,
                     runs_remaining: r.get(5)?,
                     source: "ESI Character Blueprints".into(),
+                    resolved_location:None,
                 })
             })
             .map_err(|e| e.to_string())?
@@ -927,6 +981,7 @@ impl<'a> ProductionRepository<'a> {
             total_owned_volume_m3,
             total_missing_volume_m3,
             warnings,
+            selected_blueprint,
             synchronized_blueprints,
         })
     }
@@ -959,7 +1014,9 @@ mod tests {
         include_str!("../../migrations/0011_esi_character_auth.sql"),
         include_str!("../../migrations/0012_character_asset_sync.sql"),
         include_str!("../../migrations/0013_character_blueprint_sync.sql"),
+        include_str!("../../migrations/0014_location_resolution.sql"),
         include_str!("../../migrations/0016_type_volume.sql"),
+        include_str!("../../migrations/0019_source_aware_operation_blueprints.sql"),
     ];
 
     fn test_db() -> Connection {
@@ -1146,6 +1203,78 @@ mod tests {
         assert_eq!(bp.owner_name, "Maxdelta");
         assert!(!bp.is_copy);
         assert_eq!((bp.me, bp.te, bp.runs_remaining), (10, 20, None));
+    }
+
+    #[test]
+    fn selected_synchronized_bpc_drives_root_me_te_and_preserves_identity() {
+        let conn=test_db();seed_fixture(&conn);
+        let op_id=seed_operation_with_target(&conn,5,0,0);
+        conn.execute("INSERT INTO characters(character_id,name,is_demo,enabled) VALUES(7,'BPC Pilot',0,1)",[]).unwrap();
+        conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(7,88,100,600,'Hangar',-2,10,20,3,'ESI Character Blueprints','now')",[]).unwrap();
+        conn.execute("UPDATE operation_build_targets SET blueprint_mode='owned',selected_blueprint_source='esi_character',character_blueprint_character_id=7,character_blueprint_item_id=88 WHERE operation_id=?1",[op_id]).unwrap();
+        let plan=ProductionRepository::new(&conn).calculate_plan(op_id).unwrap();
+        assert_eq!((plan.me,plan.te,plan.total_runs),(10,20,3));
+        assert_eq!(plan.tree.me_applied,10);
+        let selected=plan.selected_blueprint.unwrap();
+        assert_eq!((selected.character_id,selected.item_id,selected.blueprint_type_id),(Some(7),88,Some(100)));
+        assert!(selected.is_copy);
+    }
+
+    #[test]
+    fn legacy_manual_owned_blueprint_operation_still_calculates_after_migration() {
+        let conn=test_db();seed_fixture(&conn);
+        let op_id=seed_operation_with_target(&conn,5,0,0);
+        conn.execute("INSERT INTO blueprints(blueprint_id,type_name,is_copy,me_level,te_level,is_demo) VALUES(7000,'Sample Widget',0,7,14,0)",[]).unwrap();
+        conn.execute("UPDATE operation_build_targets SET blueprint_mode='owned',owned_blueprint_id=7000,selected_blueprint_source=NULL,manual_blueprint_id=NULL WHERE operation_id=?1",[op_id]).unwrap();
+        let plan=ProductionRepository::new(&conn).calculate_plan(op_id).unwrap();
+        assert_eq!((plan.me,plan.te),(7,14));
+        assert_eq!(plan.selected_blueprint.unwrap().source,"Manual Ownership");
+    }
+
+    #[test]
+    fn selected_synchronized_blueprint_is_never_silently_replaced() {
+        let conn=test_db();seed_fixture(&conn);
+        let op_id=seed_operation_with_target(&conn,1,0,0);
+        conn.execute("INSERT INTO characters(character_id,name,is_demo,enabled) VALUES(7,'Selected',0,1),(8,'Other',0,1)",[]).unwrap();
+        conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(7,88,100,600,'Hangar',-1,4,8,-1,'ESI Character Blueprints','now'),(8,88,100,600,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now')",[]).unwrap();
+        conn.execute("UPDATE operation_build_targets SET blueprint_mode='owned',selected_blueprint_source='esi_character',character_blueprint_character_id=7,character_blueprint_item_id=88 WHERE operation_id=?1",[op_id]).unwrap();
+        let plan=ProductionRepository::new(&conn).calculate_plan(op_id).unwrap();
+        assert_eq!((plan.me,plan.te),(4,8));
+        conn.execute("DELETE FROM character_blueprints WHERE character_id=7 AND item_id=88",[]).unwrap();
+        let error=ProductionRepository::new(&conn).calculate_plan(op_id).err().unwrap();
+        assert!(error.contains("no longer exists"));
+    }
+
+    #[test]
+    fn owned_candidate_matching_uses_blueprint_product_type_ids_and_returns_all_eligible_sources() {
+        let conn=test_db();seed_fixture(&conn);
+        conn.execute("INSERT INTO eve_types(type_id,name,group_id,is_manufacturable,volume_m3) VALUES(101,'Completely Different Blueprint Name',1,0,0.01)",[]).unwrap();
+        conn.execute("DELETE FROM blueprint_products WHERE product_type_id=100",[]).unwrap();
+        conn.execute("INSERT INTO blueprint_products(blueprint_type_id,product_type_id,quantity) VALUES(101,100,2)",[]).unwrap();
+        conn.execute("INSERT INTO characters(character_id,name,is_demo,enabled) VALUES(7,'Pilot A',0,1),(8,'Pilot B',0,1),(9,'Disabled',0,0)",[]).unwrap();
+        conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(7,55,101,600,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now'),(8,55,101,601,'Hangar',-2,8,16,3,'ESI Character Blueprints','now'),(9,55,101,602,'Hangar',-1,10,20,-1,'ESI Character Blueprints','now')",[]).unwrap();
+        conn.execute("INSERT INTO blueprints(blueprint_id,type_name,is_copy,me_level,te_level,is_demo) VALUES(7000,'Sample Widget',0,9,18,0)",[]).unwrap();
+        let candidates=crate::blueprint::repository::BlueprintRepository::new(&conn).owned_candidates(100,5).unwrap();
+        assert_eq!(candidates.len(),3);
+        assert_eq!(candidates.iter().filter(|c|c.source=="esi_character").count(),2);
+        assert!(candidates.iter().any(|c|c.source=="manual"));
+        assert!(candidates.iter().all(|c|c.owner_name!="Disabled"));
+        assert!(candidates.iter().any(|c|c.character_id==Some(7)&&c.item_id==Some(55)));
+        assert!(candidates.iter().any(|c|c.character_id==Some(8)&&c.item_id==Some(55)));
+    }
+
+    #[test]
+    fn owned_candidates_exclude_zero_and_insufficient_run_bpcs_but_keep_bpos() {
+        let conn=test_db();seed_fixture(&conn);
+        conn.execute("INSERT INTO characters(character_id,name,is_demo,enabled) VALUES(7,'Pilot',0,1)",[]).unwrap();
+        conn.execute("INSERT INTO character_blueprints(character_id,item_id,type_id,location_id,location_flag,quantity,material_efficiency,time_efficiency,runs,source,synced_at) VALUES(7,1,100,600,'Hangar',-1,1,2,-1,'ESI Character Blueprints','now'),(7,2,100,600,'Hangar',-2,10,20,0,'ESI Character Blueprints','now'),(7,3,100,600,'Hangar',-2,9,18,2,'ESI Character Blueprints','now'),(7,4,100,600,'Hangar',-2,8,16,3,'ESI Character Blueprints','now')",[]).unwrap();
+        let candidates=crate::blueprint::repository::BlueprintRepository::new(&conn).owned_candidates(100,5).unwrap();
+        let ids=candidates.iter().filter_map(|c|c.item_id).collect::<Vec<_>>();
+        assert!(ids.contains(&1));
+        assert!(!ids.contains(&2));
+        assert!(!ids.contains(&3));
+        assert!(ids.contains(&4));
+        assert!(candidates.iter().all(|c|c.required_runs==3));
     }
 
     #[test]

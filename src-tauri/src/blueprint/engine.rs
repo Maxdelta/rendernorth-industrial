@@ -11,6 +11,7 @@
 
 use super::models::{
     BlueprintDetail, BlueprintReadiness, BlueprintRecord, BlueprintSummary, MissingBlueprintReport,
+    OwnedBlueprintCandidate,
 };
 use super::provider::{BlueprintProvider, MockBlueprintProvider};
 use rusqlite::Connection;
@@ -50,6 +51,10 @@ impl<P: BlueprintProvider> BlueprintEngine<P> {
 
     pub fn readiness_all(&self) -> Result<Vec<BlueprintReadiness>, String> {
         self.provider.readiness_all()
+    }
+
+    pub fn owned_candidates(&self, product_type_id:i64, requested_quantity:i64) -> Result<Vec<OwnedBlueprintCandidate>,String> {
+        self.provider.owned_candidates(product_type_id,requested_quantity)
     }
 
     // ---- mutations: architecture-only this sprint ----

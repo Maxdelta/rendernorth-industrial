@@ -60,6 +60,7 @@ fn main() {
             commands::get_operation_reservations,
             commands::get_blueprint_summary,
             commands::list_blueprints,
+            commands::list_owned_blueprint_candidates,
             commands::get_blueprint_detail,
             commands::get_missing_blueprint_report,
             commands::get_blueprint_readiness_all,

@@ -271,6 +271,7 @@ function RealProductionPlanSection() {
               <div className="res-summary-label">Blueprint Source</div>
               <div className="ops-field-value" style={{ fontSize: 13 }}>
                 {plan.blueprintMode} · ME {plan.me} · TE {plan.te}
+                {plan.selectedBlueprint && <><br />Selected: {plan.selectedBlueprint.ownerName} {plan.selectedBlueprint.isCopy ? "BPC" : "BPO"} · {plan.selectedBlueprint.source}{plan.selectedBlueprint.runsRemaining == null ? " · Infinite" : ` · ${plan.selectedBlueprint.runsRemaining} runs`}</>}
                 {plan.synchronizedBlueprints.length > 0 && <><br />Owned: {plan.synchronizedBlueprints.map(b => `${b.ownerName} ${b.isCopy ? "BPC" : "BPO"} ME ${b.me} TE ${b.te}${b.runsRemaining == null ? "" : ` · ${b.runsRemaining} runs`} · ${b.source}`).join("; ")}</>}
               </div>
             </div>

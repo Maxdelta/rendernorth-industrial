@@ -451,6 +451,7 @@ mod tests {
         include_str!("../../migrations/0015_market_valuation.sql"),
         include_str!("../../migrations/0016_type_volume.sql"),
         include_str!("../../migrations/0017_operation_procurement.sql"),
+        include_str!("../../migrations/0019_source_aware_operation_blueprints.sql"),
     ];
 
     fn fixture() -> (Connection, i64) {

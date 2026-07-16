@@ -9,6 +9,7 @@
 
 use super::models::{
     BlueprintDetail, BlueprintReadiness, BlueprintRecord, BlueprintSummary, MissingBlueprintReport,
+    OwnedBlueprintCandidate,
 };
 use super::repository::BlueprintRepository;
 use rusqlite::Connection;
@@ -20,6 +21,7 @@ pub trait BlueprintProvider {
     fn missing_report(&self) -> Result<Vec<MissingBlueprintReport>, String>;
     fn readiness_for_operation(&self, operation_id: i64) -> Result<BlueprintReadiness, String>;
     fn readiness_all(&self) -> Result<Vec<BlueprintReadiness>, String>;
+    fn owned_candidates(&self, product_type_id:i64, requested_quantity:i64) -> Result<Vec<OwnedBlueprintCandidate>,String>;
 }
 
 /// The live provider, backed by the demo-seeded rows from migration 0006.
@@ -60,5 +62,9 @@ impl<'a> BlueprintProvider for MockBlueprintProvider<'a> {
 
     fn readiness_all(&self) -> Result<Vec<BlueprintReadiness>, String> {
         self.repo.readiness_all()
+    }
+
+    fn owned_candidates(&self, product_type_id:i64, requested_quantity:i64) -> Result<Vec<OwnedBlueprintCandidate>,String> {
+        self.repo.owned_candidates(product_type_id,requested_quantity)
     }
 }

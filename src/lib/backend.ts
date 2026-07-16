@@ -461,7 +461,12 @@ export interface NewOperationInput {
   typeId?: number | null;
   quantityRequested?: number | null;
   blueprintMode?: "owned" | "assumed" | null;
+  /** Legacy manual identity; new callers use the explicit source-aware fields below. */
   ownedBlueprintId?: number | null;
+  selectedBlueprintSource?: "manual" | "esi_character" | null;
+  manualBlueprintId?: number | null;
+  characterBlueprintCharacterId?: number | null;
+  characterBlueprintItemId?: number | null;
   assumedMe?: number | null;
   assumedTe?: number | null;
   assumedIsBpc?: boolean | null;
@@ -549,7 +554,21 @@ export interface ProductionPlan {
   totalOwnedVolumeM3: number | null;
   totalMissingVolumeM3: number | null;
   warnings: string[];
-  synchronizedBlueprints: Array<{itemId:number;ownerName:string;isCopy:boolean;me:number;te:number;runsRemaining:number|null;source:string}>;
+  selectedBlueprint: OwnedBlueprintInfo | null;
+  synchronizedBlueprints: OwnedBlueprintInfo[];
+}
+
+export interface OwnedBlueprintInfo {
+  itemId: number;
+  characterId: number | null;
+  blueprintTypeId: number | null;
+  ownerName: string;
+  isCopy: boolean;
+  me: number;
+  te: number;
+  runsRemaining: number | null;
+  source: string;
+  resolvedLocation: ResolvedLocation | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1022,6 +1041,34 @@ export async function setAppSetting(key: string, value: string): Promise<void> {
     return;
   }
   await invoke<void>("set_app_setting", { key, value });
+}
+
+export async function listOwnedBlueprintCandidates(
+  productTypeId: number,
+  requestedQuantity: number,
+): Promise<OwnedBlueprintCandidate[]> {
+  if (!inTauri()) return [];
+  return invoke<OwnedBlueprintCandidate[]>("list_owned_blueprint_candidates", {
+    productTypeId,
+    requestedQuantity,
+  });
+}
+
+export interface OwnedBlueprintCandidate {
+  source: "manual" | "esi_character";
+  manualBlueprintId: number | null;
+  characterId: number | null;
+  itemId: number | null;
+  blueprintTypeId: number | null;
+  productTypeId: number;
+  isCopy: boolean;
+  me: number;
+  te: number;
+  runsRemaining: number | null;
+  requiredRuns: number;
+  ownerName: string;
+  sourceLabel: string;
+  resolvedLocation: ResolvedLocation | null;
 }
 
 export interface ReleaseViewState { currentVersion: string; lastViewedVersion: string | null; unseen: boolean; }
