@@ -2,6 +2,32 @@
 
 All notable user-facing changes to RenderNorth Industrial are recorded here. Releases are listed newest first and use semantic versions.
 
+## [0.1.2] — 2026-07-16
+
+### RenderNorth Industrial Open Beta 0.1.2
+
+Open Beta 0.1.2 fixes synchronized ESI blueprint selection in Production, including accurate blueprint identity, research values, and BPC run limits.
+
+### Added
+
+- Source-aware synchronized blueprint identity for Production operations.
+
+### Changed
+
+- Owned blueprint matching now uses CCP blueprint-to-product relationships instead of blueprint name matching.
+
+### Fixed
+
+- Synchronized ESI BPOs and BPCs are now fully selectable in Production.
+- Production now correctly uses synchronized blueprint ME, TE, owner, source, and remaining runs.
+- Blueprint matching now uses CCP blueprint-to-product relationships instead of blueprint name matching.
+- Existing manual blueprint operations remain fully supported.
+
+### Known Issues
+
+- The installer is unsigned and may trigger Windows SmartScreen.
+- Automatic update installation is not implemented; updates open in the browser and require manual installation.
+
 ## [0.1.1] — 2026-07-16
 
 ### RenderNorth Industrial Open Beta 0.1.1

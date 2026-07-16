@@ -701,9 +701,9 @@ mod tests {
     fn equal_newer_and_installed_newer_have_deterministic_states() {
         let now = Utc::now();
         for (latest, expected) in [
+            ("0.1.2", UpdateStatus::UpToDate),
+            ("0.1.3", UpdateStatus::UpdateAvailable),
             ("0.1.1", UpdateStatus::UpToDate),
-            ("0.1.2", UpdateStatus::UpdateAvailable),
-            ("0.1.0", UpdateStatus::UpToDate),
         ] {
             let mut state = UpdateState::default();
             state.latest_version = Some(latest.into());
@@ -843,14 +843,14 @@ mod tests {
     fn remind_skip_newer_override_and_clear_are_persistent() {
         let conn = connection();
         let mut cached = UpdateState::default();
-        cached.latest_version = Some("0.1.1".into());
+        cached.latest_version = Some("0.1.2".into());
         cached.status = UpdateStatus::UpdateAvailable;
         save_state(&conn, &cached).unwrap();
         assert_eq!(remind_later(&conn).unwrap().status, UpdateStatus::Skipped);
         let skipped = skip_current(&conn).unwrap();
-        assert_eq!(skipped.skipped_version.as_deref(), Some("0.1.1"));
+        assert_eq!(skipped.skipped_version.as_deref(), Some("0.1.2"));
         let mut newer = skipped;
-        newer.latest_version = Some("0.1.2".into());
+        newer.latest_version = Some("0.1.3".into());
         newer.reminder_until = None;
         save_state(&conn, &newer).unwrap();
         assert_eq!(state(&conn).unwrap().status, UpdateStatus::UpdateAvailable);

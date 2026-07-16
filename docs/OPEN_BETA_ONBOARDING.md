@@ -1,4 +1,4 @@
-# RenderNorth Industrial Open Beta 0.1.1 Onboarding
+# RenderNorth Industrial Open Beta 0.1.2 Onboarding
 
 ## Normal setup
 
@@ -30,7 +30,7 @@ Only users intentionally managing their own CCP application need this path. Crea
 
 ## Copy-ready Open Beta announcement
 
-RenderNorth Industrial Open Beta 0.1.1 is available for Windows. Connect an EVE character through secure read-only CCP SSO, import CCP's official JSONL static data, synchronize inventory and blueprints, value markets, plan production and procurement, and analyze EFT doctrines locally. Report beta issues through GitHub or contact Maxdelta on Discord (`maxdelta0089`).
+RenderNorth Industrial Open Beta 0.1.2 is available for Windows. Connect an EVE character through secure read-only CCP SSO, import CCP's official JSONL static data, synchronize inventory and blueprints, value markets, plan production and procurement, and analyze EFT doctrines locally. Report beta issues through GitHub or contact Maxdelta on Discord (`maxdelta0089`).
 
 ## Copy-ready Getting Started
 
@@ -38,7 +38,7 @@ Install RenderNorth Industrial, connect a character with the built-in official C
 
 ## Copy-ready release notes
 
-Open Beta 0.1.1 delivers first-run onboarding, official read-only character authentication, static-data validation, synchronized assets and blueprints, resolved locations, inventory and production economics, procurement exports, Quartermaster doctrine readiness, release history, update-availability notifications, diagnostics, and Windows packaging. This is beta software and is not production-certified.
+Open Beta 0.1.2 delivers first-run onboarding, official read-only character authentication, static-data validation, synchronized assets and blueprints, resolved locations, inventory and production economics, procurement exports, Quartermaster doctrine readiness, release history, update-availability notifications, diagnostics, and Windows packaging. Production can select synchronized ESI BPOs and BPCs using their real ME, TE, owner, source, location, and remaining runs. This is beta software and is not production-certified.
 
 ## Help and support
 

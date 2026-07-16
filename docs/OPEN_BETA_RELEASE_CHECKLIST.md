@@ -1,4 +1,4 @@
-# RenderNorth Industrial Open Beta 0.1.1 Release Checklist
+# RenderNorth Industrial Open Beta 0.1.2 Release Checklist
 
 - [ ] Fresh Windows install opens the first-run wizard.
 - [ ] No Client ID entry is required in normal setup.
@@ -8,7 +8,7 @@
 - [ ] All four required JSONL files report Found before import is enabled.
 - [ ] Assets, locations, blueprints, and market refresh complete.
 - [ ] A doctrine can be imported and analyzed.
-- [ ] About shows Open Beta 0.1.1, build metadata, bug reporting, Discord, and optional support.
+- [ ] About shows Open Beta 0.1.2, build metadata, bug reporting, Discord, and optional support.
 - [ ] Diagnostics contain no access token, refresh token, credential contents, Client Secret, or custom Client ID.
 - [ ] The release tag is valid semantic version text (`vX.Y.Z` or a valid pre-release).
 - [ ] Release assets use `RenderNorth-Industrial-<version>-Windows-Installer.exe` and `RenderNorth-Industrial-<version>-Windows-Portable.zip`.

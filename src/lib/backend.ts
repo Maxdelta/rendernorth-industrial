@@ -1191,7 +1191,7 @@ export async function openSelectedFolder(path: string): Promise<void> {
 
 export async function getAboutInfo(): Promise<AboutInfo> {
   if (!inTauri()) {
-    return { applicationName: "RenderNorth Industrial", version: RELEASE_CATALOG.publicVersion, build: "development", gitCommit: "unavailable", databaseVersion: "unavailable", migrationVersion: 0, rustVersion: "unavailable", website: "https://rendernorth.com", github: "https://github.com/Maxdelta/rendernorth-industrial", issues: "https://github.com/Maxdelta/rendernorth-industrial/issues", support: "https://buymeacoffee.com/maxdelta", discordInvite: "https://discord.gg/XycCz6ppx", setupGuide: "https://github.com/Maxdelta/rendernorth-industrial/blob/main/docs/OPEN_BETA_ONBOARDING.md", releaseStatus: "Open Beta 0.1.1", discordUsername: "maxdelta0089" };
+    return { applicationName: "RenderNorth Industrial", version: RELEASE_CATALOG.publicVersion, build: "development", gitCommit: "unavailable", databaseVersion: "unavailable", migrationVersion: 0, rustVersion: "unavailable", website: "https://rendernorth.com", github: "https://github.com/Maxdelta/rendernorth-industrial", issues: "https://github.com/Maxdelta/rendernorth-industrial/issues", support: "https://buymeacoffee.com/maxdelta", discordInvite: "https://discord.gg/XycCz6ppx", setupGuide: "https://github.com/Maxdelta/rendernorth-industrial/blob/main/docs/OPEN_BETA_ONBOARDING.md", releaseStatus: "Open Beta 0.1.2", discordUsername: "maxdelta0089" };
   }
   return invoke<AboutInfo>("get_about_info");
 }

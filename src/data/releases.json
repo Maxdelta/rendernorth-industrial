@@ -1,6 +1,31 @@
 {
-  "publicVersion": "0.1.1",
+  "publicVersion": "0.1.2",
   "releases": [
+    {
+      "version": "0.1.2",
+      "name": "RenderNorth Industrial Open Beta 0.1.2",
+      "date": "2026-07-16",
+      "channel": "Open Beta",
+      "summary": "Open Beta 0.1.2 fixes synchronized ESI blueprint selection in Production, including accurate blueprint identity, research values, and BPC run limits.",
+      "added": [
+        "Source-aware synchronized blueprint identity for Production operations"
+      ],
+      "changed": [
+        "Owned blueprint matching now uses CCP blueprint-to-product relationships instead of blueprint name matching"
+      ],
+      "fixed": [
+        "Synchronized ESI BPOs and BPCs are now fully selectable in Production",
+        "Production now correctly uses synchronized blueprint ME, TE, owner, source, and remaining runs",
+        "Blueprint matching now uses CCP blueprint-to-product relationships instead of blueprint name matching",
+        "Existing manual blueprint operations remain fully supported"
+      ],
+      "knownIssues": [
+        "The installer is unsigned and may trigger Windows SmartScreen",
+        "Automatic update installation is not implemented; updates open in the browser and require manual installation"
+      ],
+      "security": [],
+      "internalCheckpoint": "BUG-001 checkpoint 4cfe154"
+    },
     {
       "version": "0.1.1",
       "name": "RenderNorth Industrial Open Beta 0.1.1",
