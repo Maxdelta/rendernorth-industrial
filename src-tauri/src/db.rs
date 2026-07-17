@@ -27,6 +27,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (17, include_str!("../migrations/0017_operation_procurement.sql")),
     (18, include_str!("../migrations/0018_quartermaster.sql")),
     (19, include_str!("../migrations/0019_source_aware_operation_blueprints.sql")),
+    (20, include_str!("../migrations/0020_corporation_asset_sync.sql")),
 ];
 
 pub struct Db {
@@ -382,5 +383,36 @@ mod tests {
             [operation_id],|r|Ok((r.get(0)?,r.get(1)?))
         ).unwrap();
         assert_eq!(values,("manual".into(),900));
+    }
+
+    #[test]
+    fn migration_0020_is_additive_and_preserves_existing_inventory() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        for (_, sql) in MIGRATIONS.iter().filter(|(version, _)| *version <= 19) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled,authorization_status) VALUES(42,'Pilot',0,'',1,'authorized')",
+            [],
+        ).unwrap();
+        conn.execute("INSERT INTO eve_categories(category_id,name) VALUES(99991,'Migration Test')",[]).unwrap();
+        conn.execute("INSERT INTO eve_groups(group_id,category_id,name) VALUES(99991,99991,'Migration Test')",[]).unwrap();
+        conn.execute("INSERT INTO eve_types(type_id,name,group_id,is_manufacturable) VALUES(99991,'Migration Test Type',99991,0)",[]).unwrap();
+        conn.execute(
+            "INSERT INTO character_assets(character_id,item_id,type_id,quantity,location_id,location_type,location_flag,is_singleton,synced_at) VALUES(42,1001,99991,50,60003760,'station','Hangar',0,'2026-07-17T12:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO manual_inventory_entries(type_id,quantity,location_name) VALUES(99991,25,'Jita')",
+            [],
+        ).unwrap();
+
+        conn.execute_batch(include_str!("../migrations/0020_corporation_asset_sync.sql")).unwrap();
+
+        let personal:i64=conn.query_row("SELECT quantity FROM character_assets WHERE character_id=42 AND item_id=1001",[],|row|row.get(0)).unwrap();
+        let manual:i64=conn.query_row("SELECT quantity FROM manual_inventory_entries WHERE type_id=99991",[],|row|row.get(0)).unwrap();
+        assert_eq!((personal,manual),(50,25));
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM corporation_assets",[],|row|row.get::<_,i64>(0)).unwrap(),0);
     }
 }

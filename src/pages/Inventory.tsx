@@ -8,11 +8,29 @@ import {
   formatVolume,
   type ManualInventoryEntry,
   type TypeSearchResult,
+  listSyncedAssets,
+  type SyncedAsset,
 } from "../lib/backend";
 import { Panel } from "../components/Panel";
 import { BuildTargetSearch } from "../components/BuildTargetSearch";
 import { PasteInventory } from "../components/PasteInventory";
 import { MarketInventory } from "../components/MarketInventory";
+import { LocationDisplay } from "../components/LocationDisplay";
+
+type OwnerScope="personal"|"corporation"|"both";
+function SynchronizedAssetsSection(){
+  const[scope,setScope]=useState<OwnerScope>("both");const[assets,setAssets]=useState<SyncedAsset[]>([]);const[error,setError]=useState<string|null>(null);const[loading,setLoading]=useState(false);
+  useEffect(()=>{setLoading(true);setError(null);listSyncedAssets(scope).then(setAssets).catch(cause=>setError(String(cause))).finally(()=>setLoading(false))},[scope]);
+  return <Panel title="Synchronized ESI Assets" keel="furnace" className="dash-hero">
+    <p className="ph-mission">View personal and corporation snapshots without merging ownership totals. Corporation assets are read-only and are not used by Production, Quartermaster, or Procurement.</p>
+    <div className="new-op-mode-toggle" style={{marginBottom:12}}>{(["personal","corporation","both"] as OwnerScope[]).map(value=><button key={value} className={scope===value?"target-select enabled active":"target-select enabled"} onClick={()=>setScope(value)}>{value==="personal"?"Personal":value==="corporation"?"Corporation":"Both"}</button>)}</div>
+    {error&&<div className="sd-error"><div className="conflict-desc">Corporation or personal asset query failed: {error}</div></div>}
+    {loading?<div className="data-source">Loading synchronized assets…</div>:assets.length===0?<div className="data-source">No {scope==="both"?"synchronized":scope} assets are available.</div>:<div className="inv-table" style={{overflowX:"auto"}}>
+      <div className="inv-row" style={{gridTemplateColumns:".7fr 1fr 1.4fr .7fr .7fr .8fr 1fr 1.8fr .9fr .9fr",minWidth:1550}}><div>Owner Type</div><div>Owner Name</div><div>Type</div><div>Quantity</div><div>Unit m³</div><div>Stack m³</div><div>Division</div><div>Location</div><div>Source</div><div>Last synced</div></div>
+      {assets.map(asset=><div className="inv-row" key={`${asset.ownerType}:${asset.ownerId}:${asset.itemId}`} style={{gridTemplateColumns:".7fr 1fr 1.4fr .7fr .7fr .8fr 1fr 1.8fr .9fr .9fr",minWidth:1550}}><div><span className={`inv-status ${asset.ownerType==="Corporation"?"furnace":"nominal"}`}>{asset.ownerType}</span></div><div>{asset.ownerName}</div><div className="inv-name">{asset.typeName}<div className="bts-result-meta">Type {asset.typeId} · Item {asset.itemId}</div></div><div>{formatQty(asset.quantity)}</div><div>{formatVolume(asset.unitVolumeM3)}</div><div>{formatVolume(asset.stackVolumeM3)}</div><div>{asset.division??"—"}<div className="bts-result-meta">{asset.locationFlag}</div></div><div><LocationDisplay location={asset.resolvedLocation}/><div className="bts-result-meta">Raw {asset.locationId} · {asset.locationType}</div></div><div>{asset.source}</div><div>{new Date(asset.lastSynced).toLocaleString()}</div></div>)}
+    </div>}
+  </Panel>
+}
 
 function ManualInventorySection() {
   const [entries, setEntries] = useState<ManualInventoryEntry[]>([]);
@@ -169,6 +187,7 @@ function ManualInventorySection() {
 export function InventoryPage() {
   return (
     <div className="dash">
+      <SynchronizedAssetsSection />
       <MarketInventory />
       <ManualInventorySection />
     </div>

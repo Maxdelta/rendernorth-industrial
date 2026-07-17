@@ -152,6 +152,18 @@ Coverage, shortage, and cross-operation "critical bottleneck" detection (a mater
 - **doctrine_fits** — imported EFT fits, desired fleet quantity, normalized hull reference, source, and original EFT text.
 - **doctrine_fit_items** — normalized CCP type references, detected item kind, and per-fit quantity. Fleet demand and readiness remain live derived results rather than stored totals.
 
+### Corporation asset synchronization (migration 0020, live now)
+
+- **corporations** — corporation identity and the connected character most recently used to authorize its read-only snapshot.
+- **corporation_asset_sync_state** / **corporation_character_sync_state** — corporation- and character-facing sync status, Director verification, timestamps, counts, pages, and last error.
+- **corporation_divisions** — custom hangar division names keyed by corporation and division number.
+- **corporation_assets** — replaceable per-corporation item snapshots with type, quantity, raw location, flag, singleton state, derived division, and sync time.
+
+These tables are deliberately separate from `character_assets`,
+`manual_inventory_entries`, and demo inventory. Migration 0020 does not add
+corporation ownership to any Production, Procurement, Quartermaster, or
+inventory-aggregation query.
+
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)
 - **sync_state**(resource, character_id, etag, last_success_at, next_allowed_at, last_error, PRIMARY KEY(resource, character_id))

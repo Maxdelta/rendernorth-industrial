@@ -1282,17 +1282,30 @@ export interface CharacterSummary {
   blueprintPageCount: number;
   blueprintSyncError: string | null;
   structureScopeGranted: boolean;
+  corporationAssetScopeGranted:boolean;
+  corporationRoleScopeGranted:boolean;
+  corporationDivisionScopeGranted:boolean;
+  corporationBlueprintScopeGranted:boolean;
+  corporationSyncStatus:string;
+  corporationId:number|null;
+  corporationName:string|null;
+  corporationRoleVerified:boolean;
+  corporationLastSyncAt:string|null;
+  corporationAssetCount:number;
+  corporationPageCount:number;
+  corporationSyncError:string|null;
 }
 
 export interface AssetSyncResult { characterId: number; status: string; assetCount: number; pageCount: number; error: string | null; }
 export interface ResolvedLocation { rawLocationId:number; displayName:string; locationKind:string; solarSystemName:string|null; constellationName:string|null; regionName:string|null; containerPath:string[]; fullPath:string[]; resolutionStatus:string; resolutionSource:string; lastResolved:string|null; }
 export interface SyncedAsset {
-  characterId: number; characterOwner: string; typeId: number; typeName: string; quantity: number;
+  ownerType:"Personal"|"Corporation"; ownerId:number; ownerName:string; characterId:number|null; corporationId:number|null; division:string|null; typeId: number; typeName: string; quantity: number;
   unitVolumeM3:number|null; stackVolumeM3:number|null;
   itemId: number; locationId: number; locationType: string; locationFlag: string; singleton: boolean;
   source: string; lastSynced: string; resolvedLocation: ResolvedLocation;
 }
 export interface LocationRefreshResult { resolved:number; inaccessible:number; errors:string[]; }
+export interface CorporationSyncResult { characterId:number; corporationId:number|null; corporationName:string|null; status:string; roleVerified:boolean; assetCount:number; pageCount:number; error:string|null; }
 export interface WeightedFill { unitPrice:number|null; totalPrice:number|null; requested:number; filled:number; availableVolume:number; sufficient:boolean; }
 export interface MarketQuote { typeId:number; quantity:number; unitVolumeM3:number|null; requestedVolumeM3:number|null; acquisition:WeightedFill; liquidation:WeightedFill; marketProfile:string; fetchedAt:string|null; expiresAt:string|null; stale:boolean; source:string; }
 export interface MarketProfile { profileId:number; displayName:string; regionId:number; locationId:number; refreshIntervalSeconds:number; status:string; fetchedAt:string|null; expiresAt:string|null; orderCount:number; pageCount:number; lastError:string|null; stale:boolean; }
@@ -1356,10 +1369,12 @@ export async function syncAllCharacterAssets(clientId: string): Promise<AssetSyn
   return invoke<AssetSyncResult[]>("sync_all_character_assets", { clientId });
 }
 
-export async function listSyncedAssets(): Promise<SyncedAsset[]> {
+export async function listSyncedAssets(ownerScope:"personal"|"corporation"|"both"="both"): Promise<SyncedAsset[]> {
   if (!inTauri()) return [];
-  return invoke<SyncedAsset[]>("list_synced_assets");
+  return invoke<SyncedAsset[]>("list_synced_assets",{ownerScope});
 }
+export async function syncCorporationAssets(clientId:string,characterId:number):Promise<CorporationSyncResult>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<CorporationSyncResult>("sync_corporation_assets",{clientId,characterId});}
+export async function syncAllCorporationAssets(clientId:string):Promise<CorporationSyncResult[]>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<CorporationSyncResult[]>("sync_all_corporation_assets",{clientId});}
 export async function refreshAssetLocations(clientId:string):Promise<LocationRefreshResult>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<LocationRefreshResult>("refresh_asset_locations",{clientId});}
 export async function getMarketProfile():Promise<MarketProfile>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke<MarketProfile>("get_market_profile");}
 export async function refreshMarketPrices():Promise<{orderCount:number;pageCount:number;fetchedAt:string;expiresAt:string}>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("refresh_market_prices");}

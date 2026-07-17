@@ -22,6 +22,18 @@ pub struct CharacterSummary {
     pub blueprint_page_count: i64,
     pub blueprint_sync_error: Option<String>,
     pub structure_scope_granted: bool,
+    pub corporation_asset_scope_granted: bool,
+    pub corporation_role_scope_granted: bool,
+    pub corporation_division_scope_granted: bool,
+    pub corporation_blueprint_scope_granted: bool,
+    pub corporation_sync_status: String,
+    pub corporation_id: Option<i64>,
+    pub corporation_name: Option<String>,
+    pub corporation_role_verified: bool,
+    pub corporation_last_sync_at: Option<String>,
+    pub corporation_asset_count: i64,
+    pub corporation_page_count: i64,
+    pub corporation_sync_error: Option<String>,
 }
 
 pub struct NewCharacter {

@@ -7,6 +7,7 @@
 mod blueprint;
 mod character;
 mod commands;
+mod corporation;
 mod db;
 mod decision;
 mod esi;
@@ -93,6 +94,8 @@ fn main() {
             commands::list_characters,
             commands::sync_character_assets,
             commands::sync_all_character_assets,
+            commands::sync_corporation_assets,
+            commands::sync_all_corporation_assets,
             commands::list_synced_assets,
             commands::refresh_asset_locations,
             commands::get_market_profile,

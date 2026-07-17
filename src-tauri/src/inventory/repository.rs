@@ -33,14 +33,62 @@ mod synced_asset_tests {
              INSERT INTO character_assets VALUES(1, 99, 34, 500, 60003760, 'station', 'Hangar', 0, '2026-07-12T18:35:01Z');"
         ).unwrap();
 
-        let assets = InventoryRepository::new(&conn).list_synced_assets().unwrap();
+        let assets = InventoryRepository::new(&conn).list_synced_assets("personal").unwrap();
         assert_eq!(assets.len(), 1);
-        assert_eq!(assets[0].character_owner, "Maxdelta");
+        assert_eq!(assets[0].owner_name, "Maxdelta");
+        assert_eq!(assets[0].owner_type, "Personal");
         assert_eq!(assets[0].type_name, "Tritanium");
         assert_eq!(assets[0].location_id, 60003760);
         assert_eq!(assets[0].source, "ESI Character Assets");
         assert_eq!(assets[0].unit_volume_m3, Some(0.01));
         assert_eq!(assets[0].stack_volume_m3, Some(5.0));
+    }
+
+    fn ownership_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE characters(character_id INTEGER PRIMARY KEY, name TEXT);
+             CREATE TABLE corporations(corporation_id INTEGER PRIMARY KEY, name TEXT);
+             CREATE TABLE eve_types(type_id INTEGER PRIMARY KEY, name TEXT, volume_m3 REAL);
+             CREATE TABLE character_assets(
+                character_id INTEGER, item_id INTEGER, type_id INTEGER, quantity INTEGER,
+                location_id INTEGER, location_type TEXT, location_flag TEXT,
+                is_singleton INTEGER, synced_at TEXT);
+             CREATE TABLE corporation_assets(
+                corporation_id INTEGER, item_id INTEGER, type_id INTEGER, quantity INTEGER,
+                location_id INTEGER, location_type TEXT, location_flag TEXT,
+                is_singleton INTEGER, division_name TEXT, synced_at TEXT);
+             CREATE TABLE location_cache(location_id INTEGER PRIMARY KEY,location_kind TEXT,display_name TEXT,solar_system_name TEXT,constellation_name TEXT,region_name TEXT,resolution_status TEXT,resolution_source TEXT,resolved_at TEXT);
+             INSERT INTO characters VALUES(1, 'Pilot One');
+             INSERT INTO corporations VALUES(10, 'Industry Corp');
+             INSERT INTO eve_types VALUES(34, 'Tritanium', 0.01);
+             INSERT INTO character_assets VALUES(1, 101, 34, 5, 60003760, 'station', 'Hangar', 0, '2026-07-17T12:00:00Z');
+             INSERT INTO corporation_assets VALUES(10, 201, 34, 7, 60003760, 'station', 'CorpSAG2', 0, 'Minerals', '2026-07-17T12:01:00Z');"
+        ).unwrap();
+        conn
+    }
+
+    #[test]
+    fn owner_scope_filters_keep_personal_and_corporation_rows_distinct() {
+        let conn = ownership_db();
+        let repository = InventoryRepository::new(&conn);
+        let personal = repository.list_synced_assets("personal").unwrap();
+        assert_eq!((personal.len(), personal[0].owner_type.as_str(), personal[0].quantity), (1, "Personal", 5));
+        let corporation = repository.list_synced_assets("corporation").unwrap();
+        assert_eq!((corporation.len(), corporation[0].owner_type.as_str(), corporation[0].quantity), (1, "Corporation", 7));
+        assert_eq!(corporation[0].owner_name, "Industry Corp");
+        assert_eq!(corporation[0].division.as_deref(), Some("Minerals"));
+        let both = repository.list_synced_assets("both").unwrap();
+        assert_eq!(both.len(), 2);
+        assert!(both.iter().any(|asset| asset.item_id == 101));
+        assert!(both.iter().any(|asset| asset.item_id == 201));
+    }
+
+    #[test]
+    fn invalid_owner_scope_is_rejected() {
+        let conn = ownership_db();
+        let error = InventoryRepository::new(&conn).list_synced_assets("global").err().unwrap();
+        assert!(error.contains("personal, corporation, or both"));
     }
 }
 
@@ -49,7 +97,16 @@ impl<'a> InventoryRepository<'a> {
         Self { conn }
     }
 
-    pub fn list_synced_assets(&self) -> Result<Vec<SyncedAsset>, String> {
+    pub fn list_synced_assets(&self, owner_scope:&str) -> Result<Vec<SyncedAsset>, String> {
+        if !["personal","corporation","both"].contains(&owner_scope){return Err("owner scope must be personal, corporation, or both".into())}
+        let mut output=Vec::new();
+        if owner_scope!="corporation" { output.extend(self.list_personal_assets()?); }
+        if owner_scope!="personal" { output.extend(self.list_corporation_assets()?); }
+        output.sort_by(|a,b|(&a.owner_type,&a.owner_name,a.location_id,&a.type_name,a.item_id).cmp(&(&b.owner_type,&b.owner_name,b.location_id,&b.type_name,b.item_id)));
+        Ok(output)
+    }
+
+    fn list_personal_assets(&self) -> Result<Vec<SyncedAsset>, String> {
         let mut stmt = self.conn.prepare(
             "SELECT a.character_id, c.name, a.type_id,
                     COALESCE(t.name, 'Unknown Type ' || a.type_id), a.quantity, a.item_id,
@@ -62,7 +119,7 @@ impl<'a> InventoryRepository<'a> {
                       COALESCE(t.name, 'Unknown Type ' || a.type_id), a.item_id"
         ).map_err(|e| e.to_string())?;
         let rows = stmt.query_map([], |row| { let character_id=row.get(0)?; let location_id=row.get(6)?; Ok(SyncedAsset {
-            character_id, character_owner: row.get(1)?, type_id: row.get(2)?,
+            owner_type:"Personal".into(),owner_id:character_id,owner_name:row.get(1)?,character_id:Some(character_id),corporation_id:None,division:None,type_id: row.get(2)?,
             type_name: row.get(3)?, quantity: row.get(4)?, item_id: row.get(5)?,
             unit_volume_m3: row.get(11)?,
             stack_volume_m3: crate::volume::volume_for_quantity(row.get(11)?, row.get(4)?),
@@ -72,6 +129,12 @@ impl<'a> InventoryRepository<'a> {
             resolved_location: crate::location::resolve(self.conn,character_id,location_id).map_err(|e|rusqlite::Error::ToSqlConversionFailure(e.into()))?,
         })}).map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
+
+    fn list_corporation_assets(&self)->Result<Vec<SyncedAsset>,String>{
+        let mut stmt=self.conn.prepare("SELECT a.corporation_id,c.name,a.type_id,COALESCE(t.name,'Unknown Type '||a.type_id),a.quantity,a.item_id,a.location_id,a.location_type,a.location_flag,a.is_singleton,a.synced_at,t.volume_m3,a.division_name FROM corporation_assets a JOIN corporations c ON c.corporation_id=a.corporation_id LEFT JOIN eve_types t ON t.type_id=a.type_id ORDER BY c.name,a.location_id,COALESCE(t.name,'Unknown Type '||a.type_id),a.item_id").map_err(|e|e.to_string())?;
+        let rows=stmt.query_map([],|row|{let corporation_id=row.get(0)?;let location_id=row.get(6)?;let quantity=row.get(4)?;let unit=row.get(11)?;Ok(SyncedAsset{owner_type:"Corporation".into(),owner_id:corporation_id,owner_name:row.get(1)?,character_id:None,corporation_id:Some(corporation_id),division:row.get(12)?,type_id:row.get(2)?,type_name:row.get(3)?,quantity,item_id:row.get(5)?,unit_volume_m3:unit,stack_volume_m3:crate::volume::volume_for_quantity(unit,quantity),location_id,location_type:row.get(7)?,location_flag:row.get(8)?,singleton:row.get::<_,i64>(9)?!=0,source:"ESI Corporation Assets".into(),last_synced:row.get(10)?,resolved_location:crate::location::resolve_corporation(self.conn,corporation_id,location_id).map_err(|e|rusqlite::Error::ToSqlConversionFailure(e.into()))?})}).map_err(|e|e.to_string())?;
+        rows.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())
     }
 
     /// Normal runtime: excludes demo-seeded rows (`source = 'demo'`).

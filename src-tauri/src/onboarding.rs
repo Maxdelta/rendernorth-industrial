@@ -266,7 +266,7 @@ fn diagnostics_value(conn: &Connection) -> Result<Value, String> {
         })),
     ).optional().map_err(|error| format!("failed to read diagnostics SDE state: {error}"))?;
     Ok(json!({
-        "privacy": "No access tokens, refresh tokens, Client IDs, credential material, or app secrets are included.",
+        "privacy": "No access tokens, refresh tokens, authorization codes, Client IDs, client secrets, PKCE verifier values, or credential material are included.",
         "authentication": { "mode": authentication.application_name },
         "os": { "family": std::env::consts::OS, "architecture": std::env::consts::ARCH },
         "application": about,
@@ -398,5 +398,8 @@ mod tests {
         assert!(!report.contains("access_token"));
         assert!(!report.contains("client_id"));
         assert!(!report.contains("client_secret"));
+        assert!(!report.contains("authorization_code"));
+        assert!(!report.contains("code_verifier"));
+        assert!(!report.contains("pkce_verifier"));
     }
 }

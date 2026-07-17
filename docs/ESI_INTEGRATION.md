@@ -33,6 +33,10 @@ OAuth consent expansion; existing refresh tokens cannot silently gain scope.
 | Scope | Used by | Why |
 |---|---|---|
 | esi-assets.read_assets.v1 | Asset Manager, Inventory Engine | What do I own / where is it |
+| esi-assets.read_corporation_assets.v1 | Corporation Asset Viewer | Read corporation asset stacks and raw locations (Director only) |
+| esi-characters.read_corporation_roles.v1 | Corporation Asset Viewer | Verify that the authorizing character has the required Director role |
+| esi-corporations.read_divisions.v1 | Corporation Asset Viewer | Read custom corporation hangar division names (Director only) |
+| esi-corporations.read_blueprints.v1 | Future Corporation Blueprint Viewer | Authorization requested now; endpoint use and synchronization are not implemented in REQ-001 |
 | esi-universe.read_structures.v1 | Asset Manager | Resolve citadel names for asset locations |
 | esi-characters.read_blueprints.v1 | Blueprint Manager | BPO/BPC inventory, ME/TE |
 | esi-industry.read_character_jobs.v1 | Industry Jobs, Factory Status | Running/idle slots, in-progress output |
@@ -51,7 +55,30 @@ Sprint 011B implements the personal-character asset slice: sequential
 `X-Pages` pagination, access-token refresh through the existing secure token
 store, and one transaction per completed character snapshot. A fetch or write
 failure retains the prior successful asset rows and records visible sync state.
-Corporation assets and structure-name resolution are not part of this slice.
+That personal snapshot remains separate from the later corporation snapshot.
+
+### Corporation assets (REQ-001 Phase 1)
+
+- Official operations: `GET /corporations/{corporation_id}/assets/`,
+  `GET /characters/{character_id}/roles/`, and
+  `GET /corporations/{corporation_id}/divisions/`; public character and
+  corporation information routes identify the current corporation and name.
+- Required scopes: `esi-assets.read_corporation_assets.v1`,
+  `esi-characters.read_corporation_roles.v1`, and
+  `esi-corporations.read_divisions.v1`.
+- CCP requires the authorizing character to hold the corporation `Director`
+  role. Missing scopes require reauthorization; a missing role produces an
+  explicit permission error and leaves the last successful snapshot intact.
+- Asset pagination is driven by `X-Pages` with at most 1000 records per page.
+  The route's documented cache duration is 3600 seconds.
+- Corporation identity, custom hangar division names, item hierarchy, and
+  human-readable terminal locations are stored/read independently of personal
+  assets. Raw IDs and flags remain available when a structure is inaccessible.
+- Phase 1 is view-only. Corporation rows never enter Production, Quartermaster,
+  Procurement, manual inventory, personal inventory totals, or demo data.
+- `esi-corporations.read_blueprints.v1` is included in authorization to avoid
+  an immediate second consent cycle for Phase 2. REQ-001 does not call the
+  corporation-blueprints endpoint or store, display, or consume its records.
 
 ### Character blueprints (RNI-150)
 

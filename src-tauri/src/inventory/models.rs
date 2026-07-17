@@ -27,8 +27,12 @@ pub struct ManualInventoryEntry {
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncedAsset {
-    pub character_id: i64,
-    pub character_owner: String,
+    pub owner_type: String,
+    pub owner_id: i64,
+    pub owner_name: String,
+    pub character_id: Option<i64>,
+    pub corporation_id: Option<i64>,
+    pub division: Option<String>,
     pub type_id: i64,
     pub type_name: String,
     pub quantity: i64,

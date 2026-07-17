@@ -10,9 +10,9 @@
 //! the right order with the right values," which is what
 //! docs/ESI_INTEGRATION.md §2's numbered steps describe.
 //!
-//! Sprint 011B requests the single read-only scope used by character asset
-//! synchronization. Characters connected before this scope was introduced
-//! must run Add Character again so CCP can grant it.
+//! The application requests its complete read-only capability set together.
+//! Characters connected before a scope is introduced must run Add Character
+//! again so CCP can grant the expanded consent explicitly.
 
 use super::{client, jwt, loopback, pkce};
 use std::time::Duration;
@@ -23,6 +23,10 @@ pub const SCOPES: &[&str] = &[
     "esi-assets.read_assets.v1",
     "esi-characters.read_blueprints.v1",
     "esi-universe.read_structures.v1",
+    "esi-assets.read_corporation_assets.v1",
+    "esi-characters.read_corporation_roles.v1",
+    "esi-corporations.read_divisions.v1",
+    "esi-corporations.read_blueprints.v1",
 ];
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(180);
 

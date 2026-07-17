@@ -70,10 +70,16 @@ impl<'a> CharacterRepository<'a> {
                         ,CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-characters.read_blueprints.v1 ') > 0 THEN 1 ELSE 0 END
                         ,COALESCE(bs.status, 'never'), bs.last_success_at,
                         COALESCE(bs.blueprint_count, 0), COALESCE(bs.page_count, 0), bs.last_error,
-                        CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-universe.read_structures.v1 ') > 0 THEN 1 ELSE 0 END
+                        CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-universe.read_structures.v1 ') > 0 THEN 1 ELSE 0 END,
+                        CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-assets.read_corporation_assets.v1 ') > 0 THEN 1 ELSE 0 END,
+                        CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-characters.read_corporation_roles.v1 ') > 0 THEN 1 ELSE 0 END,
+                        CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-corporations.read_divisions.v1 ') > 0 THEN 1 ELSE 0 END,
+                        CASE WHEN instr(' ' || c.scopes_granted || ' ', ' esi-corporations.read_blueprints.v1 ') > 0 THEN 1 ELSE 0 END,
+                        COALESCE(cs.status,'never'),cs.corporation_id,cs.corporation_name,COALESCE(cs.role_verified,0),cs.last_success_at,COALESCE(cs.asset_count,0),COALESCE(cs.page_count,0),cs.last_error
                  FROM characters c
                  LEFT JOIN character_asset_sync_state s ON s.character_id = c.character_id
                  LEFT JOIN character_blueprint_sync_state bs ON bs.character_id = c.character_id
+                 LEFT JOIN corporation_character_sync_state cs ON cs.character_id = c.character_id
                  WHERE c.is_demo = 0 ORDER BY c.name",
             )
             .map_err(|e| e.to_string())?;
@@ -98,6 +104,11 @@ impl<'a> CharacterRepository<'a> {
                     blueprint_page_count: row.get(15)?,
                     blueprint_sync_error: row.get(16)?,
                     structure_scope_granted: row.get::<_, i64>(17)? != 0,
+                    corporation_asset_scope_granted:row.get::<_,i64>(18)?!=0,
+                    corporation_role_scope_granted:row.get::<_,i64>(19)?!=0,
+                    corporation_division_scope_granted:row.get::<_,i64>(20)?!=0,
+                    corporation_blueprint_scope_granted:row.get::<_,i64>(21)?!=0,
+                    corporation_sync_status:row.get(22)?,corporation_id:row.get(23)?,corporation_name:row.get(24)?,corporation_role_verified:row.get::<_,i64>(25)?!=0,corporation_last_sync_at:row.get(26)?,corporation_asset_count:row.get(27)?,corporation_page_count:row.get(28)?,corporation_sync_error:row.get(29)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -123,6 +134,7 @@ mod tests {
         include_str!("../../migrations/0011_esi_character_auth.sql"),
         include_str!("../../migrations/0012_character_asset_sync.sql"),
         include_str!("../../migrations/0013_character_blueprint_sync.sql"),
+        include_str!("../../migrations/0020_corporation_asset_sync.sql"),
     ];
 
     fn test_db() -> Connection {

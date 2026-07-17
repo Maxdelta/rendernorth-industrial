@@ -7,6 +7,7 @@
 pub mod auth;
 pub mod assets;
 pub mod blueprints;
+pub mod corporation_assets;
 pub mod client;
 pub mod jwt;
 pub mod loopback;

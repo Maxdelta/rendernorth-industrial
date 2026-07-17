@@ -858,10 +858,16 @@ pub fn sync_all_character_assets(db: State<'_, Db>, client_id: String) -> Result
 }
 
 #[tauri::command]
-pub fn list_synced_assets(db: State<'_, Db>) -> Result<Vec<inventory::models::SyncedAsset>, String> {
+pub fn list_synced_assets(db: State<'_, Db>, owner_scope:String) -> Result<Vec<inventory::models::SyncedAsset>, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
-    inventory::repository::InventoryRepository::new(&conn).list_synced_assets()
+    inventory::repository::InventoryRepository::new(&conn).list_synced_assets(&owner_scope)
 }
+
+#[tauri::command]
+pub fn sync_corporation_assets(db:State<'_,Db>,client_id:String,character_id:i64)->Result<crate::corporation::CorporationSyncResult,String>{let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::corporation::sync_one(&conn,&client_id,character_id)}
+
+#[tauri::command]
+pub fn sync_all_corporation_assets(db:State<'_,Db>,client_id:String)->Result<Vec<crate::corporation::CorporationSyncResult>,String>{let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::corporation::sync_all(&conn,&client_id)}
 
 #[tauri::command]
 pub async fn refresh_asset_locations(
