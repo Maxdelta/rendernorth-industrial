@@ -67,7 +67,7 @@ export function AboutPrivacy() {
       <section id="about-overview" className="about-function-section">
         <h3 className="about-section-heading">About</h3>
         <div className="about-grid">
-          <div><span>Release status</span><strong>{about?.releaseStatus ?? "Open Beta 0.1.2"}</strong></div>
+          <div><span>Release status</span><strong>{about?.releaseStatus ?? "Open Beta 0.1.3"}</strong></div>
           <div><span>Version</span><strong>{about?.version ?? "Loading…"}</strong></div>
           <div><span>Build</span><strong>{about?.build && about.build !== "unknown" ? new Date(Number(about.build) * 1000).toLocaleString() : "Unknown"}</strong></div>
           <div><span>Git commit</span><strong>{about?.gitCommit ?? "Loading…"}</strong></div>

@@ -2,6 +2,42 @@
 
 All notable user-facing changes to RenderNorth Industrial are recorded here. Releases are listed newest first and use semantic versions.
 
+## [0.1.3] — 2026-07-17
+
+### RenderNorth Industrial Open Beta 0.1.3
+
+Open Beta 0.1.3 adds Phase 1 corporation asset synchronization and isolated corporation inventory viewing for authorized industrial corporations.
+
+### Added
+
+- Corporation Asset Synchronization (Phase 1).
+- Personal / Corporation / Both inventory filters.
+- Director role validation.
+- Corporation capability detection.
+- Corporation Blueprint authorization support for a future implementation.
+
+### Improved
+
+- Corporation permission guidance now distinguishes authorization from the actual Director corporation role.
+- Authorization diagnostics now report safe capability and scope metadata.
+- Character capability display now shows corporation asset and future corporation blueprint authorization states.
+
+### Fixed
+
+- Missing Director permissions are reported precisely instead of appearing as an empty successful corporation inventory.
+
+### Security & Privacy
+
+- Corporation permissions are read-only.
+- Diagnostics explicitly exclude tokens, authorization codes, client secrets, PKCE verifier values, and credential material.
+- No authentication secrets are exposed to the frontend.
+
+### Known Limitations
+
+- Live corporation synchronization requires an EVE character with the actual Director corporation role.
+- Corporation Blueprint synchronization is not yet implemented.
+- Corporation assets are not yet used by Production or Quartermaster.
+
 ## [0.1.2] — 2026-07-16
 
 ### RenderNorth Industrial Open Beta 0.1.2

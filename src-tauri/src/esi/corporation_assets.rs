@@ -69,7 +69,10 @@ fn request(
     let mut req = http
         .get(url)
         .header("X-Compatibility-Date", COMPATIBILITY_DATE)
-        .header("User-Agent", "RenderNorthIndustrial/0.1.2");
+        .header(
+            "User-Agent",
+            concat!("RenderNorthIndustrial/", env!("CARGO_PKG_VERSION")),
+        );
     if let Some(token) = token {
         req = req.bearer_auth(token);
     }
