@@ -42,6 +42,7 @@ OAuth consent expansion; existing refresh tokens cannot silently gain scope.
 | esi-industry.read_character_jobs.v1 | Industry Jobs, Factory Status | Running/idle slots, in-progress output |
 | esi-wallet.read_character_wallet.v1 | Wallet panel, Cost Engine | Liquidity for shopping plan |
 | esi-markets.read_character_orders.v1 | Market Orders module | Open buy/sell exposure |
+| esi-contracts.read_character_contracts.v1 | Contracts module | Personal contract list, item details, and auction bids |
 | esi-planets.manage_planets.v1 *(read use only)* | PI Manager (later sprint) | PI colony output vs. build-target requirements |
 | esi-industry.read_character_mining.v1 | Mining Manager (later sprint) | Mining ledger vs. mineral needs |
 
@@ -118,6 +119,29 @@ That personal snapshot remains separate from the later corporation snapshot.
 - Parent item IDs are walked through the synchronized character asset snapshot
   with cycle detection and a 32-segment maximum. Inaccessible structures are
   labeled honestly with their raw ID and never assigned a guessed name.
+
+### Personal Commerce (RNI-159 Phase 1)
+
+- Active personal orders use `GET /characters/{character_id}/orders` with
+  `esi-markets.read_character_orders.v1`. The current route is not paginated;
+  ETag and Last-Modified cache metadata are retained and a `304 Not Modified`
+  response preserves the existing snapshot without rewriting rows.
+- Personal contracts use `GET /characters/{character_id}/contracts` with
+  `esi-contracts.read_character_contracts.v1`. Every page is fetched from the
+  `X-Pages` count. CCP returns contracts involving the character that are no
+  older than 30 days, plus contracts still in progress.
+- Contract items and auction bids use
+  `GET /characters/{character_id}/contracts/{contract_id}/items` and
+  `/bids`. These details are loaded only when a user opens a contract, cached
+  locally, and never requested row-by-row while rendering the dashboard.
+- Orders and contracts are replaceable, per-character snapshots. Failed syncs
+  preserve the prior successful snapshot; a successful empty response is a
+  valid empty state. Corporation orders are excluded, and no corporation
+  contract endpoint is called.
+- ISK decimals are stored as exact text received from ESI. Dashboard totals
+  use deterministic integer-cent arithmetic rather than binary floating point.
+- Commerce data is display-only and remains outside Production, Quartermaster,
+  Procurement, Inventory ownership, reservations, and market pricing caches.
 
 - **Per-resource fetchers** with a shared client: `assets`, `blueprints`, `industry_jobs`, `wallet`, `orders`.
 - **Cadence:** driven by ESI's own `expires` header per endpoint — never poll faster than the cache timer. Manual "Sync now" respects the same limits (button disabled until `next_allowed_at`).

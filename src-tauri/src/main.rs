@@ -7,6 +7,7 @@
 mod blueprint;
 mod character;
 mod commands;
+mod commerce;
 mod corporation;
 mod db;
 mod decision;
@@ -14,17 +15,17 @@ mod esi;
 mod inventory;
 mod location;
 mod market;
-mod onboarding;
-mod volume;
 mod models;
+mod onboarding;
 mod operation;
-mod production;
 mod procurement;
+mod production;
 mod quartermaster;
-mod reservation;
 mod release;
+mod reservation;
 mod staticdata;
 mod update;
+mod volume;
 
 use tauri::Manager;
 
@@ -96,6 +97,15 @@ fn main() {
             commands::sync_all_character_assets,
             commands::sync_corporation_assets,
             commands::sync_all_corporation_assets,
+            commands::sync_character_market_orders,
+            commands::sync_all_market_orders,
+            commands::sync_character_contracts,
+            commands::sync_all_contracts,
+            commands::sync_all_commerce,
+            commands::get_market_order_dashboard,
+            commands::get_contract_dashboard,
+            commands::get_commerce_overview,
+            commands::get_contract_detail,
             commands::list_synced_assets,
             commands::refresh_asset_locations,
             commands::get_market_profile,
@@ -120,27 +130,27 @@ fn main() {
             commands::delete_doctrine_fit,
             commands::analyze_doctrine,
             commands::sync_character_blueprints,
-            commands::sync_all_character_blueprints
-            ,commands::inspect_sde_directory
-            ,commands::pick_sde_directory
-            ,commands::pick_sde_archive
-            ,commands::open_selected_folder
-            ,commands::get_about_info
-            ,commands::get_authentication_info
-            ,commands::save_custom_authentication
-            ,commands::restore_official_authentication
-            ,commands::export_diagnostics
-            ,commands::open_external_url
-            ,commands::set_application_section
-            ,commands::get_release_view_state
-            ,commands::mark_current_release_viewed
-            ,commands::get_update_state
-            ,commands::get_update_preferences
-            ,commands::save_update_preferences
-            ,commands::check_for_updates
-            ,commands::remind_update_later
-            ,commands::skip_update_version
-            ,commands::clear_skipped_update
+            commands::sync_all_character_blueprints,
+            commands::inspect_sde_directory,
+            commands::pick_sde_directory,
+            commands::pick_sde_archive,
+            commands::open_selected_folder,
+            commands::get_about_info,
+            commands::get_authentication_info,
+            commands::save_custom_authentication,
+            commands::restore_official_authentication,
+            commands::export_diagnostics,
+            commands::open_external_url,
+            commands::set_application_section,
+            commands::get_release_view_state,
+            commands::mark_current_release_viewed,
+            commands::get_update_state,
+            commands::get_update_preferences,
+            commands::save_update_preferences,
+            commands::check_for_updates,
+            commands::remind_update_later,
+            commands::skip_update_version,
+            commands::clear_skipped_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running RenderNorth Industrial");

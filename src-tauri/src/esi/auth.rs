@@ -27,6 +27,8 @@ pub const SCOPES: &[&str] = &[
     "esi-characters.read_corporation_roles.v1",
     "esi-corporations.read_divisions.v1",
     "esi-corporations.read_blueprints.v1",
+    "esi-markets.read_character_orders.v1",
+    "esi-contracts.read_character_contracts.v1",
 ];
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -44,14 +46,20 @@ pub fn run_add_character_flow(client_id: &str) -> Result<AddCharacterResult, Str
     let challenge = pkce::code_challenge_s256(&verifier);
     let state = pkce::generate_state();
 
-    let authorize_url = client::build_authorize_url(client_id, REDIRECT_URI, &challenge, &state, SCOPES);
+    let authorize_url =
+        client::build_authorize_url(client_id, REDIRECT_URI, &challenge, &state, SCOPES);
 
     open::that(&authorize_url).map_err(|e| format!("failed to open the system browser: {e}"))?;
 
     let callback = loopback::listen_for_callback(REDIRECT_PORT, &state, LOGIN_TIMEOUT)?;
 
     let http = reqwest::Client::new();
-    let tokens = tauri::async_runtime::block_on(client::exchange_code_for_tokens(&http, client_id, &callback.code, &verifier))?;
+    let tokens = tauri::async_runtime::block_on(client::exchange_code_for_tokens(
+        &http,
+        client_id,
+        &callback.code,
+        &verifier,
+    ))?;
 
     let now_unix = chrono::Utc::now().timestamp();
     let identity = jwt::parse_and_validate(&tokens.access_token, client_id, now_unix)?;
@@ -62,7 +70,8 @@ pub fn run_add_character_flow(client_id: &str) -> Result<AddCharacterResult, Str
     // scopes here, and there's no reason to remove correct, if currently
     // inert, logic.
     let requested: std::collections::HashSet<&str> = SCOPES.iter().copied().collect();
-    let granted: std::collections::HashSet<&str> = identity.scopes.iter().map(|s| s.as_str()).collect();
+    let granted: std::collections::HashSet<&str> =
+        identity.scopes.iter().map(|s| s.as_str()).collect();
     if !requested.is_subset(&granted) {
         return Err(format!(
             "EVE SSO granted fewer scopes than requested — requested {SCOPES:?}, granted {:?}. \

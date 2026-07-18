@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test:commerce-ui": "node --test src/lib/isk.test.mjs src/lib/commerceUiState.test.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "package:beta": "powershell -ExecutionPolicy Bypass -File scripts/package-open-beta.ps1"

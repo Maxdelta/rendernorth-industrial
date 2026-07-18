@@ -10,24 +10,67 @@ use std::sync::Mutex;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("../migrations/0001_init.sql")),
     (2, include_str!("../migrations/0002_build_targets.sql")),
-    (3, include_str!("../migrations/0003_inventory_foundation.sql")),
-    (4, include_str!("../migrations/0004_operation_foundation.sql")),
-    (5, include_str!("../migrations/0005_reservation_foundation.sql")),
-    (6, include_str!("../migrations/0006_blueprint_foundation.sql")),
-    (7, include_str!("../migrations/0007_production_requirement_foundation.sql")),
-    (8, include_str!("../migrations/0008_real_production_planner.sql")),
+    (
+        3,
+        include_str!("../migrations/0003_inventory_foundation.sql"),
+    ),
+    (
+        4,
+        include_str!("../migrations/0004_operation_foundation.sql"),
+    ),
+    (
+        5,
+        include_str!("../migrations/0005_reservation_foundation.sql"),
+    ),
+    (
+        6,
+        include_str!("../migrations/0006_blueprint_foundation.sql"),
+    ),
+    (
+        7,
+        include_str!("../migrations/0007_production_requirement_foundation.sql"),
+    ),
+    (
+        8,
+        include_str!("../migrations/0008_real_production_planner.sql"),
+    ),
     (9, include_str!("../migrations/0009_inventory_scope.sql")),
-    (10, include_str!("../migrations/0010_demo_category_correction.sql")),
-    (11, include_str!("../migrations/0011_esi_character_auth.sql")),
-    (12, include_str!("../migrations/0012_character_asset_sync.sql")),
-    (13, include_str!("../migrations/0013_character_blueprint_sync.sql")),
-    (14, include_str!("../migrations/0014_location_resolution.sql")),
+    (
+        10,
+        include_str!("../migrations/0010_demo_category_correction.sql"),
+    ),
+    (
+        11,
+        include_str!("../migrations/0011_esi_character_auth.sql"),
+    ),
+    (
+        12,
+        include_str!("../migrations/0012_character_asset_sync.sql"),
+    ),
+    (
+        13,
+        include_str!("../migrations/0013_character_blueprint_sync.sql"),
+    ),
+    (
+        14,
+        include_str!("../migrations/0014_location_resolution.sql"),
+    ),
     (15, include_str!("../migrations/0015_market_valuation.sql")),
     (16, include_str!("../migrations/0016_type_volume.sql")),
-    (17, include_str!("../migrations/0017_operation_procurement.sql")),
+    (
+        17,
+        include_str!("../migrations/0017_operation_procurement.sql"),
+    ),
     (18, include_str!("../migrations/0018_quartermaster.sql")),
-    (19, include_str!("../migrations/0019_source_aware_operation_blueprints.sql")),
-    (20, include_str!("../migrations/0020_corporation_asset_sync.sql")),
+    (
+        19,
+        include_str!("../migrations/0019_source_aware_operation_blueprints.sql"),
+    ),
+    (
+        20,
+        include_str!("../migrations/0020_corporation_asset_sync.sql"),
+    ),
+    (21, include_str!("../migrations/0021_personal_commerce.sql")),
 ];
 
 pub struct Db {
@@ -56,7 +99,10 @@ impl Db {
     }
 
     pub fn schema_version(&self) -> Result<i64, String> {
-        let conn = self.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "db lock poisoned".to_string())?;
         conn.query_row(
             "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
             [],
@@ -152,8 +198,11 @@ fn migrate(conn: &Connection) -> Result<(), String> {
 
     if cleanup_pending {
         run_demo_seed_cleanup(conn)?;
-        conn.execute("DELETE FROM install_state WHERE key = 'demo_cleanup_pending'", [])
-            .map_err(|e| format!("failed to clear fresh-install marker: {e}"))?;
+        conn.execute(
+            "DELETE FROM install_state WHERE key = 'demo_cleanup_pending'",
+            [],
+        )
+        .map_err(|e| format!("failed to clear fresh-install marker: {e}"))?;
     }
 
     Ok(())
@@ -239,13 +288,26 @@ mod tests {
 
     fn demo_row_counts(conn: &Connection) -> Vec<(&'static str, i64)> {
         let tables = [
-            "operations", "operation_timeline", "operation_dependencies",
-            "operation_blueprint_requirements", "production_requirements",
-            "production_requirement_groups", "production_requirement_sources",
-            "inventory_reservations", "reservation_events", "reservation_conflicts",
-            "inventory_items", "inventory_allocations", "inventory_locations",
-            "characters", "blueprints", "build_projects", "build_requirement_groups",
-            "missing_materials", "recommendations", "factory_snapshot",
+            "operations",
+            "operation_timeline",
+            "operation_dependencies",
+            "operation_blueprint_requirements",
+            "production_requirements",
+            "production_requirement_groups",
+            "production_requirement_sources",
+            "inventory_reservations",
+            "reservation_events",
+            "reservation_conflicts",
+            "inventory_items",
+            "inventory_allocations",
+            "inventory_locations",
+            "characters",
+            "blueprints",
+            "build_projects",
+            "build_requirement_groups",
+            "missing_materials",
+            "recommendations",
+            "factory_snapshot",
         ];
         tables
             .iter()
@@ -266,19 +328,38 @@ mod tests {
         migrate(&conn).expect("migrate should succeed on a fresh database");
 
         for (table, count) in demo_row_counts(&conn) {
-            assert_eq!(count, 0, "table '{table}' must be empty after fresh-install cleanup, found {count} rows");
+            assert_eq!(
+                count, 0,
+                "table '{table}' must be empty after fresh-install cleanup, found {count} rows"
+            );
         }
 
         // Vocabulary/taxonomy tables are not demo data and must survive.
-        let categories: i64 = conn.query_row("SELECT COUNT(*) FROM inventory_categories", [], |r| r.get(0)).unwrap();
-        let states: i64 = conn.query_row("SELECT COUNT(*) FROM inventory_states", [], |r| r.get(0)).unwrap();
-        assert!(categories > 0, "inventory_categories is product vocabulary, must survive fresh-install cleanup");
-        assert!(states > 0, "inventory_states is product vocabulary, must survive fresh-install cleanup");
+        let categories: i64 = conn
+            .query_row("SELECT COUNT(*) FROM inventory_categories", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let states: i64 = conn
+            .query_row("SELECT COUNT(*) FROM inventory_states", [], |r| r.get(0))
+            .unwrap();
+        assert!(
+            categories > 0,
+            "inventory_categories is product vocabulary, must survive fresh-install cleanup"
+        );
+        assert!(
+            states > 0,
+            "inventory_states is product vocabulary, must survive fresh-install cleanup"
+        );
 
         // The marker must have been created and then cleared — no
         // permanent runtime dependency left behind.
         let marker: i64 = conn
-            .query_row("SELECT COUNT(*) FROM install_state WHERE key = 'demo_cleanup_pending'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM install_state WHERE key = 'demo_cleanup_pending'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(marker, 0, "the fresh-install marker must be cleared once cleanup succeeds, not left pending forever");
     }
@@ -317,12 +398,28 @@ mod tests {
 
         migrate(&conn).expect("second migrate (resume) should succeed");
 
-        let demo_ops: i64 = conn.query_row("SELECT COUNT(*) FROM operations WHERE is_demo = 1", [], |r| r.get(0)).unwrap();
-        assert_eq!(demo_ops, 0, "resumed cleanup must finish removing demo rows left over from the simulated crash");
-        let marker: i64 = conn
-            .query_row("SELECT COUNT(*) FROM install_state WHERE key = 'demo_cleanup_pending'", [], |r| r.get(0))
+        let demo_ops: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM operations WHERE is_demo = 1",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(marker, 0, "marker must be cleared again after the resumed cleanup succeeds");
+        assert_eq!(
+            demo_ops, 0,
+            "resumed cleanup must finish removing demo rows left over from the simulated crash"
+        );
+        let marker: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM install_state WHERE key = 'demo_cleanup_pending'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            marker, 0,
+            "marker must be cleared again after the resumed cleanup succeeds"
+        );
     }
 
     #[test]
@@ -343,24 +440,53 @@ mod tests {
         .unwrap();
         for (version, sql) in MIGRATIONS {
             conn.execute_batch(sql).unwrap();
-            conn.execute("INSERT INTO schema_migrations (version) VALUES (?1)", [version]).unwrap();
+            conn.execute(
+                "INSERT INTO schema_migrations (version) VALUES (?1)",
+                [version],
+            )
+            .unwrap();
         }
 
-        let demo_ops_before: i64 = conn.query_row("SELECT COUNT(*) FROM operations WHERE is_demo = 1", [], |r| r.get(0)).unwrap();
-        assert!(demo_ops_before > 0, "fixture must have pre-existing demo rows for this test to be meaningful");
+        let demo_ops_before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM operations WHERE is_demo = 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(
+            demo_ops_before > 0,
+            "fixture must have pre-existing demo rows for this test to be meaningful"
+        );
 
         // Now call migrate() for the "first time" this code sees this
         // already-populated database — current will be > 0, so the
         // marker must never be written.
         migrate(&conn).expect("migrate should succeed on an already-migrated database");
 
-        let demo_ops_after: i64 = conn.query_row("SELECT COUNT(*) FROM operations WHERE is_demo = 1", [], |r| r.get(0)).unwrap();
-        assert_eq!(demo_ops_before, demo_ops_after, "an upgraded install's demo rows must never be touched");
+        let demo_ops_after: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM operations WHERE is_demo = 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            demo_ops_before, demo_ops_after,
+            "an upgraded install's demo rows must never be touched"
+        );
 
         let marker: i64 = conn
-            .query_row("SELECT COUNT(*) FROM install_state WHERE key = 'demo_cleanup_pending'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM install_state WHERE key = 'demo_cleanup_pending'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(marker, 0, "the marker must never be written for a database that already had migration history");
+        assert_eq!(
+            marker, 0,
+            "the marker must never be written for a database that already had migration history"
+        );
     }
 
     #[test]
@@ -370,19 +496,30 @@ mod tests {
         for (_, sql) in MIGRATIONS.iter().filter(|(version, _)| *version <= 18) {
             conn.execute_batch(sql).unwrap();
         }
-        conn.execute("INSERT INTO eve_categories(category_id,name) VALUES(900,'Test')",[]).unwrap();
-        conn.execute("INSERT INTO eve_groups(group_id,category_id,name) VALUES(900,900,'Test')",[]).unwrap();
+        conn.execute(
+            "INSERT INTO eve_categories(category_id,name) VALUES(900,'Test')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO eve_groups(group_id,category_id,name) VALUES(900,900,'Test')",
+            [],
+        )
+        .unwrap();
         conn.execute("INSERT INTO eve_types(type_id,name,group_id,is_manufacturable) VALUES(900,'Test Product',900,1)",[]).unwrap();
         conn.execute("INSERT INTO operations(goal,priority,status,progress,notes,is_demo) VALUES('Legacy',1,'planned',0,'',0)",[]).unwrap();
-        let operation_id=conn.last_insert_rowid();
+        let operation_id = conn.last_insert_rowid();
         conn.execute("INSERT INTO blueprints(blueprint_id,type_name,is_copy,me_level,te_level,is_demo) VALUES(900,'Test Product',0,10,20,0)",[]).unwrap();
         conn.execute("INSERT INTO operation_build_targets(operation_id,type_id,quantity_requested,blueprint_mode,owned_blueprint_id) VALUES(?1,900,1,'owned',900)",[operation_id]).unwrap();
-        conn.execute_batch(include_str!("../migrations/0019_source_aware_operation_blueprints.sql")).unwrap();
+        conn.execute_batch(include_str!(
+            "../migrations/0019_source_aware_operation_blueprints.sql"
+        ))
+        .unwrap();
         let values:(String,i64)=conn.query_row(
             "SELECT selected_blueprint_source,manual_blueprint_id FROM operation_build_targets WHERE operation_id=?1",
             [operation_id],|r|Ok((r.get(0)?,r.get(1)?))
         ).unwrap();
-        assert_eq!(values,("manual".into(),900));
+        assert_eq!(values, ("manual".into(), 900));
     }
 
     #[test]
@@ -396,7 +533,11 @@ mod tests {
             "INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled,authorization_status) VALUES(42,'Pilot',0,'',1,'authorized')",
             [],
         ).unwrap();
-        conn.execute("INSERT INTO eve_categories(category_id,name) VALUES(99991,'Migration Test')",[]).unwrap();
+        conn.execute(
+            "INSERT INTO eve_categories(category_id,name) VALUES(99991,'Migration Test')",
+            [],
+        )
+        .unwrap();
         conn.execute("INSERT INTO eve_groups(group_id,category_id,name) VALUES(99991,99991,'Migration Test')",[]).unwrap();
         conn.execute("INSERT INTO eve_types(type_id,name,group_id,is_manufacturable) VALUES(99991,'Migration Test Type',99991,0)",[]).unwrap();
         conn.execute(
@@ -408,11 +549,84 @@ mod tests {
             [],
         ).unwrap();
 
-        conn.execute_batch(include_str!("../migrations/0020_corporation_asset_sync.sql")).unwrap();
+        conn.execute_batch(include_str!(
+            "../migrations/0020_corporation_asset_sync.sql"
+        ))
+        .unwrap();
 
-        let personal:i64=conn.query_row("SELECT quantity FROM character_assets WHERE character_id=42 AND item_id=1001",[],|row|row.get(0)).unwrap();
-        let manual:i64=conn.query_row("SELECT quantity FROM manual_inventory_entries WHERE type_id=99991",[],|row|row.get(0)).unwrap();
-        assert_eq!((personal,manual),(50,25));
-        assert_eq!(conn.query_row("SELECT COUNT(*) FROM corporation_assets",[],|row|row.get::<_,i64>(0)).unwrap(),0);
+        let personal: i64 = conn
+            .query_row(
+                "SELECT quantity FROM character_assets WHERE character_id=42 AND item_id=1001",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let manual: i64 = conn
+            .query_row(
+                "SELECT quantity FROM manual_inventory_entries WHERE type_id=99991",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!((personal, manual), (50, 25));
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM corporation_assets", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn migration_0021_is_additive_and_preserves_existing_personal_data() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        for (_, sql) in MIGRATIONS.iter().filter(|(version, _)| *version <= 20) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled,authorization_status) VALUES(42,'Pilot',0,'esi-assets.read_assets.v1',1,'authorized')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO eve_categories(category_id,name) VALUES(99992,'Commerce Test')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO eve_groups(group_id,category_id,name) VALUES(99992,99992,'Commerce Test')",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO eve_types(type_id,name,group_id,is_manufacturable) VALUES(99992,'Commerce Test Type',99992,0)",[]).unwrap();
+        conn.execute(
+            "INSERT INTO character_assets(character_id,item_id,type_id,quantity,location_id,location_type,location_flag,is_singleton,synced_at) VALUES(42,2001,99992,7,60003760,'station','Hangar',0,'2026-07-18T12:00:00Z')",
+            [],
+        ).unwrap();
+
+        conn.execute_batch(include_str!("../migrations/0021_personal_commerce.sql"))
+            .unwrap();
+
+        let quantity: i64 = conn
+            .query_row(
+                "SELECT quantity FROM character_assets WHERE character_id=42 AND item_id=2001",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(quantity, 7);
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM character_market_orders", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap(),
+            0
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM character_contracts", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
     }
 }

@@ -9,10 +9,7 @@ use crate::blueprint::{
         MissingBlueprintReport,
     },
 };
-use crate::character::{
-    self,
-    models::CharacterSummary,
-};
+use crate::character::{self, models::CharacterSummary};
 use crate::db::Db;
 use crate::inventory::{
     self,
@@ -22,6 +19,7 @@ use crate::inventory::{
     },
 };
 use crate::models::*;
+use crate::onboarding::{AboutInfo, AuthenticationInfo, SdeInspection};
 use crate::operation::{
     self,
     models::{CreatedOperation, NewOperationInput, OperationDetail, OperationsDashboard},
@@ -40,8 +38,10 @@ use crate::reservation::{
         ReservationRecord, ReservationSummary,
     },
 };
-use crate::staticdata::{self, models::{ImportSummary, TypeSearchResult}};
-use crate::onboarding::{AboutInfo, AuthenticationInfo, SdeInspection};
+use crate::staticdata::{
+    self,
+    models::{ImportSummary, TypeSearchResult},
+};
 use rusqlite::Connection;
 use tauri::State;
 
@@ -571,7 +571,9 @@ pub fn pick_sde_archive(app: tauri::AppHandle) -> Option<String> {
 #[tauri::command]
 pub fn open_selected_folder(path: String) -> Result<(), String> {
     let selected = std::path::Path::new(&path);
-    if !selected.is_dir() { return Err("The selected folder cannot be opened.".into()); }
+    if !selected.is_dir() {
+        return Err("The selected folder cannot be opened.".into());
+    }
     open::that(selected).map_err(|error| format!("failed to open selected folder: {error}"))
 }
 
@@ -588,7 +590,10 @@ pub fn get_authentication_info(db: State<'_, Db>) -> Result<AuthenticationInfo, 
 }
 
 #[tauri::command]
-pub fn save_custom_authentication(db: State<'_, Db>, client_id: String) -> Result<AuthenticationInfo, String> {
+pub fn save_custom_authentication(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<AuthenticationInfo, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     crate::onboarding::save_custom_authentication(&conn, &client_id)
 }
@@ -600,7 +605,10 @@ pub fn restore_official_authentication(db: State<'_, Db>) -> Result<Authenticati
 }
 
 #[tauri::command]
-pub fn export_diagnostics(app: tauri::AppHandle, db: State<'_, Db>) -> Result<Option<String>, String> {
+pub fn export_diagnostics(
+    app: tauri::AppHandle,
+    db: State<'_, Db>,
+) -> Result<Option<String>, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     crate::onboarding::export_diagnostics(&app, &conn)
 }
@@ -718,12 +726,14 @@ pub fn remove_manual_inventory_entry(db: State<'_, Db>, id: i64) -> Result<(), S
 #[tauri::command]
 pub fn get_app_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
-    conn.query_row("SELECT value FROM app_meta WHERE key = ?1", [key], |row| row.get(0))
-        .map(Some)
-        .or_else(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => Ok(None),
-            other => Err(format!("failed to read app setting: {other}")),
-        })
+    conn.query_row("SELECT value FROM app_meta WHERE key = ?1", [key], |row| {
+        row.get(0)
+    })
+    .map(Some)
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(None),
+        other => Err(format!("failed to read app setting: {other}")),
+    })
 }
 
 #[tauri::command]
@@ -739,13 +749,17 @@ pub fn set_app_setting(db: State<'_, Db>, key: String, value: String) -> Result<
 }
 
 #[tauri::command]
-pub fn get_release_view_state(db: State<'_, Db>) -> Result<crate::release::ReleaseViewState, String> {
+pub fn get_release_view_state(
+    db: State<'_, Db>,
+) -> Result<crate::release::ReleaseViewState, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     crate::release::view_state(&conn)
 }
 
 #[tauri::command]
-pub fn mark_current_release_viewed(db: State<'_, Db>) -> Result<crate::release::ReleaseViewState, String> {
+pub fn mark_current_release_viewed(
+    db: State<'_, Db>,
+) -> Result<crate::release::ReleaseViewState, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     crate::release::mark_current_viewed(&conn)
 }
@@ -767,7 +781,9 @@ pub fn get_update_state(db: State<'_, Db>) -> Result<crate::update::UpdateState,
 }
 
 #[tauri::command]
-pub fn get_update_preferences(db: State<'_, Db>) -> Result<crate::update::UpdatePreferences, String> {
+pub fn get_update_preferences(
+    db: State<'_, Db>,
+) -> Result<crate::update::UpdatePreferences, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     crate::update::preferences(&conn)
 }
@@ -834,7 +850,11 @@ pub fn remove_character(db: State<'_, Db>, character_id: i64) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub fn set_character_enabled(db: State<'_, Db>, character_id: i64, enabled: bool) -> Result<(), String> {
+pub fn set_character_enabled(
+    db: State<'_, Db>,
+    character_id: i64,
+    enabled: bool,
+) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     character::engine::set_enabled(&conn, character_id, enabled)
 }
@@ -846,28 +866,51 @@ pub fn list_characters(db: State<'_, Db>) -> Result<Vec<CharacterSummary>, Strin
 }
 
 #[tauri::command]
-pub fn sync_character_assets(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<character::assets::SyncResult, String> {
+pub fn sync_character_assets(
+    db: State<'_, Db>,
+    client_id: String,
+    character_id: i64,
+) -> Result<character::assets::SyncResult, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     character::assets::sync_one(&conn, &client_id, character_id)
 }
 
 #[tauri::command]
-pub fn sync_all_character_assets(db: State<'_, Db>, client_id: String) -> Result<Vec<character::assets::SyncResult>, String> {
+pub fn sync_all_character_assets(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<Vec<character::assets::SyncResult>, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     character::assets::sync_all(&conn, &client_id)
 }
 
 #[tauri::command]
-pub fn list_synced_assets(db: State<'_, Db>, owner_scope:String) -> Result<Vec<inventory::models::SyncedAsset>, String> {
+pub fn list_synced_assets(
+    db: State<'_, Db>,
+    owner_scope: String,
+) -> Result<Vec<inventory::models::SyncedAsset>, String> {
     let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
     inventory::repository::InventoryRepository::new(&conn).list_synced_assets(&owner_scope)
 }
 
 #[tauri::command]
-pub fn sync_corporation_assets(db:State<'_,Db>,client_id:String,character_id:i64)->Result<crate::corporation::CorporationSyncResult,String>{let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::corporation::sync_one(&conn,&client_id,character_id)}
+pub fn sync_corporation_assets(
+    db: State<'_, Db>,
+    client_id: String,
+    character_id: i64,
+) -> Result<crate::corporation::CorporationSyncResult, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::corporation::sync_one(&conn, &client_id, character_id)
+}
 
 #[tauri::command]
-pub fn sync_all_corporation_assets(db:State<'_,Db>,client_id:String)->Result<Vec<crate::corporation::CorporationSyncResult>,String>{let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::corporation::sync_all(&conn,&client_id)}
+pub fn sync_all_corporation_assets(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<Vec<crate::corporation::CorporationSyncResult>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::corporation::sync_all(&conn, &client_id)
+}
 
 #[tauri::command]
 pub async fn refresh_asset_locations(
@@ -918,7 +961,11 @@ pub fn search_inventory_market(
 }
 
 #[tauri::command]
-pub fn get_market_quote(db: State<'_, Db>, type_id: i64, quantity: i64) -> Result<crate::market::MarketQuote, String> {
+pub fn get_market_quote(
+    db: State<'_, Db>,
+    type_id: i64,
+    quantity: i64,
+) -> Result<crate::market::MarketQuote, String> {
     if quantity < 1 {
         return Err("requested market quantity must be at least 1".to_string());
     }
@@ -991,27 +1038,182 @@ pub fn reset_procurement_state(db: State<'_, Db>, operation_id: i64) -> Result<i
     crate::procurement::reset_state(&conn, operation_id)
 }
 
-#[tauri::command] pub fn list_doctrines(db:State<'_,Db>)->Result<Vec<crate::quartermaster::Doctrine>,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::list(&c)}
-#[tauri::command] pub fn create_doctrine(db:State<'_,Db>,input:crate::quartermaster::DoctrineInput)->Result<crate::quartermaster::Doctrine,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::create(&c,&input)}
-#[tauri::command] pub fn update_doctrine(db:State<'_,Db>,doctrine_id:i64,input:crate::quartermaster::DoctrineInput)->Result<crate::quartermaster::Doctrine,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::update(&c,doctrine_id,&input)}
-#[tauri::command] pub fn list_doctrine_fits(db:State<'_,Db>,doctrine_id:i64)->Result<Vec<crate::quartermaster::DoctrineFit>,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::fits(&c,doctrine_id)}
-#[tauri::command] pub fn import_doctrine_eft_text(db:State<'_,Db>,doctrine_id:i64,text:String,source_name:String)->Result<crate::quartermaster::DoctrineFit,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::import_text(&c,doctrine_id,&text,&source_name)}
-#[tauri::command] pub fn import_doctrine_eft_file(db:State<'_,Db>,doctrine_id:i64,path:String)->Result<crate::quartermaster::DoctrineFit,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::import_file(&c,doctrine_id,&path)}
-#[tauri::command] pub fn import_doctrine_eft_folder(db:State<'_,Db>,doctrine_id:i64,path:String)->Result<Vec<crate::quartermaster::DoctrineFit>,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::import_folder(&c,doctrine_id,&path)}
-#[tauri::command] pub fn set_doctrine_fit_quantity(db:State<'_,Db>,fit_id:i64,quantity:i64)->Result<crate::quartermaster::DoctrineFit,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::set_quantity(&c,fit_id,quantity)}
-#[tauri::command] pub fn delete_doctrine_fit(db:State<'_,Db>,fit_id:i64)->Result<(),String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::delete_fit(&c,fit_id)}
-#[tauri::command] pub fn analyze_doctrine(db:State<'_,Db>,doctrine_id:i64)->Result<crate::quartermaster::DoctrineAnalysis,String>{let c=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;crate::quartermaster::analyze(&c,doctrine_id)}
-
 #[tauri::command]
-pub fn sync_character_blueprints(db: State<'_, Db>, client_id: String, character_id: i64) -> Result<blueprint::sync::BlueprintSyncResult, String> {
-    let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
-    blueprint::sync::sync_one(&conn,&client_id,character_id)
+pub fn list_doctrines(db: State<'_, Db>) -> Result<Vec<crate::quartermaster::Doctrine>, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::list(&c)
+}
+#[tauri::command]
+pub fn create_doctrine(
+    db: State<'_, Db>,
+    input: crate::quartermaster::DoctrineInput,
+) -> Result<crate::quartermaster::Doctrine, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::create(&c, &input)
+}
+#[tauri::command]
+pub fn update_doctrine(
+    db: State<'_, Db>,
+    doctrine_id: i64,
+    input: crate::quartermaster::DoctrineInput,
+) -> Result<crate::quartermaster::Doctrine, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::update(&c, doctrine_id, &input)
+}
+#[tauri::command]
+pub fn list_doctrine_fits(
+    db: State<'_, Db>,
+    doctrine_id: i64,
+) -> Result<Vec<crate::quartermaster::DoctrineFit>, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::fits(&c, doctrine_id)
+}
+#[tauri::command]
+pub fn import_doctrine_eft_text(
+    db: State<'_, Db>,
+    doctrine_id: i64,
+    text: String,
+    source_name: String,
+) -> Result<crate::quartermaster::DoctrineFit, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::import_text(&c, doctrine_id, &text, &source_name)
+}
+#[tauri::command]
+pub fn import_doctrine_eft_file(
+    db: State<'_, Db>,
+    doctrine_id: i64,
+    path: String,
+) -> Result<crate::quartermaster::DoctrineFit, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::import_file(&c, doctrine_id, &path)
+}
+#[tauri::command]
+pub fn import_doctrine_eft_folder(
+    db: State<'_, Db>,
+    doctrine_id: i64,
+    path: String,
+) -> Result<Vec<crate::quartermaster::DoctrineFit>, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::import_folder(&c, doctrine_id, &path)
+}
+#[tauri::command]
+pub fn set_doctrine_fit_quantity(
+    db: State<'_, Db>,
+    fit_id: i64,
+    quantity: i64,
+) -> Result<crate::quartermaster::DoctrineFit, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::set_quantity(&c, fit_id, quantity)
+}
+#[tauri::command]
+pub fn delete_doctrine_fit(db: State<'_, Db>, fit_id: i64) -> Result<(), String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::delete_fit(&c, fit_id)
+}
+#[tauri::command]
+pub fn analyze_doctrine(
+    db: State<'_, Db>,
+    doctrine_id: i64,
+) -> Result<crate::quartermaster::DoctrineAnalysis, String> {
+    let c = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::quartermaster::analyze(&c, doctrine_id)
 }
 
 #[tauri::command]
-pub fn sync_all_character_blueprints(db: State<'_, Db>, client_id: String) -> Result<Vec<blueprint::sync::BlueprintSyncResult>, String> {
-    let conn=db.conn.lock().map_err(|_|"db lock poisoned".to_string())?;
-    blueprint::sync::sync_all(&conn,&client_id)
+pub fn sync_character_blueprints(
+    db: State<'_, Db>,
+    client_id: String,
+    character_id: i64,
+) -> Result<blueprint::sync::BlueprintSyncResult, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::sync::sync_one(&conn, &client_id, character_id)
+}
+
+#[tauri::command]
+pub fn sync_all_character_blueprints(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<Vec<blueprint::sync::BlueprintSyncResult>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    blueprint::sync::sync_all(&conn, &client_id)
+}
+
+#[tauri::command]
+pub fn sync_character_market_orders(
+    db: State<'_, Db>,
+    client_id: String,
+    character_id: i64,
+) -> Result<crate::commerce::SyncResult, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::sync_market_one(&conn, &client_id, character_id)
+}
+#[tauri::command]
+pub fn sync_all_market_orders(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<Vec<crate::commerce::SyncResult>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::sync_market_all(&conn, &client_id)
+}
+#[tauri::command]
+pub fn sync_character_contracts(
+    db: State<'_, Db>,
+    client_id: String,
+    character_id: i64,
+) -> Result<crate::commerce::SyncResult, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::sync_contracts_one(&conn, &client_id, character_id)
+}
+#[tauri::command]
+pub fn sync_all_contracts(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<Vec<crate::commerce::SyncResult>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::sync_contracts_all(&conn, &client_id)
+}
+#[tauri::command]
+pub fn sync_all_commerce(
+    db: State<'_, Db>,
+    client_id: String,
+) -> Result<Vec<crate::commerce::SyncResult>, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::sync_all_commerce(&conn, &client_id)
+}
+#[tauri::command]
+pub fn get_market_order_dashboard(
+    db: State<'_, Db>,
+    filter: crate::commerce::MarketOrderFilter,
+) -> Result<crate::commerce::MarketDashboard, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::market_dashboard(&conn, filter)
+}
+#[tauri::command]
+pub fn get_contract_dashboard(
+    db: State<'_, Db>,
+    filter: crate::commerce::ContractFilter,
+) -> Result<crate::commerce::ContractDashboard, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::contract_dashboard(&conn, filter)
+}
+#[tauri::command]
+pub fn get_commerce_overview(
+    db: State<'_, Db>,
+    character_id: Option<i64>,
+    expiring_days: Option<i64>,
+) -> Result<crate::commerce::CommerceOverview, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::commerce_overview(&conn, character_id, expiring_days)
+}
+#[tauri::command]
+pub fn get_contract_detail(
+    db: State<'_, Db>,
+    client_id: String,
+    character_id: i64,
+    contract_id: i64,
+) -> Result<crate::commerce::ContractDetail, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::contract_detail(&conn, &client_id, character_id, contract_id)
 }
 
 const APPLICATION_NAME: &str = "RenderNorth Industrial";
@@ -1022,6 +1224,7 @@ const APPLICATION_SECTIONS: &[&str] = &[
     "Blueprints",
     "Production",
     "Quartermaster",
+    "Commerce",
     "Settings",
     "What's New",
     "Industry",
@@ -1062,6 +1265,7 @@ mod application_title_tests {
             "Blueprints",
             "Production",
             "Quartermaster",
+            "Commerce",
             "Settings",
             "What's New",
         ] {

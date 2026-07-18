@@ -34,6 +34,18 @@ pub struct CharacterSummary {
     pub corporation_asset_count: i64,
     pub corporation_page_count: i64,
     pub corporation_sync_error: Option<String>,
+    pub market_order_scope_granted: bool,
+    pub market_order_sync_status: String,
+    pub market_order_last_sync_at: Option<String>,
+    pub market_order_count: i64,
+    pub market_order_page_count: i64,
+    pub market_order_sync_error: Option<String>,
+    pub contract_scope_granted: bool,
+    pub contract_sync_status: String,
+    pub contract_last_sync_at: Option<String>,
+    pub contract_count: i64,
+    pub contract_page_count: i64,
+    pub contract_sync_error: Option<String>,
 }
 
 pub struct NewCharacter {

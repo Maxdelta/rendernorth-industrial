@@ -1294,6 +1294,8 @@ export interface CharacterSummary {
   corporationAssetCount:number;
   corporationPageCount:number;
   corporationSyncError:string|null;
+  marketOrderScopeGranted:boolean; marketOrderSyncStatus:string; marketOrderLastSyncAt:string|null; marketOrderCount:number; marketOrderPageCount:number; marketOrderSyncError:string|null;
+  contractScopeGranted:boolean; contractSyncStatus:string; contractLastSyncAt:string|null; contractCount:number; contractPageCount:number; contractSyncError:string|null;
 }
 
 export interface AssetSyncResult { characterId: number; status: string; assetCount: number; pageCount: number; error: string | null; }
@@ -1337,6 +1339,20 @@ export interface QuartermasterExports { buyFinishedGoods:ShoppingExports; buyMan
 export interface QuartermasterSummary { buyCost:number; buyVolumeM3:number; buildInputCost:number; buildInputVolumeM3:number; totalCompletionCost:number; totalHaulingVolumeM3:number; totalsComplete:boolean; excludedLines:number; readyNow:number; readyAfterBuild:number; stillMissingAfterBuild:number; target:number; coverageNowPercent:number; coverageAfterBuildPercent:number; overallStatus:string; canFullyField:boolean; blockingComponents:string[]; shoppingReady:boolean; productionReady:boolean; actionSummary:ActionSummary; blockedReasons:ReasonCount[]; partialReasons:ReasonCount[]; }
 export interface DoctrineAnalysis { doctrine:Doctrine; fits:FitReadiness[]; items:DoctrineItem[]; buildDetails:BuildDetail[]; buyLines:ShoppingLine[]; buildInputLines:ShoppingLine[]; summary:QuartermasterSummary; shopping:QuartermasterExports; }
 export interface BlueprintSyncResult { characterId:number; status:string; blueprintCount:number; pageCount:number; error:string|null; }
+export interface CommerceSyncResult { characterId:number; status:string; count:number; pageCount:number; error:string|null; }
+export interface MarketOrderFilter { characterId?:number|null; side?:string|null; expiringDays?:number|null; location?:string|null; search?:string|null; sort?:string|null; }
+export interface MarketOrderRow { orderId:number; characterId:number; characterName:string; typeId:number; itemName:string; side:string; locationId:number; locationName:string; solarSystemName:string|null; regionName:string|null; priceIsk:string; volumeTotal:number; volumeRemain:number; quantityFilled:number; fillPercentage:number; minVolume:number|null; issuedAt:string; expiresAt:string; remainingSeconds:number; durationDays:number; orderRange:string; escrowIsk:string|null; source:string; lastSynced:string; }
+export interface MarketOrderSummary { activeOrders:number; sellOrders:number; buyOrders:number; remainingSellValueIsk:string; remainingBuyCommitmentIsk:string; totalEscrowIsk:string; expiringSoon:number; }
+export interface MarketOrderDashboard { rows:MarketOrderRow[]; summary:MarketOrderSummary; }
+export interface ContractFilter { characterId?:number|null; status?:string|null; contractType?:string|null; availability?:string|null; direction?:string|null; startLocation?:string|null; endLocation?:string|null; search?:string|null; expiringDays?:number|null; }
+export interface ContractRow { contractId:number; characterId:number; characterName:string; title:string; contractType:string; issuerId:number; issuerCorporationId:number; assigneeId:number; acceptorId:number; direction:string; availability:string; status:string; startLocationId:number|null; startLocationName:string|null; endLocationId:number|null; endLocationName:string|null; priceIsk:string|null; rewardIsk:string|null; collateralIsk:string|null; buyoutIsk:string|null; dateIssued:string; dateExpired:string; remainingSeconds:number; source:string; lastSynced:string; }
+export interface ContractSummary { outstandingContracts:number; assignedToMe:number; issuedByMe:number; inProgress:number; expiringSoon:number; completedOrFinished:number; totalCollateralExposureIsk:string; outstandingRewardsIsk:string; outstandingContractValueIsk:string; }
+export interface ContractDashboard { rows:ContractRow[]; summary:ContractSummary; }
+export interface CommerceSyncOverview { status:"never"|"syncing"|"partial"|"error"|"current"; oldestSuccessAt:string|null; relevantCharacters:number; currentCharacters:number; errorCharacters:number; }
+export interface CommerceOverview { remainingSellValueIsk:string; remainingBuyCommitmentIsk:string; outstandingContractValueIsk:string; collateralExposureIsk:string; totalCommerceExposureIsk:string; marketOrdersSync:CommerceSyncOverview; contractsSync:CommerceSyncOverview; }
+export interface ContractItemRow { recordId:number; typeId:number; itemName:string; quantity:number; rawQuantity:number|null; singleton:boolean; included:boolean; }
+export interface ContractBidRow { bidId:number; bidderId:number; amountIsk:string; dateBid:string; }
+export interface ContractDetail { contract:ContractRow; items:ContractItemRow[]; bids:ContractBidRow[]; itemsError:string|null; bidsError:string|null; }
 
 /** Blocking on the Rust side (opens the browser, waits on the OAuth callback) — this call can take up to 3 minutes. */
 export async function addCharacter(clientId: string): Promise<CharacterSummary> {
@@ -1407,3 +1423,12 @@ export async function syncAllCharacterBlueprints(clientId:string):Promise<Bluepr
   if(!inTauri()) throw new Error(BROWSER_PREVIEW_ERROR);
   return invoke<BlueprintSyncResult[]>("sync_all_character_blueprints",{clientId});
 }
+export async function syncCharacterMarketOrders(clientId:string,characterId:number):Promise<CommerceSyncResult>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("sync_character_market_orders",{clientId,characterId});}
+export async function syncAllMarketOrders(clientId:string):Promise<CommerceSyncResult[]>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("sync_all_market_orders",{clientId});}
+export async function syncCharacterContracts(clientId:string,characterId:number):Promise<CommerceSyncResult>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("sync_character_contracts",{clientId,characterId});}
+export async function syncAllContracts(clientId:string):Promise<CommerceSyncResult[]>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("sync_all_contracts",{clientId});}
+export async function syncAllCommerce(clientId:string):Promise<CommerceSyncResult[]>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("sync_all_commerce",{clientId});}
+export async function getMarketOrderDashboard(filter:MarketOrderFilter={}):Promise<MarketOrderDashboard>{if(!inTauri())return {rows:[],summary:{activeOrders:0,sellOrders:0,buyOrders:0,remainingSellValueIsk:"0.00",remainingBuyCommitmentIsk:"0.00",totalEscrowIsk:"0.00",expiringSoon:0}};return invoke("get_market_order_dashboard",{filter});}
+export async function getContractDashboard(filter:ContractFilter={}):Promise<ContractDashboard>{if(!inTauri())return {rows:[],summary:{outstandingContracts:0,assignedToMe:0,issuedByMe:0,inProgress:0,expiringSoon:0,completedOrFinished:0,totalCollateralExposureIsk:"0.00",outstandingRewardsIsk:"0.00",outstandingContractValueIsk:"0.00"}};return invoke("get_contract_dashboard",{filter});}
+export async function getCommerceOverview(characterId:number|null=null,expiringDays:number|null=7):Promise<CommerceOverview>{if(!inTauri())return {remainingSellValueIsk:"0.00",remainingBuyCommitmentIsk:"0.00",outstandingContractValueIsk:"0.00",collateralExposureIsk:"0.00",totalCommerceExposureIsk:"0.00",marketOrdersSync:{status:"never",oldestSuccessAt:null,relevantCharacters:0,currentCharacters:0,errorCharacters:0},contractsSync:{status:"never",oldestSuccessAt:null,relevantCharacters:0,currentCharacters:0,errorCharacters:0}};return invoke("get_commerce_overview",{characterId,expiringDays});}
+export async function getContractDetail(clientId:string,characterId:number,contractId:number):Promise<ContractDetail>{if(!inTauri())throw new Error(BROWSER_PREVIEW_ERROR);return invoke("get_contract_detail",{clientId,characterId,contractId});}

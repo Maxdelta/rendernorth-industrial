@@ -164,6 +164,23 @@ These tables are deliberately separate from `character_assets`,
 corporation ownership to any Production, Procurement, Quartermaster, or
 inventory-aggregation query.
 
+### Personal Commerce (migration 0021, live now)
+
+- **character_market_order_sync_state** / **character_contract_sync_state** —
+  per-character last attempt, last success, status, count, page count, cache
+  metadata where supported, and last error.
+- **character_market_orders** — replaceable active personal-order snapshots,
+  keyed by character and order ID. Prices and escrow are exact decimal text.
+- **character_contracts** — replaceable personal-contract list snapshots,
+  keyed by character and contract ID. Status, direction participants, type,
+  availability, dates, locations, and exact decimal amounts remain source data.
+- **character_contract_detail_state**, **character_contract_items**, and
+  **character_contract_bids** — separately cached, lazy-loaded contract detail.
+
+Migration 0021 is additive and does not alter personal/corporation inventory,
+Production, Quartermaster, Procurement, pricing, reservations, or operation
+tables. Commerce ownership remains personal and isolated by character.
+
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)
 - **sync_state**(resource, character_id, etag, last_success_at, next_allowed_at, last_error, PRIMARY KEY(resource, character_id))

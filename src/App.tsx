@@ -9,6 +9,7 @@ import { OperationsWorkspacePage } from "./pages/OperationsWorkspace";
 import { ProductionPage } from "./pages/Production";
 import { SettingsPage } from "./pages/Settings";
 import { QuartermasterPage } from "./pages/Quartermaster";
+import { CommercePage } from "./pages/Commerce";
 import { WhatsNewPage } from "./pages/WhatsNew";
 import { FirstRunWizard } from "./components/FirstRunWizard";
 import { UpdateMonitor } from "./components/UpdateNotification";
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="/blueprints" element={<BlueprintsPage />} />
               <Route path="/production" element={<ProductionPage />} />
               <Route path="/quartermaster" element={<QuartermasterPage />} />
+              <Route path="/commerce" element={<CommercePage />} />
               <Route path="/industry" element={<IndustryPage />} />
               <Route path="/logistics" element={<LogisticsPage />} />
               <Route path="/market" element={<MarketIntelligencePage />} />
