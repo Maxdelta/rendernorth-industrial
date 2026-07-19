@@ -20,7 +20,7 @@ pub const SDE_DOWNLOAD_URL: &str = "https://developers.eveonline.com/static-data
 pub const SETUP_GUIDE_URL: &str =
     "https://github.com/Maxdelta/rendernorth-industrial/blob/main/docs/OPEN_BETA_ONBOARDING.md";
 pub const OFFICIAL_CLIENT_ID: &str = "f6321a78ea0e4ed78fc52ab2ba85d502";
-pub const OPEN_BETA_STATUS: &str = "Open Beta 0.1.4";
+pub const OPEN_BETA_STATUS: &str = "Open Beta 0.1.5";
 pub const DISCORD_USERNAME: &str = "maxdelta0089";
 pub const REQUIRED_SDE_FILES: [&str; 4] = [
     "categories.jsonl",
@@ -478,7 +478,7 @@ mod tests {
     #[test]
     fn official_download_and_open_beta_help_values_are_allowlisted() {
         assert!(external_url_allowed(SDE_DOWNLOAD_URL));
-        assert_eq!(OPEN_BETA_STATUS, "Open Beta 0.1.4");
+        assert_eq!(OPEN_BETA_STATUS, "Open Beta 0.1.5");
         assert_eq!(DISCORD_USERNAME, "maxdelta0089");
         assert_eq!(SUPPORT_URL, "https://buymeacoffee.com/maxdelta");
         assert_eq!(WEBSITE_URL, "https://rendernorth.com");

@@ -2,6 +2,48 @@
 
 All notable user-facing changes to RenderNorth Industrial are recorded here. Releases are listed newest first and use semantic versions.
 
+## [0.1.5] — 2026-07-19
+
+### RenderNorth Industrial Open Beta 0.1.5
+
+Inventory is now cleaner, faster, and easier to use.
+
+### Added
+
+- Collapsed Asset Source Details for verification and troubleshooting.
+
+### Improved
+
+- Inventory Search & Market Valuation is now the primary Inventory experience.
+- Personal, Corporation, and Both now work as asset-source filters.
+- Raw synchronized ESI assets moved into a collapsed Asset Source Details section.
+- Reduced duplicate inventory presentation.
+- Improved Inventory performance with large asset counts.
+- Preserved market filters, source selection, sorting, and cached pricing during asset refreshes.
+- Cleaner workflow for ownership, valuation, and troubleshooting.
+
+### Fixed
+
+- Inventory Market Valuation no longer disappears after synchronized assets finish loading.
+- Personal, Corporation, and Both no longer behave like page-level selectors.
+- Asset loading can no longer hide or replace the Market Valuation module.
+- Inventory state is now separated correctly between synchronized assets and valuation data.
+
+### Security & Privacy
+
+- No authentication or permission changes.
+- No new ESI scopes.
+- No credential or diagnostic exposure.
+- Corporation assets remain read-only.
+- Corporation assets are still not used by Production, Quartermaster, or Procurement.
+
+### Known Limitations
+
+- Corporation asset synchronization still requires an actual EVE Director role.
+- Corporation assets are displayed and valued but are not yet available as Production sources.
+- Corporation Blueprint synchronization remains planned.
+- Raw Asset Source Details are intended for verification and troubleshooting, not the primary workflow.
+
 ## [0.1.4] — 2026-07-18
 
 ### RenderNorth Industrial Open Beta 0.1.4
