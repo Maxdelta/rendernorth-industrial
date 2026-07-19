@@ -1,4 +1,4 @@
-# RenderNorth Industrial Open Beta 0.1.3 Onboarding
+# RenderNorth Industrial Open Beta 0.1.4 Onboarding
 
 ## Normal setup
 
@@ -30,7 +30,7 @@ Only users intentionally managing their own CCP application need this path. Crea
 
 ## Copy-ready Open Beta announcement
 
-RenderNorth Industrial Open Beta 0.1.3 is available for Windows. Connect an EVE character through secure read-only CCP SSO, import CCP's official JSONL static data, synchronize personal inventory and authorized corporation assets, value markets, plan production and procurement, and analyze EFT doctrines locally. Report beta issues through GitHub or contact Maxdelta on Discord (`maxdelta0089`).
+RenderNorth Industrial Open Beta 0.1.4 is available for Windows. Connect an EVE character through secure read-only CCP SSO, import CCP's official JSONL static data, synchronize personal inventory, blueprints, Market Orders, Contracts, and authorized corporation assets, value markets, plan production and procurement, and analyze EFT doctrines locally. Report beta issues through GitHub or contact Maxdelta on Discord (`maxdelta0089`).
 
 ## Copy-ready Getting Started
 
@@ -38,7 +38,7 @@ Install RenderNorth Industrial, connect a character with the built-in official C
 
 ## Copy-ready release notes
 
-Open Beta 0.1.3 adds Phase 1 corporation asset synchronization, Personal / Corporation / Both inventory viewing, Director-role validation, corporation capability status, and future-ready corporation blueprint authorization. Corporation assets remain read-only and are not used by Production or Quartermaster. Successful live synchronization still requires a character holding CCP's actual Director corporation role. This is beta software and is not production-certified.
+Open Beta 0.1.4 adds the Commerce Dashboard with read-only personal Market Order and Contract synchronization, multi-character views, filters, exact and compact ISK presentation, contract details, and Total Commerce Exposure. Corporation commerce and wallet integration are not yet implemented. This is beta software and is not production-certified.
 
 ## Help and support
 

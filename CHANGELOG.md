@@ -2,6 +2,66 @@
 
 All notable user-facing changes to RenderNorth Industrial are recorded here. Releases are listed newest first and use semantic versions.
 
+## [0.1.4] — 2026-07-18
+
+### RenderNorth Industrial Open Beta 0.1.4
+
+Commerce has arrived.
+
+### Added
+
+- Commerce Dashboard.
+- Personal Market Order synchronization.
+- Personal Contract synchronization.
+- Multi-character Market Order and Contract views.
+- Buy and Sell order tracking.
+- Remaining quantity and filled percentage.
+- Order expiration tracking.
+- Contract status and direction tracking.
+- Item Exchange, Courier, and Auction contract support.
+- Offered and requested contract-item details.
+- Contract auction bid details.
+- Per-character Commerce synchronization states.
+- Commerce filters, sorting, and search.
+- Total Commerce Exposure.
+
+### Improved
+
+- Compact K/M/B/T ISK formatting.
+- Exact ISK values available on hover and keyboard focus.
+- Separate Market Order and Contract synchronization status.
+- Sticky table headers.
+- Responsive Commerce layout.
+- Improved filter organization.
+- Clearer financial summary cards.
+- Open Contract Value wording.
+- Commerce Exposure explanation tooltip.
+- Sanitized Commerce diagnostics.
+
+### Fixed
+
+- Finished and terminal contracts no longer show a misleading Open action or active countdown.
+- Contract details open in a visible dialog instead of rendering below a long contract table.
+
+### Security & Privacy
+
+- Market Orders and Contracts are read-only.
+- No order modification or cancellation is available.
+- No contract creation, acceptance, rejection, deletion, or bidding is available.
+- Diagnostics exclude exact orders, contract contents, counterparties, amounts, locations, tokens, credentials, and PKCE values.
+- Personal Commerce data remains isolated by character.
+
+### Known Limitations
+
+- Personal Market Orders and Contracts only.
+- Corporation Market Orders and Corporation Contracts are not yet supported.
+- Wallet journal and wallet transaction integration are not yet implemented.
+- Completed or sold-out Market Order history is not available from the active-order endpoint.
+- Contract history is limited by CCP's returned history window.
+- Contract counterparties currently display as identifiers where names have not been resolved.
+- Corporation Blueprint synchronization is authorized but not yet implemented.
+- Corporation Assets still require an actual EVE Director role for live synchronization.
+
 ## [0.1.3] — 2026-07-17
 
 ### RenderNorth Industrial Open Beta 0.1.3

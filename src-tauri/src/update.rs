@@ -701,9 +701,9 @@ mod tests {
     fn equal_newer_and_installed_newer_have_deterministic_states() {
         let now = Utc::now();
         for (latest, expected) in [
+            ("0.1.4", UpdateStatus::UpToDate),
+            ("0.1.5", UpdateStatus::UpdateAvailable),
             ("0.1.3", UpdateStatus::UpToDate),
-            ("0.1.4", UpdateStatus::UpdateAvailable),
-            ("0.1.2", UpdateStatus::UpToDate),
         ] {
             let mut state = UpdateState::default();
             state.latest_version = Some(latest.into());
