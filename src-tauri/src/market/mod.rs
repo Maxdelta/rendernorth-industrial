@@ -275,6 +275,7 @@ pub fn refresh(conn: &Connection) -> Result<RefreshResult, String> {
 #[serde(rename_all = "camelCase")]
 pub struct InventorySearchInput {
     pub text: Option<String>,
+    pub asset_scope: Option<String>,
     pub character: Option<String>,
     pub source: Option<String>,
     pub category: Option<String>,
@@ -295,7 +296,9 @@ pub struct InventorySearchRow {
     pub quantity: i64,
     pub unit_volume_m3: Option<f64>,
     pub stack_volume_m3: Option<f64>,
+    pub owner_type: String,
     pub owner: String,
+    pub division: Option<String>,
     pub source: String,
     pub group_name: Option<String>,
     pub category_name: Option<String>,
@@ -326,6 +329,16 @@ fn contains(hay: &str, needle: &str) -> bool {
 fn matches(row: &InventorySearchRow, input: &InventorySearchInput) -> bool {
     if input.positive_only.unwrap_or(false) && row.quantity <= 0 {
         return false;
+    }
+    match input.asset_scope.as_deref().filter(|value| !value.is_empty()) {
+        Some("personal") => {
+            if row.owner_type != "Personal" { return false; }
+        }
+        Some("corporation") => {
+            if row.owner_type != "Corporation" { return false; }
+        }
+        Some("both") | None => {}
+        Some(_) => return false,
     }
     if let Some(v) = &input.character {
         if !v.is_empty() && row.owner != *v {
@@ -369,9 +382,11 @@ fn matches(row: &InventorySearchRow, input: &InventorySearchInput) -> bool {
     }
     if let Some(q) = input.text.as_ref().filter(|q| !q.trim().is_empty()) {
         let joined = format!(
-            "{} {} {} {} {} {} {} {} {}",
+            "{} {} {} {} {} {} {} {} {} {} {}",
             row.type_name,
+            row.owner_type,
             row.owner,
+            row.division.as_deref().unwrap_or(""),
             row.location_name,
             row.system_name.as_deref().unwrap_or(""),
             row.constellation_name.as_deref().unwrap_or(""),
@@ -390,7 +405,14 @@ pub fn search_inventory(
     conn: &Connection,
     input: &InventorySearchInput,
 ) -> Result<InventorySearchResult, String> {
+    if let Some(scope) = input.asset_scope.as_deref().filter(|value| !value.is_empty()) {
+        if !["personal", "corporation", "both"].contains(&scope) {
+            return Err("asset scope must be personal, corporation, or both".into());
+        }
+    }
     let mut rows = Vec::new();
+    let asset_scope = input.asset_scope.as_deref().unwrap_or("both");
+    if asset_scope != "corporation" {
     let mut stmt=conn.prepare("SELECT a.character_id,a.item_id,a.type_id,COALESCE(t.name,'Unknown Type '||a.type_id),a.quantity,c.name,COALESCE(g.name,''),COALESCE(cat.name,''),a.location_id,a.location_flag,a.synced_at,t.volume_m3 FROM character_assets a JOIN characters c ON c.character_id=a.character_id LEFT JOIN eve_types t ON t.type_id=a.type_id LEFT JOIN eve_groups g ON g.group_id=t.group_id LEFT JOIN eve_categories cat ON cat.category_id=g.category_id WHERE c.is_demo=0").map_err(|e|format!("inventory search query failed: {e}"))?;
     let assets = stmt
         .query_map([], |r| {
@@ -424,7 +446,9 @@ pub fn search_inventory(
             quantity,
             unit_volume_m3,
             stack_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, quantity),
+            owner_type: "Personal".into(),
             owner,
+            division: None,
             source: "ESI Character Assets".into(),
             group_name: if group.is_empty() { None } else { Some(group) },
             category_name: if category.is_empty() {
@@ -443,6 +467,55 @@ pub fn search_inventory(
             quote,
         })
     }
+    }
+    let has_corporation_assets: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='corporation_assets')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if asset_scope != "personal" && has_corporation_assets {
+        let mut statement = conn.prepare(
+            "SELECT a.corporation_id,a.item_id,a.type_id,COALESCE(t.name,'Unknown Type '||a.type_id),a.quantity,c.name,COALESCE(g.name,''),COALESCE(cat.name,''),a.location_id,a.location_flag,a.synced_at,t.volume_m3,a.division_name
+             FROM corporation_assets a
+             JOIN corporations c ON c.corporation_id=a.corporation_id
+             LEFT JOIN eve_types t ON t.type_id=a.type_id
+             LEFT JOIN eve_groups g ON g.group_id=t.group_id
+             LEFT JOIN eve_categories cat ON cat.category_id=g.category_id"
+        ).map_err(|error| format!("corporation inventory search query failed: {error}"))?;
+        let corporation_assets = statement.query_map([], |row| Ok((
+            row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?,
+            row.get::<_, String>(3)?, row.get::<_, i64>(4)?, row.get::<_, String>(5)?,
+            row.get::<_, String>(6)?, row.get::<_, String>(7)?, row.get::<_, i64>(8)?,
+            row.get::<_, String>(9)?, row.get::<_, String>(10)?, row.get::<_, Option<f64>>(11)?,
+            row.get::<_, Option<String>>(12)?,
+        ))).map_err(|error| error.to_string())?
+          .collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())?;
+        for (corporation_id,item,type_id,name,quantity,owner,group,category,location_id,flag,synced,unit_volume_m3,division) in corporation_assets {
+            let location = crate::location::resolve_corporation(conn, corporation_id, location_id)?;
+            let quote = quote(conn, type_id, quantity)?;
+            rows.push(InventorySearchRow {
+                stack_key: format!("corporation-{corporation_id}-{item}"),
+                type_id, type_name: name, quantity, unit_volume_m3,
+                stack_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, quantity),
+                owner_type: "Corporation".into(), owner, division,
+                source: "ESI Corporation Assets".into(),
+                group_name: if group.is_empty() { None } else { Some(group) },
+                category_name: if category.is_empty() { None } else { Some(category) },
+                location_name: location.display_name,
+                system_name: location.solar_system_name,
+                constellation_name: location.constellation_name,
+                region_name: location.region_name,
+                container_path: location.container_path,
+                location_flag: Some(flag),
+                resolved: location.resolution_status == "resolved",
+                last_synced: synced,
+                quote,
+            });
+        }
+    }
+    if asset_scope != "corporation" {
     let mut manual=conn.prepare("SELECT m.id,m.type_id,t.name,m.quantity,m.location_name,m.updated_at,COALESCE(g.name,''),COALESCE(c.name,''),t.volume_m3 FROM manual_inventory_entries m JOIN eve_types t ON t.type_id=m.type_id LEFT JOIN eve_groups g ON g.group_id=t.group_id LEFT JOIN eve_categories c ON c.category_id=g.category_id").map_err(|e|e.to_string())?;
     let entries = manual
         .query_map([], |r| {
@@ -470,7 +543,9 @@ pub fn search_inventory(
             quantity,
             unit_volume_m3,
             stack_volume_m3: crate::volume::volume_for_quantity(unit_volume_m3, quantity),
+            owner_type: "Personal".into(),
             owner: "Manual".into(),
+            division: None,
             source: "Manual Inventory".into(),
             group_name: if group.is_empty() { None } else { Some(group) },
             category_name: if category.is_empty() {
@@ -488,6 +563,7 @@ pub fn search_inventory(
             last_synced: synced,
             quote,
         })
+    }
     }
     rows.retain(|r| matches(r, input));
     match input.sort.as_deref() {
@@ -926,7 +1002,9 @@ mod tests {
             quantity: 5,
             unit_volume_m3: Some(0.01),
             stack_volume_m3: Some(0.05),
+            owner_type: "Personal".into(),
             owner: "Maxdelta".into(),
+            division: None,
             source: "ESI Character Assets".into(),
             group_name: Some("Mineral".into()),
             category_name: Some("Material".into()),
@@ -990,6 +1068,21 @@ mod tests {
             ..Default::default()
         };
         assert!(!matches(&row(), &bad))
+    }
+    #[test]
+    fn asset_scope_keeps_personal_manual_and_corporation_ownership_separate() {
+        let personal = row();
+        let mut corporation = row();
+        corporation.owner_type = "Corporation".into();
+        corporation.owner = "The Exchange Collective".into();
+        corporation.division = Some("Industry".into());
+        corporation.source = "ESI Corporation Assets".into();
+        assert!(matches(&personal, &InventorySearchInput { asset_scope: Some("personal".into()), ..Default::default() }));
+        assert!(!matches(&corporation, &InventorySearchInput { asset_scope: Some("personal".into()), ..Default::default() }));
+        assert!(matches(&corporation, &InventorySearchInput { asset_scope: Some("corporation".into()), ..Default::default() }));
+        assert!(!matches(&personal, &InventorySearchInput { asset_scope: Some("corporation".into()), ..Default::default() }));
+        assert!(matches(&personal, &InventorySearchInput { asset_scope: Some("both".into()), ..Default::default() }));
+        assert!(matches(&corporation, &InventorySearchInput { asset_scope: Some("both".into()), ..Default::default() }));
     }
     #[test]
     fn no_result_search_is_false() {
@@ -1304,18 +1397,24 @@ mod tests {
              CREATE TABLE eve_groups(group_id INTEGER PRIMARY KEY,category_id INTEGER,name TEXT);
              CREATE TABLE eve_types(type_id INTEGER PRIMARY KEY,name TEXT,group_id INTEGER,published INTEGER,is_manufacturable INTEGER,volume_m3 REAL);
              CREATE TABLE blueprint_products(blueprint_type_id INTEGER,product_type_id INTEGER,quantity INTEGER);
-             CREATE TABLE characters(character_id INTEGER PRIMARY KEY,name TEXT,is_demo INTEGER);
-             CREATE TABLE character_assets(character_id INTEGER,item_id INTEGER,type_id INTEGER,quantity INTEGER,location_id INTEGER,location_flag TEXT,synced_at TEXT);
-             CREATE TABLE manual_inventory_entries(id INTEGER PRIMARY KEY,type_id INTEGER,quantity INTEGER,location_name TEXT,updated_at TEXT);
+	             CREATE TABLE characters(character_id INTEGER PRIMARY KEY,name TEXT,is_demo INTEGER);
+	             CREATE TABLE character_assets(character_id INTEGER,item_id INTEGER,type_id INTEGER,quantity INTEGER,location_id INTEGER,location_flag TEXT,synced_at TEXT);
+	             CREATE TABLE corporations(corporation_id INTEGER PRIMARY KEY,name TEXT);
+	             CREATE TABLE corporation_assets(corporation_id INTEGER,item_id INTEGER,type_id INTEGER,quantity INTEGER,location_id INTEGER,location_type TEXT,location_flag TEXT,is_singleton INTEGER,division_number INTEGER,division_name TEXT,synced_at TEXT);
+	             CREATE TABLE location_cache(location_id INTEGER PRIMARY KEY,location_kind TEXT,display_name TEXT,solar_system_id INTEGER,solar_system_name TEXT,constellation_id INTEGER,constellation_name TEXT,region_id INTEGER,region_name TEXT,resolution_status TEXT,resolution_source TEXT,resolved_at TEXT);
+	             CREATE TABLE manual_inventory_entries(id INTEGER PRIMARY KEY,type_id INTEGER,quantity INTEGER,location_name TEXT,updated_at TEXT);
              INSERT INTO market_profiles VALUES(1,'Jita 4-4',10000002,60003760,300,1);
              INSERT INTO market_refresh_state VALUES(1,'success','2026-01-01T00:00:00Z','2999-01-01T00:00:00Z',4,1,NULL);
              INSERT INTO eve_categories VALUES(1,'Commodity');
              INSERT INTO eve_groups VALUES(1,1,'Test Group');
              INSERT INTO eve_types VALUES
                 (42,'Owned Widget',1,1,0,2.5),
-                (43,'Radar-FTL Interlink Communicator',1,1,0,6.0),
-                (44,'Known Type Without Orders',1,1,0,4.0);
-             INSERT INTO manual_inventory_entries VALUES(1,42,3,'Owned Hangar','2026-01-01T00:00:00Z');
+	                (43,'Radar-FTL Interlink Communicator',1,1,0,6.0),
+	                (44,'Known Type Without Orders',1,1,0,4.0);
+	             INSERT INTO corporations VALUES(9001,'Test Corporation');
+	             INSERT INTO corporation_assets VALUES(9001,7001,42,4,60003760,'station','CorpSAG1',0,1,'Industry','2026-01-01T00:00:00Z');
+	             INSERT INTO location_cache VALUES(60003760,'station','Jita IV - Moon 4 - Caldari Navy Assembly Plant',30000142,'Jita',20000020,'Kimotoro',10000002,'The Forge','resolved','test','2026-01-01T00:00:00Z');
+	             INSERT INTO manual_inventory_entries VALUES(1,42,3,'Owned Hangar','2026-01-01T00:00:00Z');
              INSERT INTO market_order_cache VALUES
                 (1,1,43,0,10,1,1,'station',60003760,30000142,'now','later','CCP ESI Market Orders'),
                 (1,2,43,0,12,9,1,'station',60003760,30000142,'now','later','CCP ESI Market Orders'),
@@ -1331,15 +1430,42 @@ mod tests {
         let conn = market_search_db();
         let owned = search_inventory(
             &conn,
-            &InventorySearchInput {
-                text: Some("Owned Widget".into()),
-                ..Default::default()
+	            &InventorySearchInput {
+	                text: Some("Owned Widget".into()),
+	                asset_scope: Some("personal".into()),
+	                ..Default::default()
             },
         )
         .unwrap();
         assert_eq!(owned.matching_stacks, 1);
         assert_eq!(owned.matching_units, 3);
-        assert_eq!(owned.total_volume_m3, Some(7.5));
+	        assert_eq!(owned.total_volume_m3, Some(7.5));
+
+	        let corporation = search_inventory(
+	            &conn,
+	            &InventorySearchInput {
+	                text: Some("Owned Widget".into()),
+	                asset_scope: Some("corporation".into()),
+	                ..Default::default()
+	            },
+	        ).unwrap();
+	        assert_eq!(corporation.matching_stacks, 1);
+	        assert_eq!(corporation.matching_units, 4);
+	        assert_eq!(corporation.rows[0].owner_type, "Corporation");
+	        assert_eq!(corporation.rows[0].owner, "Test Corporation");
+	        assert_eq!(corporation.rows[0].division.as_deref(), Some("Industry"));
+	        assert_eq!(corporation.rows[0].source, "ESI Corporation Assets");
+
+	        let both = search_inventory(
+	            &conn,
+	            &InventorySearchInput {
+	                text: Some("Owned Widget".into()),
+	                asset_scope: Some("both".into()),
+	                ..Default::default()
+	            },
+	        ).unwrap();
+	        assert_eq!(both.matching_stacks, 2);
+	        assert_eq!(both.matching_units, 7);
 
         let unowned = search_inventory(
             &conn,

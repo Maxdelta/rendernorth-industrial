@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getMarketProfile,
   getMarketQuote,
@@ -14,8 +14,11 @@ import {
   type WeightedFill,
 } from "../lib/backend";
 import { Panel } from "./Panel";
+import { createRequestGate, type RequestGate } from "../lib/requestGate";
 
 type SearchMode = "inventory" | "market";
+type AssetScope = "personal" | "corporation" | "both";
+const INVENTORY_PAGE_SIZE = 100;
 
 const isk = (value: number | null) =>
   value == null ? "No market orders" : `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ISK`;
@@ -35,8 +38,9 @@ function ProfileSummary({ profile }: { profile: MarketProfile }) {
 
 export function MarketInventory() {
   const [mode, setMode] = useState<SearchMode>("inventory");
-  const [input, setInput] = useState<InventorySearchInput>({ positiveOnly: true, sort: "name" });
+  const [input, setInput] = useState<InventorySearchInput>({ assetScope: "both", positiveOnly: true, sort: "name" });
   const [inventoryResult, setInventoryResult] = useState<InventorySearchResult | null>(null);
+  const [inventoryPage, setInventoryPage] = useState(0);
   const [profile, setProfile] = useState<MarketProfile | null>(null);
   const [marketQuery, setMarketQuery] = useState("");
   const [typeResults, setTypeResults] = useState<TypeSearchResult[]>([]);
@@ -46,17 +50,21 @@ export function MarketInventory() {
   const [marketQuote, setMarketQuote] = useState<MarketQuote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const marketRequestGate = useRef<RequestGate>(createRequestGate());
 
   async function loadInventory(next = input) {
+    const isCurrent = marketRequestGate.current.begin();
     setLoading(true);
     setError(null);
     try {
-      setInventoryResult(await searchInventoryMarket(next));
-      setProfile(await getMarketProfile());
+      const [result, nextProfile] = await Promise.all([searchInventoryMarket(next), getMarketProfile()]);
+      if (!isCurrent()) return;
+      setInventoryResult(result);
+      setProfile(nextProfile);
     } catch (cause) {
-      setError(String(cause));
+      if (isCurrent()) setError(String(cause));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }
 
@@ -65,23 +73,28 @@ export function MarketInventory() {
       setMarketQuote(null);
       return;
     }
+    const isCurrent = marketRequestGate.current.begin();
     setLoading(true);
     setError(null);
     try {
-      setMarketQuote(await getMarketQuote(type.typeId, requested));
-      setProfile(await getMarketProfile());
+      const [quote, nextProfile] = await Promise.all([getMarketQuote(type.typeId, requested), getMarketProfile()]);
+      if (!isCurrent()) return;
+      setMarketQuote(quote);
+      setProfile(nextProfile);
     } catch (cause) {
-      setMarketQuote(null);
-      setError(String(cause));
+      if (isCurrent()) {
+        setMarketQuote(null);
+        setError(String(cause));
+      }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }
 
   useEffect(() => {
     if (mode !== "inventory") return;
     const id = setTimeout(() => loadInventory(input), 150);
-    return () => clearTimeout(id);
+    return () => { clearTimeout(id); marketRequestGate.current.invalidate(); };
   }, [mode, input]);
 
   useEffect(() => {
@@ -118,24 +131,26 @@ export function MarketInventory() {
       return;
     }
     const id = setTimeout(() => loadQuote(selectedType, requested), 150);
-    return () => clearTimeout(id);
+    return () => { clearTimeout(id); marketRequestGate.current.invalidate(); };
   }, [mode, selectedType, quantity]);
 
-  useEffect(() => {
-    getMarketProfile().then(setProfile).catch((cause) => setError(String(cause)));
-  }, []);
+  useEffect(() => () => marketRequestGate.current.invalidate(), []);
+  useEffect(() => setInventoryPage(0), [inventoryResult]);
 
   async function refresh() {
+    const isCurrent = marketRequestGate.current.begin();
     setLoading(true);
     setError(null);
     try {
       await refreshMarketPrices();
+      if (!isCurrent()) return;
       if (mode === "inventory") await loadInventory(input);
       else await loadQuote();
-      setProfile(await getMarketProfile());
     } catch (cause) {
-      setError(String(cause));
-      setLoading(false);
+      if (isCurrent()) {
+        setError(String(cause));
+        setLoading(false);
+      }
     }
   }
 
@@ -167,6 +182,11 @@ export function MarketInventory() {
 
   const noMarketOrders = marketQuote && marketQuote.acquisition.filled === 0 && marketQuote.liquidation.filled === 0;
   const validMarketQuote = marketQuote?.acquisition.sufficient && marketQuote.liquidation.sufficient;
+  const assetScope = input.assetScope ?? "both";
+  const inventoryPageCount = Math.max(1, Math.ceil((inventoryResult?.rows.length ?? 0) / INVENTORY_PAGE_SIZE));
+  const activeInventoryPage = Math.min(inventoryPage, inventoryPageCount - 1);
+  const firstInventoryRow = activeInventoryPage * INVENTORY_PAGE_SIZE;
+  const visibleInventoryRows = inventoryResult?.rows.slice(firstInventoryRow, firstInventoryRow + INVENTORY_PAGE_SIZE) ?? [];
 
   return (
     <Panel
@@ -184,6 +204,23 @@ export function MarketInventory() {
       {error && <div className="sd-error"><div className="conflict-desc">{mode === "inventory" ? "Inventory or market query failed" : "Market search failed"}: {error}</div></div>}
 
       {mode === "inventory" ? <>
+        <div className="inventory-source-filter" aria-label="Asset Source">
+          <span className="ops-field-label">Asset Source</span>
+          <div className="new-op-mode-toggle">
+            {(["personal", "corporation", "both"] as AssetScope[]).map((value) => (
+              <button
+                key={value}
+                className={assetScope === value ? "target-select enabled active" : "target-select enabled"}
+                onClick={() => setInput((current) => ({ ...current, assetScope: value }))}
+              >
+                {value === "personal" ? "Personal" : value === "corporation" ? "Corporation" : "Both"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="data-source inventory-ownership-notice">
+          This filter controls inventory viewing and valuation only. Corporation assets remain separate and are not available to Production, Quartermaster, or Procurement.
+        </div>
         <div className="manual-inv-form" style={{ flexWrap: "wrap" }}>
           <input className="sd-path-input" style={{ minWidth: 300 }} placeholder="Search owned type, owner, location, path, flag, or source" value={input.text ?? ""} onChange={(event) => set("text", event.target.value)} />
           {selectFilters.map(([key, label, options]) => <select key={key} value={String(input[key] ?? "")} onChange={(event) => set(key, event.target.value)}><option value="">{label}</option>{options.map((option) => <option key={option}>{option}</option>)}</select>)}
@@ -199,13 +236,22 @@ export function MarketInventory() {
             <div className="res-summary-cell"><div className="res-summary-label">Replacement value</div><div className="ops-field-value">{isk(inventoryResult.totalReplacementValue)}</div></div>
             <div className="res-summary-cell"><div className="res-summary-label">Liquidation value</div><div className="ops-field-value">{isk(inventoryResult.totalLiquidationValue)}</div></div>
           </div>
+          <div className="inventory-details-pagination">
+            <span>{(firstInventoryRow + 1).toLocaleString()}–{Math.min(firstInventoryRow + INVENTORY_PAGE_SIZE, inventoryResult.rows.length).toLocaleString()} of {inventoryResult.rows.length.toLocaleString()} matching stacks</span>
+            <div>
+              <button className="target-select enabled" disabled={activeInventoryPage === 0} onClick={() => setInventoryPage((value) => Math.max(0, value - 1))}>Previous</button>{" "}
+              <button className="target-select enabled" disabled={activeInventoryPage >= inventoryPageCount - 1} onClick={() => setInventoryPage((value) => Math.min(inventoryPageCount - 1, value + 1))}>Next</button>
+            </div>
+          </div>
           <div className="inv-table" style={{ overflowX: "auto" }}>
-            <div className="inv-row" style={{ gridTemplateColumns: "1.5fr .7fr .7fr .8fr .9fr 1.7fr .8fr .9fr .9fr .9fr .9fr", minWidth: 1750 }}><div>Type</div><div>Quantity</div><div>Unit m³</div><div>Stack m³</div><div>Owner</div><div>Owned item location</div><div>Unit buy cost</div><div>Replacement</div><div>Unit sell value</div><div>Liquidation</div><div>Price state</div></div>
-            {inventoryResult.rows.map((row) => <div className="inv-row" key={row.stackKey} style={{ gridTemplateColumns: "1.5fr .7fr .7fr .8fr .9fr 1.7fr .8fr .9fr .9fr .9fr .9fr", minWidth: 1750 }}>
-              <div className="inv-name">{row.typeName}<div className="bts-result-meta">{row.groupName ?? row.categoryName ?? "—"} · {row.source}</div></div><div>{row.quantity.toLocaleString()}</div>
+            <div className="inv-row" style={{ gridTemplateColumns: "1.4fr .6fr .6fr .7fr .7fr .9fr .8fr 1.6fr 1fr .8fr .9fr .9fr .9fr .9fr", minWidth: 2150 }}><div>Type</div><div>Quantity</div><div>Unit m³</div><div>Stack m³</div><div>Owner Type</div><div>Owner Name</div><div>Division</div><div>Owned item location</div><div>Source</div><div>Unit buy cost</div><div>Replacement</div><div>Unit sell value</div><div>Liquidation</div><div>Price state</div></div>
+            {visibleInventoryRows.map((row) => <div className="inv-row" key={row.stackKey} style={{ gridTemplateColumns: "1.4fr .6fr .6fr .7fr .7fr .9fr .8fr 1.6fr 1fr .8fr .9fr .9fr .9fr .9fr", minWidth: 2150 }}>
+              <div className="inv-name">{row.typeName}<div className="bts-result-meta">{row.groupName ?? row.categoryName ?? "—"}</div></div><div>{row.quantity.toLocaleString()}</div>
               <div>{formatVolume(row.unitVolumeM3)}</div><div>{formatVolume(row.stackVolumeM3)}</div>
-              <div>{row.owner}</div>
+              <div><span className={`inv-status ${row.ownerType === "Corporation" ? "furnace" : "nominal"}`}>{row.ownerType}</span></div>
+              <div>{row.owner}</div><div>{row.division ?? "—"}</div>
               <div>{row.locationName}<div className="bts-result-meta">{[row.systemName, row.regionName, ...row.containerPath].filter(Boolean).join(" → ")}</div></div>
+              <div>{row.source}</div>
               <div>{fillValue(row.quote.acquisition, true)}</div><div>{fillValue(row.quote.acquisition)}</div><div>{fillValue(row.quote.liquidation, true)}</div><div>{fillValue(row.quote.liquidation)}</div>
               <div className={`inv-status ${row.quote.stale ? "furnace" : "nominal"}`}>{row.quote.stale ? "STALE" : "CURRENT"}<div className="bts-result-meta">{row.quote.marketProfile} · {row.quote.source}<br />{row.quote.fetchedAt ? new Date(row.quote.fetchedAt).toLocaleString() : "No snapshot"}</div></div>
             </div>)}

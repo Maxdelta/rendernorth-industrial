@@ -683,6 +683,59 @@
   font-size: 13px;
 }
 
+.synchronized-assets-table-wrap {
+  max-height: min(48vh, 560px);
+  max-width: 100%;
+  overflow: auto;
+}
+
+.synchronized-assets-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+.inventory-details-panel {
+  border: 1px solid var(--bulkhead);
+  border-left: 3px solid var(--coolant);
+  background: var(--panel);
+}
+
+.inventory-details-summary {
+  cursor: pointer;
+  padding: 15px 18px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.inventory-details-summary:hover { color: var(--coolant); }
+.inventory-details-body { padding: 0 18px 18px; }
+
+.inventory-details-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.inventory-source-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.inventory-ownership-notice { margin-bottom: 12px; }
+
 .inv-row {
   display: grid;
   grid-template-columns: 1.5fr 0.6fr 0.6fr 0.6fr 0.6fr 1.3fr 0.8fr 0.9fr 0.9fr;
