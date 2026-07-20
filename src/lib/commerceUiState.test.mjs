@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { commerceTabAttributes, switchCommerceTab } from "./commerceUiState.js";
+import { commerceKpiActive, commerceSyncAvailability, commerceTabAttributes, switchCommerceTab, toggleCommerceKpiFilter } from "./commerceUiState.js";
 
 test("active Commerce tab exposes selected and keyboard state", () => {
   assert.deepEqual(commerceTabAttributes("orders", "orders"), { "aria-selected": true, tabIndex: 0 });
@@ -14,4 +15,70 @@ test("switching Commerce modules preserves independent filter state", () => {
   assert.equal(switched.tab, "contracts");
   assert.strictEqual(switched.orderFilters, orderFilters);
   assert.strictEqual(switched.contractFilters, contractFilters);
+});
+
+test("Buy, Sell, and Expiring Soon KPI filters update the existing order filter", () => {
+  const initial = { tab: "orders", side: "all", direction: "all", status: "all" };
+  assert.equal(toggleCommerceKpiFilter(initial, "orders-buy").side, "Buy");
+  assert.equal(toggleCommerceKpiFilter(initial, "orders-sell").side, "Sell");
+  assert.equal(toggleCommerceKpiFilter(initial, "orders-expiring").side, "expiring");
+});
+
+test("clicking an active KPI toggles it off without separate active state", () => {
+  const active = { tab: "orders", side: "Buy", direction: "all", status: "all" };
+  assert.equal(commerceKpiActive(active, "orders-buy"), true);
+  const cleared = toggleCommerceKpiFilter(active, "orders-buy");
+  assert.equal(cleared.side, "all");
+  assert.equal(commerceKpiActive(cleared, "orders-buy"), false);
+});
+
+test("contract KPI filters switch tabs and preserve unrelated manual filters", () => {
+  const initial = { tab: "orders", side: "Sell", direction: "all", status: "all", search: "Raven" };
+  const outstanding = toggleCommerceKpiFilter(initial, "contracts-outstanding");
+  assert.equal(outstanding.tab, "contracts");
+  assert.equal(outstanding.status, "outstanding");
+  assert.equal(outstanding.side, "Sell");
+  assert.equal(outstanding.search, "Raven");
+  assert.equal(commerceKpiActive(outstanding, "contracts-outstanding"), true);
+});
+
+test("Assigned, Issued, Finished, and contract Expiring KPI filters share manual fields", () => {
+  const initial = { tab: "contracts", side: "all", direction: "all", status: "all" };
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-assigned").direction, "Assigned");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-issued").direction, "Issued");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-finished").status, "finished");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-expiring").status, "expiring");
+});
+
+test("manual filter changes drive KPI active feedback", () => {
+  const manual = { tab: "contracts", side: "all", direction: "Issued", status: "finished" };
+  assert.equal(commerceKpiActive(manual, "contracts-issued"), true);
+  assert.equal(commerceKpiActive(manual, "contracts-finished"), true);
+  assert.equal(commerceKpiActive({ ...manual, direction: "all" }, "contracts-issued"), false);
+});
+
+test("Commerce sync availability follows enabled characters and granted scopes", () => {
+  const characters = [
+    { characterId: 1, enabled: true, marketOrderScopeGranted: true, contractScopeGranted: true },
+    { characterId: 2, enabled: false, marketOrderScopeGranted: true, contractScopeGranted: true },
+    { characterId: 3, enabled: true, marketOrderScopeGranted: true, contractScopeGranted: false },
+  ];
+  assert.deepEqual(commerceSyncAvailability(characters), { marketOrders: true, contracts: true, commerce: true });
+  assert.deepEqual(commerceSyncAvailability(characters, 3), { marketOrders: true, contracts: false, commerce: false });
+  assert.deepEqual(commerceSyncAvailability(characters, 2), { marketOrders: false, contracts: false, commerce: false });
+});
+
+test("Commerce page exposes all three existing-command sync controls", () => {
+  const source = readFileSync(new URL("../pages/Commerce.tsx", import.meta.url), "utf8");
+  for (const label of ["Sync Market Orders", "Sync Contracts", "Sync Commerce"]) assert.ok(source.includes(`"${label}"`));
+  assert.match(source, /syncAllMarketOrders/);
+  assert.match(source, /syncAllContracts/);
+  assert.match(source, /syncAllCommerce/);
+});
+
+test("Commerce sticky headers are paint-contained inside their table scroll region", () => {
+  const css = readFileSync(new URL("../styles/app.css", import.meta.url), "utf8");
+  assert.match(css, /\.commerce-table-wrap\s*\{[^}]*isolation:isolate;[^}]*contain:paint;/s);
+  assert.match(css, /\.commerce-table th\s*\{[^}]*position:sticky;[^}]*top:0;[^}]*z-index:1;/s);
+  assert.match(css, /\.commerce-summary\s*\{[^}]*position:relative;/s);
 });
