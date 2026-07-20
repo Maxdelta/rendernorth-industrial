@@ -1,4 +1,4 @@
-# RenderNorth Industrial Open Beta 0.1.5 Onboarding
+# RenderNorth Industrial Open Beta 0.1.6 Onboarding
 
 ## Normal setup
 
@@ -30,7 +30,7 @@ Only users intentionally managing their own CCP application need this path. Crea
 
 ## Copy-ready Open Beta announcement
 
-RenderNorth Industrial Open Beta 0.1.5 is available for Windows. Connect an EVE character through secure read-only CCP SSO, import CCP's official JSONL static data, synchronize personal inventory, blueprints, Market Orders, Contracts, and authorized corporation assets, value markets, plan production and procurement, and analyze EFT doctrines locally. Report beta issues through GitHub or contact Maxdelta on Discord (`maxdelta0089`).
+RenderNorth Industrial Open Beta 0.1.6 is available for Windows. Connect an EVE character through secure read-only CCP SSO, import CCP's official JSONL static data, synchronize personal inventory, blueprints, Market Orders, Contracts, and authorized corporation assets, value markets, plan production and procurement, and analyze EFT doctrines locally. Report beta issues through GitHub or contact Maxdelta on Discord (`maxdelta0089`).
 
 ## Copy-ready Getting Started
 
@@ -38,7 +38,7 @@ Install RenderNorth Industrial, connect a character with the built-in official C
 
 ## Copy-ready release notes
 
-Open Beta 0.1.5 makes Inventory cleaner and faster by keeping Inventory Search & Market Valuation primary and moving raw synchronized assets into collapsed Asset Source Details. Corporation commerce and wallet integration are not yet implemented. This is beta software and is not production-certified.
+Open Beta 0.1.6 makes Commerce faster to refresh and easier to explore with direct synchronization controls and interactive KPI filtering. Corporation commerce and wallet integration are not yet implemented. This is beta software and is not production-certified.
 
 ## Help and support
 

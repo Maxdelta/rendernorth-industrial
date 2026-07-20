@@ -2,6 +2,52 @@
 
 All notable user-facing changes to RenderNorth Industrial are recorded here. Releases are listed newest first and use semantic versions.
 
+## [0.1.6] — 2026-07-20
+
+### RenderNorth Industrial Open Beta 0.1.6
+
+Commerce is now faster to refresh and easier to explore.
+
+### Added
+
+- Sync Market Orders directly from Commerce.
+- Sync Contracts directly from Commerce.
+- Sync Commerce for both datasets.
+- Interactive Market Order summary cards.
+- Interactive Contract summary cards.
+- One-click filtering from Commerce KPIs.
+- Active-filter indicators with click-to-clear behavior.
+
+### Improved
+
+- Manual Commerce filters and KPI highlights now remain synchronized.
+- Contract KPI cards automatically open the Contracts module.
+- Selected-character sync targets only the selected character.
+- All Characters sync targets all enabled eligible characters.
+- Last-sync status refreshes directly on the Commerce page.
+- Sticky headers no longer overlap summary cards.
+- Large datasets are easier to navigate.
+
+### Fixed
+
+- Manual Commerce filter changes no longer leave KPI highlights out of sync.
+- Sticky Commerce table headers no longer overlap summary cards.
+
+### Security & Privacy
+
+- Commerce synchronization remains read-only.
+- No market or contract actions were added.
+- No new ESI scopes were added.
+- No database or migration changes were made.
+- Diagnostics remain unchanged.
+
+### Known Limitations
+
+- A completed Market Order activity inbox is not implemented.
+- Corporation Commerce is not supported.
+- Monetary summary cards without a direct filter remain informational.
+- Wallet journal and wallet transaction synchronization are not supported.
+
 ## [0.1.5] — 2026-07-19
 
 ### RenderNorth Industrial Open Beta 0.1.5

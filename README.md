@@ -4,7 +4,7 @@
 
 [Download the latest Windows release](https://github.com/Maxdelta/rendernorth-industrial/releases/latest)
 
-Open Beta 0.1.5 makes Inventory cleaner, faster, and easier to use while preserving read-only personal and corporation asset viewing and market valuation. First launch is guided by an in-app setup wizard using the official RenderNorth Industrial CCP application, official CCP JSONL static data, character synchronization, and market refresh. See [Open Beta Onboarding](docs/OPEN_BETA_ONBOARDING.md) and the [Open Beta Release Checklist](docs/OPEN_BETA_RELEASE_CHECKLIST.md).
+Open Beta 0.1.6 makes Commerce faster to refresh and easier to explore with direct synchronization controls and interactive KPI filtering. First launch is guided by an in-app setup wizard using the official RenderNorth Industrial CCP application, official CCP JSONL static data, character synchronization, and market refresh. See [Open Beta Onboarding](docs/OPEN_BETA_ONBOARDING.md) and the [Open Beta Release Checklist](docs/OPEN_BETA_RELEASE_CHECKLIST.md).
 
 Public release history is maintained in [CHANGELOG.md](CHANGELOG.md) and `src/data/releases.json`. The permanent release procedure and reusable template are in [Release Process](docs/RELEASE_PROCESS.md).
 
