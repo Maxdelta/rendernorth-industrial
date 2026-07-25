@@ -14,9 +14,13 @@ export const commerceKpiFilters = Object.freeze({
   "contracts-outstanding": { tab: "contracts", field: "status", value: "outstanding", clearValue: "all" },
   "contracts-assigned": { tab: "contracts", field: "direction", value: "Assigned", clearValue: "all" },
   "contracts-issued": { tab: "contracts", field: "direction", value: "Issued", clearValue: "all" },
+  "contracts-accepted": { tab: "contracts", field: "status", value: "in_progress", clearValue: "all" },
   "contracts-progress": { tab: "contracts", field: "status", value: "in_progress", clearValue: "all" },
   "contracts-expiring": { tab: "contracts", field: "status", value: "expiring", clearValue: "all" },
-  "contracts-finished": { tab: "contracts", field: "status", value: "finished", clearValue: "all" },
+  "contracts-finished": { tab: "contracts", field: "activity", value: "completed", clearValue: "all" },
+  "contracts-cancelled": { tab: "contracts", field: "activity", value: "cancelled", clearValue: "all" },
+  "contracts-expired": { tab: "contracts", field: "activity", value: "expired", clearValue: "all" },
+  "contracts-new": { tab: "contracts", field: "readState", value: "new", clearValue: "all" },
 });
 
 export function commerceKpiActive(state, filterId) {
@@ -71,4 +75,88 @@ export function filterCompletedOrders(rows, filters, nowMs = Date.now()) {
       (!location || String(row.locationName).toLowerCase().includes(location)) &&
       new Date(row.firstSeenAt).getTime() >= cutoff;
   });
+}
+
+export function filterContracts(rows, filters, nowMs = Date.now()) {
+  const view = filters.view ?? "active";
+  const character = filters.character ?? "all";
+  const activity = String(filters.activity ?? "all").toLowerCase();
+  const readState = String(filters.readState ?? "all").toLowerCase();
+  const status = String(filters.status ?? "all").toLowerCase();
+  const direction = String(filters.direction ?? "all").toLowerCase();
+  const contractType = String(filters.contractType ?? "all").toLowerCase();
+  const availability = String(filters.availability ?? "all").toLowerCase();
+  const search = String(filters.search ?? "").trim().toLowerCase();
+  const startLocation = String(filters.startLocation ?? "").trim().toLowerCase();
+  const endLocation = String(filters.endLocation ?? "").trim().toLowerCase();
+  const thresholdSeconds = Math.max(0, Number(filters.thresholdDays ?? 7)) * 86_400;
+  const days = Math.max(0, Number(filters.days ?? 0));
+  const cutoff = days > 0 ? nowMs - days * 86_400_000 : Number.NEGATIVE_INFINITY;
+  return rows.filter(row => {
+    const rowActivity = String(row.activityCategory).toLowerCase();
+    const activeView = view === "active" ? rowActivity === "active" : rowActivity !== "active";
+    const statusMatches = status === "all" ||
+      (status === "expiring" && rowActivity === "active" && row.remainingSeconds >= 0 && row.remainingSeconds <= thresholdSeconds) ||
+      String(row.status).toLowerCase() === status;
+    return activeView &&
+      (character === "all" || Number(character) === Number(row.characterId)) &&
+      (view === "active" || activity === "all" || rowActivity === activity) &&
+      (view === "active" || readState === "all" || (readState === "new" ? !row.seen : row.seen)) &&
+      statusMatches &&
+      (direction === "all" || String(row.direction).toLowerCase() === direction) &&
+      (contractType === "all" || String(row.contractType).toLowerCase() === contractType) &&
+      (availability === "all" || String(row.availability).toLowerCase() === availability) &&
+      (!search || String(row.title).toLowerCase().includes(search) || String(row.characterName).toLowerCase().includes(search) || String(row.searchText ?? "").toLowerCase().includes(search)) &&
+      (!startLocation || String(row.startLocationName ?? row.startLocationId ?? "").toLowerCase().includes(startLocation)) &&
+      (!endLocation || String(row.endLocationName ?? row.endLocationId ?? "").toLowerCase().includes(endLocation)) &&
+      (days === 0 || new Date(view === "activity" ? (row.dateCompleted ?? row.firstObservedAt) : row.dateIssued).getTime() >= cutoff);
+  });
+}
+
+export function contractKpiCounts(rows, thresholdDays = 7) {
+  const thresholdSeconds = Math.max(0, Number(thresholdDays)) * 86_400;
+  return {
+    outstanding: rows.filter(row => row.activityCategory === "active" && row.status === "outstanding").length,
+    assigned: rows.filter(row => row.activityCategory === "active" && row.direction === "Assigned").length,
+    issued: rows.filter(row => row.activityCategory === "active" && row.direction === "Issued").length,
+    accepted: rows.filter(row => row.activityCategory === "active" && row.status === "in_progress").length,
+    completed: rows.filter(row => row.activityCategory === "completed").length,
+    cancelled: rows.filter(row => row.activityCategory === "cancelled").length,
+    expired: rows.filter(row => row.activityCategory === "expired").length,
+    expiring: rows.filter(row => row.activityCategory === "active" && row.remainingSeconds >= 0 && row.remainingSeconds <= thresholdSeconds).length,
+    newActivity: rows.filter(row => row.activityCategory !== "active" && !row.seen).length,
+  };
+}
+
+export function groupContractItems(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = `${item.included ? 1 : 0}:${item.typeId}:${item.itemName}:${item.singleton ? 1 : 0}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.quantity += Number(item.quantity);
+      existing.recordIds.push(item.recordId);
+    } else {
+      groups.set(key, {
+        typeId: item.typeId,
+        itemName: item.itemName,
+        quantity: Number(item.quantity),
+        singleton: Boolean(item.singleton),
+        included: Boolean(item.included),
+        recordIds: [item.recordId],
+      });
+    }
+  }
+  return [...groups.values()];
+}
+
+export function contractTimeline(contract) {
+  const events = [{ label: "Issued", timestamp: contract.dateIssued }];
+  if (contract.dateAccepted) events.push({ label: "Accepted", timestamp: contract.dateAccepted });
+  if (contract.dateCompleted) events.push({ label: "Completed", timestamp: contract.dateCompleted });
+  events.push({
+    label: contract.activityCategory === "expired" ? "Expired" : "Expiry",
+    timestamp: contract.dateExpired,
+  });
+  return events;
 }

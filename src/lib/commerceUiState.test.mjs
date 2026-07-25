@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { activeOrderQuantityLabel, commerceKpiActive, commerceSyncAvailability, commerceTabAttributes, completedOrderActivityLabel, filterCompletedOrders, switchCommerceTab, toggleCommerceKpiFilter } from "./commerceUiState.js";
+import { activeOrderQuantityLabel, commerceKpiActive, commerceSyncAvailability, commerceTabAttributes, completedOrderActivityLabel, contractKpiCounts, contractTimeline, filterCompletedOrders, filterContracts, groupContractItems, switchCommerceTab, toggleCommerceKpiFilter } from "./commerceUiState.js";
 
 test("active Commerce tab exposes selected and keyboard state", () => {
   assert.deepEqual(commerceTabAttributes("orders", "orders"), { "aria-selected": true, tabIndex: 0 });
@@ -43,15 +43,19 @@ test("contract KPI filters switch tabs and preserve unrelated manual filters", (
 });
 
 test("Assigned, Issued, Finished, and contract Expiring KPI filters share manual fields", () => {
-  const initial = { tab: "contracts", side: "all", direction: "all", status: "all" };
+  const initial = { tab: "contracts", side: "all", direction: "all", status: "all", activity: "all", readState: "all" };
   assert.equal(toggleCommerceKpiFilter(initial, "contracts-assigned").direction, "Assigned");
   assert.equal(toggleCommerceKpiFilter(initial, "contracts-issued").direction, "Issued");
-  assert.equal(toggleCommerceKpiFilter(initial, "contracts-finished").status, "finished");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-accepted").status, "in_progress");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-finished").activity, "completed");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-cancelled").activity, "cancelled");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-expired").activity, "expired");
+  assert.equal(toggleCommerceKpiFilter(initial, "contracts-new").readState, "new");
   assert.equal(toggleCommerceKpiFilter(initial, "contracts-expiring").status, "expiring");
 });
 
 test("manual filter changes drive KPI active feedback", () => {
-  const manual = { tab: "contracts", side: "all", direction: "Issued", status: "finished" };
+  const manual = { tab: "contracts", side: "all", direction: "Issued", status: "all", activity: "completed" };
   assert.equal(commerceKpiActive(manual, "contracts-issued"), true);
   assert.equal(commerceKpiActive(manual, "contracts-finished"), true);
   assert.equal(commerceKpiActive({ ...manual, direction: "all" }, "contracts-issued"), false);
@@ -145,4 +149,65 @@ test("Completed Orders exposes unread badge and local read controls", () => {
   assert.match(source, /markMarketOrderHistorySeen/);
   assert.match(source, /markAllMarketOrderHistorySeen/);
   assert.match(source, /Mark All Read/);
+});
+
+test("contract activity filtering combines tabs, activity, seen state, KPI fields, and search", () => {
+  const rows = [
+    { contractId: 1, characterId: 1, characterName: "Maxdelta", title: "Minerals", searchText: "Tritanium", direction: "Issued", status: "outstanding", contractType: "item_exchange", availability: "personal", startLocationId: 600, startLocationName: "Jita", endLocationId: null, endLocationName: null, remainingSeconds: 3600, activityCategory: "active", seen: false, dateIssued: "2026-07-25T09:00:00Z", dateCompleted: null, firstObservedAt: "2026-07-25T10:00:00Z" },
+    { contractId: 2, characterId: 2, characterName: "Sabre side", title: "Ships", searchText: "Hobgoblin II", direction: "Accepted", status: "finished", contractType: "courier", availability: "public", startLocationId: 601, startLocationName: "Amarr", endLocationId: 602, endLocationName: "Dodixie", remainingSeconds: -1, activityCategory: "completed", seen: false, dateIssued: "2026-07-24T09:00:00Z", dateCompleted: "2026-07-25T10:00:00Z", firstObservedAt: "2026-07-25T10:05:00Z" },
+    { contractId: 3, characterId: 1, characterName: "Maxdelta", title: "Modules", searchText: "Damage Control II", direction: "Issued", status: "cancelled", contractType: "item_exchange", availability: "personal", startLocationId: 600, startLocationName: "Jita", endLocationId: null, endLocationName: null, remainingSeconds: -1, activityCategory: "cancelled", seen: true, dateIssued: "2026-06-01T09:00:00Z", dateCompleted: null, firstObservedAt: "2026-06-15T10:00:00Z" },
+  ];
+  assert.equal(filterContracts(rows, { view: "active", status: "expiring", thresholdDays: 1 }).length, 1);
+  assert.equal(filterContracts(rows, { view: "activity", activity: "completed", readState: "new", character: 2, search: "hobgoblin", startLocation: "amarr", days: 1 }, Date.parse("2026-07-25T12:00:00Z")).length, 1);
+  assert.equal(filterContracts(rows, { view: "activity", activity: "cancelled", readState: "seen", direction: "Issued" }).length, 1);
+  assert.equal(filterContracts(rows, { view: "activity", days: 7 }, Date.parse("2026-07-25T12:00:00Z")).length, 1);
+});
+
+test("contract KPI counts drive all nine operational cards", () => {
+  const rows = [
+    { activityCategory: "active", status: "outstanding", direction: "Assigned", remainingSeconds: 100, seen: false },
+    { activityCategory: "active", status: "in_progress", direction: "Accepted", remainingSeconds: 999999, seen: false },
+    { activityCategory: "completed", status: "finished", direction: "Issued", remainingSeconds: -1, seen: false },
+    { activityCategory: "cancelled", status: "cancelled", direction: "Issued", remainingSeconds: -1, seen: true },
+    { activityCategory: "expired", status: "outstanding", direction: "Issued", remainingSeconds: -1, seen: false },
+  ];
+  assert.deepEqual(contractKpiCounts(rows, 1), { outstanding: 1, assigned: 1, issued: 0, accepted: 1, completed: 1, cancelled: 1, expired: 1, expiring: 1, newActivity: 2 });
+});
+
+test("New Activity KPI reflects manual read-state filters and clears on second click", () => {
+  const manual = { tab: "contracts", side: "all", direction: "all", status: "all", activity: "all", readState: "new" };
+  assert.equal(commerceKpiActive(manual, "contracts-new"), true);
+  assert.equal(toggleCommerceKpiFilter(manual, "contracts-new").readState, "all");
+});
+
+test("grouped contract items preserve raw records while aggregating identical presentation rows", () => {
+  const raw = [
+    { recordId: 1, typeId: 2456, itemName: "Hobgoblin II", quantity: 10, singleton: false, included: true },
+    { recordId: 2, typeId: 2456, itemName: "Hobgoblin II", quantity: 8, singleton: false, included: true },
+    { recordId: 3, typeId: 2456, itemName: "Hobgoblin II", quantity: 2, singleton: false, included: false },
+  ];
+  const snapshot = structuredClone(raw);
+  const grouped = groupContractItems(raw);
+  assert.deepEqual(raw, snapshot);
+  assert.equal(grouped.length, 2);
+  assert.equal(grouped.find(row => row.included).quantity, 18);
+  assert.deepEqual(grouped.find(row => row.included).recordIds, [1, 2]);
+});
+
+test("contract timeline renders only CCP timestamps and never invents cancellation time", () => {
+  const events = contractTimeline({ dateIssued: "2026-07-01T00:00:00Z", dateAccepted: "2026-07-02T00:00:00Z", dateCompleted: null, dateExpired: "2026-07-30T00:00:00Z", activityCategory: "cancelled" });
+  assert.deepEqual(events.map(event => event.label), ["Issued", "Accepted", "Expiry"]);
+  assert.equal(events.some(event => event.label === "Cancelled"), false);
+});
+
+test("contract client filtering remains deterministic for 5,000 synchronized rows", () => {
+  const rows = Array.from({ length: 5000 }, (_, index) => ({
+    contractId: index, characterId: index % 2, characterName: `Pilot ${index % 2}`, title: index % 5 === 0 ? "Minerals" : "Ships",
+    direction: index % 2 === 0 ? "Issued" : "Accepted", status: index % 3 === 0 ? "finished" : "cancelled",
+    contractType: "item_exchange", availability: "personal", startLocationId: 600, startLocationName: index % 4 === 0 ? "Jita" : "Amarr",
+    endLocationId: null, endLocationName: null, remainingSeconds: -1, activityCategory: index % 3 === 0 ? "completed" : "cancelled", seen: index % 7 === 0,
+    searchText: "", dateIssued: "2026-07-01T00:00:00Z", dateCompleted: null, firstObservedAt: "2026-07-25T10:00:00Z",
+  }));
+  const filtered = filterContracts(rows, { view: "activity", activity: "completed", readState: "new", search: "minerals", startLocation: "jita" });
+  assert.equal(filtered.length, 72);
 });

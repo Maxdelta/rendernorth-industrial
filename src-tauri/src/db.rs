@@ -75,6 +75,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         22,
         include_str!("../migrations/0022_commerce_activity_center.sql"),
     ),
+    (23, include_str!("../migrations/0023_contract_operations.sql")),
 ];
 
 pub struct Db {
@@ -659,5 +660,33 @@ mod tests {
             conn.query_row("SELECT COUNT(*) FROM character_market_order_history", [], |row| row.get::<_, i64>(0)).unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn migration_0023_preserves_contracts_and_adds_activity_state() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        for (_, sql) in MIGRATIONS.iter().filter(|(version, _)| *version <= 22) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled,authorization_status) VALUES(42,'Pilot',0,'esi-contracts.read_character_contracts.v1',1,'authorized')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO character_contracts(character_id,contract_id,issuer_id,issuer_corporation_id,assignee_id,acceptor_id,contract_type,availability,status,date_issued,date_expired,for_corporation,source,synced_at)
+             VALUES(42,7001,42,100,0,0,'item_exchange','personal','finished','2026-07-01T00:00:00Z','2026-08-01T00:00:00Z',0,'ESI Character Contracts','2026-07-25T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute_batch(include_str!("../migrations/0023_contract_operations.sql"))
+            .unwrap();
+        let state = conn.query_row(
+            "SELECT first_observed_at,last_observed_at,seen_at FROM character_contracts WHERE contract_id=7001",
+            [],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?)),
+        ).unwrap();
+        assert_eq!(state.0, "2026-07-25T00:00:00Z");
+        assert_eq!(state.1, state.0);
+        assert_eq!(state.2, None);
     }
 }

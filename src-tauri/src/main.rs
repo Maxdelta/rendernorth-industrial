@@ -106,6 +106,8 @@ fn main() {
             commands::get_market_order_history_dashboard,
             commands::mark_market_order_history_seen,
             commands::mark_all_market_order_history_seen,
+            commands::mark_contract_activity_seen,
+            commands::mark_all_contract_activity_seen,
             commands::get_contract_dashboard,
             commands::get_commerce_overview,
             commands::get_contract_detail,

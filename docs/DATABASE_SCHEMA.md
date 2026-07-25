@@ -197,6 +197,19 @@ contracts, wallet data, Production, Quartermaster, Procurement, or any CCP
 resource. Orders that later fall outside CCP's 90-day history window remain in
 the local activity ledger after RenderNorth has observed them.
 
+### Contract Operations (migration 0023)
+
+- Adds `first_observed_at`, `last_observed_at`, and local-only `seen_at` to
+  **character_contracts**.
+- Backfills observation timestamps from the existing synchronized timestamp
+  without changing contract ownership or authoritative CCP fields.
+- Adds indexes for activity/read filtering and terminal-state reporting.
+- Contract synchronization upserts the current CCP response, preserves read
+  state, retains terminal activity, and removes only active rows that disappear
+  from the authoritative response.
+- Raw rows in **character_contract_items** remain unchanged; identical-item
+  grouping is presentation-only.
+
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)
 - **sync_state**(resource, character_id, etag, last_success_at, next_allowed_at, last_error, PRIMARY KEY(resource, character_id))

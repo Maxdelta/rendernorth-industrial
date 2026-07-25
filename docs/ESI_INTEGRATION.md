@@ -134,10 +134,11 @@ That personal snapshot remains separate from the later corporation snapshot.
   `GET /characters/{character_id}/contracts/{contract_id}/items` and
   `/bids`. These details are loaded only when a user opens a contract, cached
   locally, and never requested row-by-row while rendering the dashboard.
-- Orders and contracts are replaceable, per-character snapshots. Failed syncs
-  preserve the prior successful snapshot; a successful empty response is a
-  valid empty state. Corporation orders are excluded, and no corporation
-  contract endpoint is called.
+- Active orders are replaceable per-character snapshots. Contracts are
+  per-character upserts so terminal activity and local read state survive the
+  rolling CCP response window. Failed syncs preserve the prior successful
+  data; a successful empty response is a valid empty state. Corporation orders
+  are excluded, and no corporation contract endpoint is called.
 - ISK decimals are stored as exact text received from ESI. Dashboard totals
   use deterministic integer-cent arithmetic rather than binary floating point.
 - Commerce data is display-only and remains outside Production, Quartermaster,
@@ -159,6 +160,20 @@ That personal snapshot remains separate from the later corporation snapshot.
   limitation in the UI.
 - New/Seen is local presentation state. Mark Read and Mark All Read update only
   the local database and never call a CCP write endpoint.
+
+### Contract Operations (RNI-162)
+
+- Active and Activity views reuse the existing synchronized personal-contract
+  response. Filters, unread state, KPI metrics, and item grouping make no
+  additional ESI requests.
+- Terminal contract rows are retained locally as an activity ledger after they
+  leave CCP's rolling response window.
+- `date_issued`, `date_accepted`, `date_completed`, and `date_expired` are
+  displayed only when supplied by CCP. No cancellation timestamp is inferred.
+- Local first-observed time supports New Activity for terminal states whose
+  terminal timestamp CCP does not supply.
+- Contract item grouping changes presentation only; raw record IDs and
+  quantities remain in the synchronized item cache.
 
 - **Per-resource fetchers** with a shared client: `assets`, `blueprints`, `industry_jobs`, `wallet`, `orders`.
 - **Cadence:** driven by ESI's own `expires` header per endpoint — never poll faster than the cache timer. Manual "Sync now" respects the same limits (button disabled until `next_allowed_at`).

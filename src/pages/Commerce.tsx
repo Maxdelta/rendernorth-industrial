@@ -8,7 +8,9 @@ import {
   getMarketOrderDashboard,
   getMarketOrderHistoryDashboard,
   listCharacters,
+  markAllContractActivitySeen,
   markAllMarketOrderHistorySeen,
+  markContractActivitySeen,
   markMarketOrderHistorySeen,
   syncAllCommerce,
   syncAllContracts,
@@ -24,10 +26,11 @@ import {
   type MarketOrderHistoryDashboard,
 } from "../lib/backend";
 import { formatCompactIsk } from "../lib/isk.js";
-import { activeOrderQuantityLabel, commerceKpiActive, commerceSyncAvailability, commerceTabAttributes, completedOrderActivityLabel, filterCompletedOrders, toggleCommerceKpiFilter, type CommerceKpiFilterId } from "../lib/commerceUiState.js";
+import { activeOrderQuantityLabel, commerceKpiActive, commerceSyncAvailability, commerceTabAttributes, completedOrderActivityLabel, contractKpiCounts, contractTimeline, filterCompletedOrders, filterContracts, groupContractItems, toggleCommerceKpiFilter, type CommerceKpiFilterId } from "../lib/commerceUiState.js";
 
 type Tab = "orders" | "contracts";
 type OrderView = "active" | "completed";
+type ContractView = "active" | "activity";
 type KpiTone = "normal" | "positive" | "warning" | "risk" | "neutral" | "exposure";
 
 function IskAmount({ value, className = "" }: { value: string | null; className?: string }) {
@@ -97,6 +100,11 @@ export function CommercePage() {
   const [threshold, setThreshold] = useState(7);
   const [side, setSide] = useState("all");
   const [orderView, setOrderView] = useState<OrderView>("active");
+  const [contractView, setContractView] = useState<ContractView>("active");
+  const [contractActivity, setContractActivity] = useState("all");
+  const [contractReadState, setContractReadState] = useState("all");
+  const [contractDays, setContractDays] = useState(0);
+  const [showIndividualItems, setShowIndividualItems] = useState(false);
   const [historyActivity, setHistoryActivity] = useState("all");
   const [historyDays, setHistoryDays] = useState(0);
   const [location, setLocation] = useState("");
@@ -126,16 +134,26 @@ export function CommercePage() {
   const characterId = character === "all" ? null : Number(character);
   useEffect(() => {
     let active = true;
+    if (tab !== "orders") return () => { active = false; };
     setLoading(true);
     setError(null);
-    const call = tab === "orders"
-      ? orderView === "active"
-        ? getMarketOrderDashboard({ characterId, side, expiringDays: threshold, location, search, sort }).then(value => { if (active) setOrders(value); })
-        : getMarketOrderHistoryDashboard().then(value => { if (active) setHistory(value); })
-      : getContractDashboard({ characterId, status, contractType, availability, direction, startLocation, endLocation, search, expiringDays: threshold }).then(value => { if (active) setContracts(value); });
+    const call = orderView === "active"
+      ? getMarketOrderDashboard({ characterId, side, expiringDays: threshold, location, search, sort }).then(value => { if (active) setOrders(value); })
+      : getMarketOrderHistoryDashboard().then(value => { if (active) setHistory(value); });
     call.catch(value => { if (active) setError(String(value)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [tab, orderView, characterId, side, threshold, location, search, sort, status, contractType, availability, direction, startLocation, endLocation, refreshVersion]);
+  }, [tab, orderView, characterId, side, threshold, location, search, sort, refreshVersion]);
+  useEffect(() => {
+    let active = true;
+    if (tab !== "contracts") return () => { active = false; };
+    setLoading(true);
+    setError(null);
+    getContractDashboard({})
+      .then(value => { if (active) setContracts(value); })
+      .catch(value => { if (active) setError(String(value)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [tab, refreshVersion]);
   useEffect(() => {
     let active = true;
     getCommerceOverview(characterId, threshold).then(value => { if (active) setOverview(value); }).catch(value => { if (active) setError(String(value)); });
@@ -197,7 +215,16 @@ export function CommercePage() {
     location,
     days: historyDays,
   }), [history, character, historyActivity, search, location, historyDays]);
-  const kpiState = { tab, side, direction, status };
+  const contractRows = useMemo(() => filterContracts(contracts?.rows ?? [], {
+    view: contractView, character, activity: contractActivity, readState: contractReadState,
+    status, direction, contractType, availability, search, startLocation, endLocation,
+    thresholdDays: threshold, days: contractDays,
+  }), [contracts, contractView, character, contractActivity, contractReadState, contractDays, status, direction, contractType, availability, search, startLocation, endLocation, threshold]);
+  const contractCounts = useMemo(() => contractKpiCounts(contracts?.rows ?? [], threshold), [contracts, threshold]);
+  const groupedDetailItems = useMemo(() => detail ? groupContractItems(detail.items) : [], [detail]);
+  const detailItems = detail ? (showIndividualItems ? detail.items : groupedDetailItems) : [];
+  const timeline = detail ? contractTimeline(detail.contract) : [];
+  const kpiState = { tab, side, direction, status, activity: contractActivity, readState: contractReadState };
   const ordersTabAttributes = commerceTabAttributes(tab, "orders");
   const contractsTabAttributes = commerceTabAttributes(tab, "contracts");
   const setRelativeTab = (event: KeyboardEvent<HTMLButtonElement>, next: Tab) => {
@@ -208,16 +235,24 @@ export function CommercePage() {
     if (sibling instanceof HTMLButtonElement) sibling.focus();
   };
   async function openDetail(characterIdValue: number, contractId: number) {
-    setDetailTarget(contractId); setDetail(null); setDetailError(null); setDetailLoading(true);
+    setDetailTarget(contractId); setDetail(null); setDetailError(null); setDetailLoading(true); setShowIndividualItems(false);
     try { setDetail(await getContractDetail(clientId, characterIdValue, contractId)); } catch (value) { setDetailError(String(value)); } finally { setDetailLoading(false); }
   }
   function closeDetail() { setDetailTarget(null); setDetail(null); setDetailError(null); setDetailLoading(false); }
   function activateKpi(filterId: CommerceKpiFilterId) {
     const next = toggleCommerceKpiFilter(kpiState, filterId);
+    const activityKpi = ["contracts-finished", "contracts-cancelled", "contracts-expired"].includes(filterId);
+    const newActivityKpi = filterId === "contracts-new";
     setTab(next.tab);
     setSide(next.side);
     setDirection(next.direction);
     setStatus(next.status);
+    if (next.tab === "contracts") {
+      setContractView(activityKpi || newActivityKpi ? "activity" : "active");
+      setContractActivity(activityKpi ? next.activity : "all");
+      setContractReadState(newActivityKpi ? next.readState : "all");
+      if (activityKpi || newActivityKpi) setStatus("all");
+    }
   }
   function isKpiActive(filterId: CommerceKpiFilterId) { return commerceKpiActive(kpiState, filterId); }
   async function markHistorySeen(characterIdValue: number, orderId: number) {
@@ -230,6 +265,19 @@ export function CommercePage() {
     try {
       const count = await markAllMarketOrderHistorySeen();
       setSyncFeedback(`${count.toLocaleString()} completed order${count === 1 ? "" : "s"} marked read.`);
+      setRefreshVersion(value => value + 1);
+    } catch (value) { setError(String(value)); }
+  }
+  async function markContractSeen(characterIdValue: number, contractId: number) {
+    try {
+      await markContractActivitySeen(characterIdValue, contractId);
+      setRefreshVersion(value => value + 1);
+    } catch (value) { setError(String(value)); }
+  }
+  async function markAllContractsSeen() {
+    try {
+      const count = await markAllContractActivitySeen();
+      setSyncFeedback(`${count.toLocaleString()} contract activit${count === 1 ? "y" : "ies"} marked read.`);
       setRefreshVersion(value => value + 1);
     } catch (value) { setError(String(value)); }
   }
@@ -255,7 +303,7 @@ export function CommercePage() {
       <p className="ph-mission">Read-only personal commerce across individually authorized characters. Corporation orders, corporation contracts, wallet activity, and trading actions are excluded.</p>
       <div className="commerce-tabs" role="tablist" aria-label="Commerce modules">
         <button id="commerce-orders-tab" role="tab" {...ordersTabAttributes} aria-controls="commerce-orders-panel" className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")} onKeyDown={event => setRelativeTab(event, "contracts")}><span aria-hidden="true">▤</span><span><strong>Market Orders {history && history.summary.newOrders > 0 ? <em className="commerce-new-badge">{history.summary.newOrders.toLocaleString()} New</em> : null}</strong><small>Active orders and completed activity</small></span></button>
-        <button id="commerce-contracts-tab" role="tab" {...contractsTabAttributes} aria-controls="commerce-contracts-panel" className={tab === "contracts" ? "active" : ""} onClick={() => setTab("contracts")} onKeyDown={event => setRelativeTab(event, "orders")}><span aria-hidden="true">◇</span><span><strong>Contracts</strong><small>Issued, assigned, and accepted</small></span></button>
+        <button id="commerce-contracts-tab" role="tab" {...contractsTabAttributes} aria-controls="commerce-contracts-panel" className={tab === "contracts" ? "active" : ""} onClick={() => setTab("contracts")} onKeyDown={event => setRelativeTab(event, "orders")}><span aria-hidden="true">◇</span><span><strong>Contracts {contractCounts.newActivity > 0 ? <em className="commerce-new-badge">{contractCounts.newActivity.toLocaleString()} New</em> : null}</strong><small>Active contracts and terminal activity</small></span></button>
       </div>
       <div className="commerce-sync-controls" aria-label="Commerce synchronization controls">
         <button className="target-select enabled" onClick={() => handleCommerceSync("orders")} disabled={!clientId || !syncAvailability.marketOrders || syncing !== null}>{syncing === "orders" ? "Syncing Market Orders…" : "Sync Market Orders"}</button>
@@ -270,7 +318,8 @@ export function CommercePage() {
         <label className="commerce-search-filter"><span>Search</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder={tab === "orders" ? "Item or character" : "Title, item, or character"}/></label>
         {tab === "orders" && orderView === "active" && <><label><span>Expiring Soon</span><select value={threshold} onChange={event => setThreshold(Number(event.target.value))}><option value={1}>24 hours</option><option value={3}>3 days</option><option value={7}>7 days</option><option value={14}>14 days</option></select></label><label><span>Order Type</span><select value={side} onChange={event => setSide(event.target.value)}><option value="all">All Active Orders</option><option value="Buy">Buy</option><option value="Sell">Sell</option><option value="expiring">Expiring Soon</option></select></label></>}
         {tab === "orders" && orderView === "completed" && <><label><span>Activity</span><select value={historyActivity} onChange={event => setHistoryActivity(event.target.value)}><option value="all">All Activity</option><option value="Buy">Buy Orders</option><option value="Sell">Sell Orders</option><option value="Bought">Bought</option><option value="Sold">Sold</option><option value="Cancelled">Cancelled</option><option value="Expired">Expired</option></select></label><label><span>First Observed</span><select value={historyDays} onChange={event => setHistoryDays(Number(event.target.value))}><option value={0}>All available</option><option value={1}>Today</option><option value={7}>This week</option><option value={30}>30 days</option><option value={90}>90 days</option></select></label><label><span>Location</span><input value={location} onChange={event => setLocation(event.target.value)} placeholder="Station or structure"/></label></>}
-        {tab === "contracts" && <><label><span>Expiring Soon</span><select value={threshold} onChange={event => setThreshold(Number(event.target.value))}><option value={1}>24 hours</option><option value={3}>3 days</option><option value={7}>7 days</option><option value={14}>14 days</option></select></label><label><span>Direction</span><select value={direction} onChange={event => setDirection(event.target.value)}><option value="all">All</option><option>Issued</option><option>Assigned</option><option>Accepted</option></select></label><label><span>Status</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option><option value="outstanding">Outstanding</option><option value="in_progress">In Progress</option><option value="finished">Finished</option><option value="finished_issuer">Finished — Issuer</option><option value="finished_contractor">Finished — Contractor</option><option value="cancelled">Cancelled</option><option value="rejected">Rejected</option><option value="failed">Failed</option><option value="deleted">Deleted</option><option value="reversed">Reversed</option><option value="expired">Expired</option><option value="expiring">Expiring Soon</option></select></label></>}
+        {tab === "contracts" && contractView === "active" && <><label><span>Expiring Soon</span><select value={threshold} onChange={event => setThreshold(Number(event.target.value))}><option value={1}>24 hours</option><option value={3}>3 days</option><option value={7}>7 days</option><option value={14}>14 days</option></select></label><label><span>Direction</span><select value={direction} onChange={event => setDirection(event.target.value)}><option value="all">All</option><option>Issued</option><option>Assigned</option><option>Accepted</option></select></label><label><span>Status</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All active statuses</option><option value="outstanding">Outstanding</option><option value="in_progress">In Progress</option><option value="expiring">Expiring Soon</option></select></label></>}
+        {tab === "contracts" && contractView === "activity" && <><label><span>Activity</span><select value={contractActivity} onChange={event => setContractActivity(event.target.value)}><option value="all">All Activity</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option><option value="expired">Expired</option></select></label><label><span>Read State</span><select value={contractReadState} onChange={event => setContractReadState(event.target.value)}><option value="all">All Activity</option><option value="new">New Activity</option><option value="seen">Seen Activity</option></select></label><label><span>Activity Date</span><select value={contractDays} onChange={event => setContractDays(Number(event.target.value))}><option value={0}>All available</option><option value={1}>Today</option><option value={7}>This week</option><option value={30}>30 days</option></select></label><label><span>Direction</span><select value={direction} onChange={event => setDirection(event.target.value)}><option value="all">All</option><option>Issued</option><option>Assigned</option><option>Accepted</option></select></label></>}
       </div>
       {(tab === "contracts" || orderView === "active")&&<button className="commerce-advanced-toggle" aria-expanded={tab === "orders" ? advancedOrders : advancedContracts} onClick={() => tab === "orders" ? setAdvancedOrders(value => !value) : setAdvancedContracts(value => !value)}>{(tab === "orders" ? advancedOrders : advancedContracts) ? "Hide" : "Show"} Advanced Filters</button>}
       {tab === "orders" && orderView === "active" && advancedOrders&&<div className="commerce-filters commerce-advanced-filters"><label><span>Station or Structure</span><input value={location} onChange={event => setLocation(event.target.value)} placeholder="Location"/></label><label><span>Sort</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="expiring">Expiring first</option><option value="value">Highest remaining value</option><option value="fill_high">Highest fill %</option><option value="fill_low">Lowest fill %</option><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="item">Item name</option><option value="character">Character</option></select></label></div>}
@@ -306,10 +355,30 @@ export function CommercePage() {
     </section>}
 
     {tab === "contracts"&&contracts&&<section id="commerce-contracts-panel" role="tabpanel" aria-labelledby="commerce-contracts-tab">
-      <div className="commerce-summary"><KpiCard label="Outstanding Contracts" value={contracts.summary.outstandingContracts.toLocaleString()} tone="positive" symbol="●" active={isKpiActive("contracts-outstanding")} onActivate={() => activateKpi("contracts-outstanding")}/><KpiCard label="Assigned to Me" value={contracts.summary.assignedToMe.toLocaleString()} active={isKpiActive("contracts-assigned")} onActivate={() => activateKpi("contracts-assigned")}/><KpiCard label="Issued by Me" value={contracts.summary.issuedByMe.toLocaleString()} active={isKpiActive("contracts-issued")} onActivate={() => activateKpi("contracts-issued")}/><KpiCard label="In Progress" value={contracts.summary.inProgress.toLocaleString()} tone="positive" symbol="▶" active={isKpiActive("contracts-progress")} onActivate={() => activateKpi("contracts-progress")}/><KpiCard label="Expiring Soon" value={contracts.summary.expiringSoon.toLocaleString()} tone="warning" symbol="!" active={isKpiActive("contracts-expiring")} onActivate={() => activateKpi("contracts-expiring")}/><KpiCard label="Finished" value={contracts.summary.completedOrFinished.toLocaleString()} tone="neutral" symbol="✓" active={isKpiActive("contracts-finished")} onActivate={() => activateKpi("contracts-finished")}/><KpiCard label="Collateral Exposure" money={contracts.summary.totalCollateralExposureIsk} tone="risk" symbol="!"/><KpiCard label="Outstanding Rewards" money={contracts.summary.outstandingRewardsIsk} tone="positive"/><KpiCard label="Open Contract Value" money={contracts.summary.outstandingContractValueIsk}/></div>
-      <Panel title="Personal Contracts" keel="coolant"><p className="data-source">CCP returns contracts where the character is issuer, acceptor, or assignee, limited to the last 30 days unless still in progress. Items and auction bids load only when viewed.</p>{contracts.rows.length === 0 ? <p className="empty-state">No personal contracts match these filters.</p> : <div className="commerce-table-wrap"><table className="commerce-table"><thead><tr><th>Title</th><th>Type</th><th>Character</th><th>Direction</th><th>Availability</th><th>Status</th><th>Start</th><th>End</th><th>Price</th><th>Reward</th><th>Collateral</th><th>Issued</th><th>Expires</th><th>Time / State</th><th>Last Synced</th><th></th></tr></thead><tbody>{contracts.rows.map(row => <tr key={`${row.characterId}-${row.contractId}`}><td><strong>{row.title}</strong><small>Contract {row.contractId}</small></td><td>{row.contractType.replaceAll("_", " ")}</td><td>{row.characterName}</td><td>{row.direction}</td><td>{row.availability}</td><td>{row.status.replaceAll("_", " ")}</td><td>{row.startLocationName ?? (row.startLocationId ? `Location ${row.startLocationId}` : "—")}</td><td>{row.endLocationName ?? (row.endLocationId ? `Location ${row.endLocationId}` : "—")}</td><td><IskAmount value={row.priceIsk}/></td><td><IskAmount value={row.rewardIsk}/></td><td><IskAmount value={row.collateralIsk}/></td><td>{date(row.dateIssued)}</td><td>{date(row.dateExpired)}</td><td>{contractState(row.status, row.remainingSeconds)}</td><td>{date(row.lastSynced)}</td><td><button className="target-select" onClick={() => openDetail(row.characterId, row.contractId)}>View Details</button></td></tr>)}</tbody></table></div>}</Panel>
+      <div className="commerce-order-tabs" role="tablist" aria-label="Contract views">
+        <button className={contractView === "active" ? "active" : ""} aria-selected={contractView === "active"} onClick={() => { setContractView("active"); setContractActivity("all"); setContractReadState("all"); }}>Active</button>
+        <button className={contractView === "activity" ? "active" : ""} aria-selected={contractView === "activity"} onClick={() => { setContractView("activity"); setStatus("all"); }}>Activity {contractCounts.newActivity > 0 ? <span className="commerce-new-badge">{contractCounts.newActivity.toLocaleString()} New</span> : null}</button>
+      </div>
+      <div className="commerce-summary">
+        <KpiCard label="Outstanding" value={contractCounts.outstanding.toLocaleString()} tone="positive" symbol="●" active={isKpiActive("contracts-outstanding")} onActivate={() => activateKpi("contracts-outstanding")}/>
+        <KpiCard label="Assigned to Me" value={contractCounts.assigned.toLocaleString()} active={isKpiActive("contracts-assigned")} onActivate={() => activateKpi("contracts-assigned")}/>
+        <KpiCard label="Issued by Me" value={contractCounts.issued.toLocaleString()} active={isKpiActive("contracts-issued")} onActivate={() => activateKpi("contracts-issued")}/>
+        <KpiCard label="Accepted" value={contractCounts.accepted.toLocaleString()} tone="positive" symbol="▶" active={isKpiActive("contracts-accepted")} onActivate={() => activateKpi("contracts-accepted")}/>
+        <KpiCard label="Completed" value={contractCounts.completed.toLocaleString()} tone="neutral" symbol="✓" active={isKpiActive("contracts-finished")} onActivate={() => activateKpi("contracts-finished")}/>
+        <KpiCard label="Cancelled" value={contractCounts.cancelled.toLocaleString()} tone="neutral" active={isKpiActive("contracts-cancelled")} onActivate={() => activateKpi("contracts-cancelled")}/>
+        <KpiCard label="Expired" value={contractCounts.expired.toLocaleString()} tone="neutral" active={isKpiActive("contracts-expired")} onActivate={() => activateKpi("contracts-expired")}/>
+        <KpiCard label="Expiring Soon" value={contractCounts.expiring.toLocaleString()} note={`Within ${threshold} day${threshold === 1 ? "" : "s"}`} tone="warning" symbol="!" active={isKpiActive("contracts-expiring")} onActivate={() => activateKpi("contracts-expiring")}/>
+        <KpiCard label="New Activity" value={contractCounts.newActivity.toLocaleString()} tone={contractCounts.newActivity ? "warning" : "neutral"} symbol="●" active={isKpiActive("contracts-new")} onActivate={() => activateKpi("contracts-new")}/>
+      </div>
+      <Panel title={contractView === "active" ? "Active Personal Contracts" : "Contract Activity"} keel="coolant">
+        <div className="commerce-activity-head">
+          <p className="data-source">{contractView === "active" ? "CCP returns contracts where the character is issuer, acceptor, or assignee. Items and auction bids load only when viewed." : "Terminal activity is retained locally after synchronization. Completed timestamps come from CCP; cancelled or expired activity uses RenderNorth’s first-observed time because CCP does not provide a terminal timestamp for those states."}</p>
+          {contractView === "activity"&&<button className="target-select" onClick={markAllContractsSeen} disabled={contractCounts.newActivity === 0}>Mark All Read</button>}
+        </div>
+        {contractRows.length === 0 ? <p className="empty-state">No personal contracts match these filters.</p> : <div className="commerce-table-wrap"><table className="commerce-table"><thead><tr>{contractView === "activity"&&<th>Read</th>}<th>Title</th><th>Type</th><th>Character</th><th>Direction</th><th>Availability</th><th>Status</th><th>Start</th><th>End</th><th>Price</th><th>Reward</th><th>Collateral</th><th>Issued</th><th>{contractView === "activity" ? "Activity Time" : "Expires"}</th><th>{contractView === "activity" ? "First Observed" : "Time / State"}</th><th>Last Synced</th><th></th></tr></thead><tbody>{contractRows.map(row => <tr key={`${row.characterId}-${row.contractId}`} className={contractView === "activity" && !row.seen ? "commerce-history-new" : ""}>{contractView === "activity"&&<td><span className={row.seen ? "commerce-seen" : "commerce-new-badge"}>{row.seen ? "Seen" : "New"}</span></td>}<td><strong>{row.title}</strong><small>Contract {row.contractId}</small></td><td>{row.contractType.replaceAll("_", " ")}</td><td>{row.characterName}</td><td>{row.direction}</td><td>{row.availability}</td><td>{row.displayStatus}</td><td>{row.startLocationName ?? (row.startLocationId ? `Location ${row.startLocationId}` : "—")}</td><td>{row.endLocationName ?? (row.endLocationId ? `Location ${row.endLocationId}` : "—")}</td><td><IskAmount value={row.priceIsk}/></td><td><IskAmount value={row.rewardIsk}/></td><td><IskAmount value={row.collateralIsk}/></td><td>{date(row.dateIssued)}</td><td>{contractView === "activity" ? date(row.dateCompleted ?? row.firstObservedAt) : date(row.dateExpired)}</td><td>{contractView === "activity" ? date(row.firstObservedAt) : contractState(row.status, row.remainingSeconds)}</td><td>{date(row.lastSynced)}</td><td><button className="target-select" onClick={() => openDetail(row.characterId, row.contractId)}>View Details</button>{contractView === "activity"&&!row.seen&&<button className="target-select" onClick={() => markContractSeen(row.characterId, row.contractId)}>Mark Read</button>}</td></tr>)}</tbody></table></div>}
+      </Panel>
     </section>}
 
-    {detailTarget !== null&&<div className="contract-detail-overlay" role="dialog" aria-modal="true" aria-label={`Contract ${detailTarget} details`}><div className="contract-detail-modal" ref={detailModalRef} tabIndex={-1}><div className="contract-detail-head"><div><span className="panel-kicker">Contract Details</span><h2>Contract {detailTarget}</h2></div><button className="target-select" ref={detailCloseRef} onClick={closeDetail}>Close</button></div>{detailLoading&&<div className="setup-feedback">Loading contract metadata, items, and applicable bids…</div>}{detailError&&<div className="sd-error"><div className="conflict-title">Unable to load contract details</div><div className="conflict-desc">{detailError}</div></div>}{detail&&<><div className="contract-detail-grid"><div><span>Title</span><strong>{detail.contract.title}</strong></div><div><span>Type</span><strong>{detail.contract.contractType}</strong></div><div><span>Direction</span><strong>{detail.contract.direction}</strong></div><div><span>Availability</span><strong>{detail.contract.availability}</strong></div><div><span>Status</span><strong>{detail.contract.status}</strong></div><div><span>Character</span><strong>{detail.contract.characterName}</strong></div><div><span>Issuer ID</span><strong>{detail.contract.issuerId}</strong></div><div><span>Issuer Corporation ID</span><strong>{detail.contract.issuerCorporationId}</strong></div><div><span>Assignee ID</span><strong>{detail.contract.assigneeId || "—"}</strong></div><div><span>Acceptor ID</span><strong>{detail.contract.acceptorId || "—"}</strong></div><div><span>Start</span><strong>{detail.contract.startLocationName ?? detail.contract.startLocationId ?? "—"}</strong></div><div><span>Destination</span><strong>{detail.contract.endLocationName ?? detail.contract.endLocationId ?? "—"}</strong></div><div><span>Price</span><strong><IskAmount value={detail.contract.priceIsk}/></strong></div><div><span>Reward</span><strong><IskAmount value={detail.contract.rewardIsk}/></strong></div><div><span>Collateral</span><strong><IskAmount value={detail.contract.collateralIsk}/></strong></div><div><span>Buyout</span><strong><IskAmount value={detail.contract.buyoutIsk}/></strong></div><div><span>Issued</span><strong>{date(detail.contract.dateIssued)}</strong></div><div><span>Expires</span><strong>{date(detail.contract.dateExpired)}</strong></div><div><span>Source</span><strong>{detail.contract.source}</strong></div><div><span>Last Synced</span><strong>{date(detail.contract.lastSynced)}</strong></div></div>{detail.itemsError&&<div className="sd-error">Items: {detail.itemsError}</div>}<div className="contract-items"><div><h3>Items Offered</h3>{detail.items.filter(item => item.included).length === 0 ? <p className="empty-state">No offered items returned.</p> : detail.items.filter(item => item.included).map(item => <p key={item.recordId}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div><div><h3>Items Requested</h3>{detail.items.filter(item => !item.included).length === 0 ? <p className="empty-state">No requested items returned.</p> : detail.items.filter(item => !item.included).map(item => <p key={item.recordId}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div></div>{detail.contract.contractType === "auction"&&<div><h3>Auction Bids</h3>{detail.bidsError&&<div className="sd-error">Bids: {detail.bidsError}</div>}{detail.bids.length === 0 ? <p className="empty-state">No bids returned.</p> : detail.bids.map(bid => <p key={bid.bidId}><IskAmount value={bid.amountIsk}/> · bidder {bid.bidderId} · {date(bid.dateBid)}</p>)}</div>}</>}</div></div>}
+    {detailTarget !== null&&<div className="contract-detail-overlay" role="dialog" aria-modal="true" aria-label={`Contract ${detailTarget} details`}><div className="contract-detail-modal" ref={detailModalRef} tabIndex={-1}><div className="contract-detail-head"><div><span className="panel-kicker">Contract Details</span><h2>Contract {detailTarget}</h2></div><button className="target-select" ref={detailCloseRef} onClick={closeDetail}>Close</button></div>{detailLoading&&<div className="setup-feedback">Loading contract metadata, items, and applicable bids…</div>}{detailError&&<div className="sd-error"><div className="conflict-title">Unable to load contract details</div><div className="conflict-desc">{detailError}</div></div>}{detail&&<><div className="contract-detail-grid"><div><span>Title</span><strong>{detail.contract.title}</strong></div><div><span>Type</span><strong>{detail.contract.contractType}</strong></div><div><span>Direction</span><strong>{detail.contract.direction}</strong></div><div><span>Availability</span><strong>{detail.contract.availability}</strong></div><div><span>Status</span><strong>{detail.contract.displayStatus}</strong></div><div><span>Character</span><strong>{detail.contract.characterName}</strong></div><div><span>Issuer ID</span><strong>{detail.contract.issuerId}</strong></div><div><span>Issuer Corporation ID</span><strong>{detail.contract.issuerCorporationId}</strong></div><div><span>Assignee ID</span><strong>{detail.contract.assigneeId || "—"}</strong></div><div><span>Acceptor ID</span><strong>{detail.contract.acceptorId || "—"}</strong></div><div><span>Start</span><strong>{detail.contract.startLocationName ?? detail.contract.startLocationId ?? "—"}</strong></div><div><span>Destination</span><strong>{detail.contract.endLocationName ?? detail.contract.endLocationId ?? "—"}</strong></div><div><span>Price</span><strong><IskAmount value={detail.contract.priceIsk}/></strong></div><div><span>Reward</span><strong><IskAmount value={detail.contract.rewardIsk}/></strong></div><div><span>Collateral</span><strong><IskAmount value={detail.contract.collateralIsk}/></strong></div><div><span>Buyout</span><strong><IskAmount value={detail.contract.buyoutIsk}/></strong></div><div><span>Issued</span><strong>{date(detail.contract.dateIssued)}</strong></div><div><span>Expires</span><strong>{date(detail.contract.dateExpired)}</strong></div><div><span>Source</span><strong>{detail.contract.source}</strong></div><div><span>Last Synced</span><strong>{date(detail.contract.lastSynced)}</strong></div></div><section className="contract-timeline" aria-label="Contract timeline"><h3>Timeline</h3><ol>{timeline.map(event => <li key={`${event.label}-${event.timestamp}`}><span>{event.label}</span><strong>{date(event.timestamp)}</strong></li>)}</ol>{detail.contract.activityCategory === "cancelled"&&<div className="contract-terminal-note"><strong>Current state: {detail.contract.displayStatus}</strong><span>CCP does not provide a terminal timestamp for this state.</span></div>}<p className="data-source">Only timestamps supplied by CCP are shown. CCP does not provide a cancellation timestamp.</p></section>{detail.itemsError&&<div className="sd-error">Items: {detail.itemsError}</div>}<div className="contract-item-controls"><button className="target-select" onClick={() => setShowIndividualItems(value => !value)}>{showIndividualItems ? "Group Identical Items" : "Show Individual Items"}</button><span>{showIndividualItems ? "Raw synchronized item records" : "Identical items grouped for presentation"}</span></div><div className="contract-items"><div><h3>Items Offered</h3>{detailItems.filter(item => item.included).length === 0 ? <p className="empty-state">No offered items returned.</p> : detailItems.filter(item => item.included).map(item => <p key={`${item.typeId}-offered-${"recordIds" in item ? item.recordIds.join("-") : item.recordId}`}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div><div><h3>Items Requested</h3>{detailItems.filter(item => !item.included).length === 0 ? <p className="empty-state">No requested items returned.</p> : detailItems.filter(item => !item.included).map(item => <p key={`${item.typeId}-requested-${"recordIds" in item ? item.recordIds.join("-") : item.recordId}`}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div></div>{detail.contract.contractType === "auction"&&<div><h3>Auction Bids</h3>{detail.bidsError&&<div className="sd-error">Bids: {detail.bidsError}</div>}{detail.bids.length === 0 ? <p className="empty-state">No bids returned.</p> : detail.bids.map(bid => <p key={bid.bidId}><IskAmount value={bid.amountIsk}/> · bidder {bid.bidderId} · {date(bid.dateBid)}</p>)}</div>}</>}</div></div>}
   </div>;
 }

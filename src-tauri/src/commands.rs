@@ -1210,6 +1210,20 @@ pub fn mark_all_market_order_history_seen(db: State<'_, Db>) -> Result<i64, Stri
     crate::commerce::mark_all_market_order_history_seen(&conn)
 }
 #[tauri::command]
+pub fn mark_contract_activity_seen(
+    db: State<'_, Db>,
+    character_id: i64,
+    contract_id: i64,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::mark_contract_activity_seen(&conn, character_id, contract_id)
+}
+#[tauri::command]
+pub fn mark_all_contract_activity_seen(db: State<'_, Db>) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|_| "db lock poisoned".to_string())?;
+    crate::commerce::mark_all_contract_activity_seen(&conn)
+}
+#[tauri::command]
 pub fn get_contract_dashboard(
     db: State<'_, Db>,
     filter: crate::commerce::ContractFilter,

@@ -590,17 +590,39 @@ pub fn sync_contracts_one_with<S: CommerceSource>(
         .into_iter()
         .filter(|row| !row.for_corporation)
         .collect::<Vec<_>>();
+    let observed_at = Utc::now().to_rfc3339();
     conn.execute_batch("BEGIN IMMEDIATE;")
         .map_err(|e| e.to_string())?;
     let result = (|| -> Result<(), String> {
+        for row in &rows {
+            conn.execute(
+                "INSERT INTO character_contracts(character_id,contract_id,issuer_id,issuer_corporation_id,assignee_id,acceptor_id,contract_type,availability,status,title,date_issued,date_expired,date_accepted,date_completed,start_location_id,end_location_id,price_isk,reward_isk,collateral_isk,buyout_isk,volume_m3,days_to_complete,for_corporation,source,synced_at,first_observed_at,last_observed_at,seen_at)
+                 VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25,?25,?25,NULL)
+                 ON CONFLICT(character_id,contract_id) DO UPDATE SET
+                   issuer_id=excluded.issuer_id,issuer_corporation_id=excluded.issuer_corporation_id,assignee_id=excluded.assignee_id,acceptor_id=excluded.acceptor_id,
+                   contract_type=excluded.contract_type,availability=excluded.availability,status=excluded.status,title=excluded.title,date_issued=excluded.date_issued,
+                   date_expired=excluded.date_expired,date_accepted=excluded.date_accepted,date_completed=excluded.date_completed,start_location_id=excluded.start_location_id,
+                   end_location_id=excluded.end_location_id,price_isk=excluded.price_isk,reward_isk=excluded.reward_isk,collateral_isk=excluded.collateral_isk,
+                   buyout_isk=excluded.buyout_isk,volume_m3=excluded.volume_m3,days_to_complete=excluded.days_to_complete,for_corporation=excluded.for_corporation,
+                   source=excluded.source,synced_at=excluded.synced_at,last_observed_at=excluded.last_observed_at",
+                params![
+                    character_id,row.contract_id,row.issuer_id,row.issuer_corporation_id,row.assignee_id,row.acceptor_id,
+                    &row.contract_type,&row.availability,&row.status,&row.title,&row.date_issued,&row.date_expired,&row.date_accepted,
+                    &row.date_completed,row.start_location_id,row.end_location_id,decimal(row.price.as_ref()),decimal(row.reward.as_ref()),
+                    decimal(row.collateral.as_ref()),decimal(row.buyout.as_ref()),decimal(row.volume.as_ref()),row.days_to_complete,
+                    row.for_corporation as i64,SOURCE_CONTRACTS,&observed_at
+                ],
+            )
+            .map_err(|e| format!("failed to persist contract {}: {e}", row.contract_id))?;
+        }
         conn.execute(
-            "DELETE FROM character_contracts WHERE character_id=?1",
-            [character_id],
+            "DELETE FROM character_contracts
+             WHERE character_id=?1
+               AND status IN ('outstanding','in_progress')
+               AND COALESCE(last_observed_at,'')<>?2",
+            params![character_id, &observed_at],
         )
         .map_err(|e| e.to_string())?;
-        for row in &rows {
-            conn.execute("INSERT INTO character_contracts(character_id,contract_id,issuer_id,issuer_corporation_id,assignee_id,acceptor_id,contract_type,availability,status,title,date_issued,date_expired,date_accepted,date_completed,start_location_id,end_location_id,price_isk,reward_isk,collateral_isk,buyout_isk,volume_m3,days_to_complete,for_corporation,source,synced_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,strftime('%Y-%m-%dT%H:%M:%SZ','now'))",params![character_id,row.contract_id,row.issuer_id,row.issuer_corporation_id,row.assignee_id,row.acceptor_id,&row.contract_type,&row.availability,&row.status,&row.title,&row.date_issued,&row.date_expired,&row.date_accepted,&row.date_completed,row.start_location_id,row.end_location_id,decimal(row.price.as_ref()),decimal(row.reward.as_ref()),decimal(row.collateral.as_ref()),decimal(row.buyout.as_ref()),decimal(row.volume.as_ref()),row.days_to_complete,row.for_corporation as i64,SOURCE_CONTRACTS]).map_err(|e|format!("failed to persist contract {}: {e}",row.contract_id))?;
-        }
         conn.execute("UPDATE character_contract_sync_state SET status=?2,last_success_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),contract_count=?3,page_count=?4,last_error=NULL WHERE character_id=?1",params![character_id,if rows.is_empty(){"empty"}else{"success"},rows.len() as i64,pages as i64]).map_err(|e|e.to_string())?;
         Ok(())
     })();
@@ -1028,12 +1050,13 @@ pub fn mark_market_order_history_seen(
     character_id: i64,
     order_id: i64,
 ) -> Result<(), String> {
-    let changed = conn
-        .execute(
-            "UPDATE character_market_order_history SET seen_at=COALESCE(seen_at,strftime('%Y-%m-%dT%H:%M:%SZ','now')) WHERE character_id=?1 AND order_id=?2",
-            params![character_id, order_id],
-        )
-        .map_err(|error| error.to_string())?;
+    let changed = mark_commerce_activity_seen(
+        conn,
+        "character_market_order_history",
+        "order_id",
+        character_id,
+        order_id,
+    )?;
     if changed == 0 {
         return Err(format!(
             "market-order history {order_id} is not synchronized for character {character_id}"
@@ -1043,12 +1066,65 @@ pub fn mark_market_order_history_seen(
 }
 
 pub fn mark_all_market_order_history_seen(conn: &Connection) -> Result<i64, String> {
-    conn.execute(
-        "UPDATE character_market_order_history SET seen_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE seen_at IS NULL AND character_id IN (SELECT character_id FROM characters WHERE enabled=1 AND is_demo=0)",
-        [],
+    mark_all_commerce_activity_seen(conn, "character_market_order_history", "1=1")
+}
+
+fn mark_commerce_activity_seen(
+    conn: &Connection,
+    table: &str,
+    id_column: &str,
+    character_id: i64,
+    record_id: i64,
+) -> Result<usize, String> {
+    let sql = format!(
+        "UPDATE {table} SET seen_at=COALESCE(seen_at,strftime('%Y-%m-%dT%H:%M:%SZ','now')) WHERE character_id=?1 AND {id_column}=?2"
+    );
+    conn.execute(&sql, params![character_id, record_id])
+        .map_err(|error| error.to_string())
+}
+
+fn mark_all_commerce_activity_seen(
+    conn: &Connection,
+    table: &str,
+    activity_predicate: &str,
+) -> Result<i64, String> {
+    let sql = format!(
+        "UPDATE {table} SET seen_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE seen_at IS NULL
+           AND ({activity_predicate})
+           AND character_id IN (SELECT character_id FROM characters WHERE enabled=1 AND is_demo=0)"
+    );
+    conn.execute(&sql, [])
+        .map(|count| count as i64)
+        .map_err(|error| error.to_string())
+}
+
+pub fn mark_contract_activity_seen(
+    conn: &Connection,
+    character_id: i64,
+    contract_id: i64,
+) -> Result<(), String> {
+    let changed = mark_commerce_activity_seen(
+        conn,
+        "character_contracts",
+        "contract_id",
+        character_id,
+        contract_id,
+    )?;
+    if changed == 0 {
+        return Err(format!(
+            "contract {contract_id} is not synchronized for character {character_id}"
+        ));
+    }
+    Ok(())
+}
+
+pub fn mark_all_contract_activity_seen(conn: &Connection) -> Result<i64, String> {
+    mark_all_commerce_activity_seen(
+        conn,
+        "character_contracts",
+        "status NOT IN ('outstanding','in_progress') OR (status='outstanding' AND date_expired<strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
     )
-    .map(|count| count as i64)
-    .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -1089,10 +1165,16 @@ pub struct ContractRow {
     pub buyout_isk: Option<String>,
     pub date_issued: String,
     pub date_expired: String,
+    pub date_accepted: Option<String>,
+    pub date_completed: Option<String>,
     pub remaining_seconds: i64,
+    pub display_status: String,
+    pub activity_category: String,
+    pub first_observed_at: String,
+    pub last_observed_at: String,
+    pub seen: bool,
     pub source: String,
     pub last_synced: String,
-    #[serde(skip)]
     pub search_text: String,
 }
 #[derive(Debug, Clone, Serialize)]
@@ -1113,6 +1195,18 @@ pub struct ContractSummary {
 pub struct ContractDashboard {
     pub rows: Vec<ContractRow>,
     pub summary: ContractSummary,
+    pub metrics: ContractActivityMetrics,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContractActivityMetrics {
+    pub outstanding_contracts: i64,
+    pub completed_today: i64,
+    pub cancelled_today: i64,
+    pub expired_today: i64,
+    pub contracts_awaiting_acceptance: i64,
+    pub new_contract_activity: i64,
 }
 
 pub fn contract_dashboard(
@@ -1120,7 +1214,7 @@ pub fn contract_dashboard(
     filter: ContractFilter,
 ) -> Result<ContractDashboard, String> {
     let now = Utc::now();
-    let mut stmt=conn.prepare("SELECT x.contract_id,x.character_id,c.name,x.title,x.contract_type,x.issuer_id,x.issuer_corporation_id,x.assignee_id,x.acceptor_id,x.availability,x.status,x.start_location_id,ls.display_name,x.end_location_id,le.display_name,x.price_isk,x.reward_isk,x.collateral_isk,x.buyout_isk,x.date_issued,x.date_expired,x.source,x.synced_at,COALESCE((SELECT group_concat(COALESCE(ti.name,'Type '||ci.type_id),' ') FROM character_contract_items ci LEFT JOIN eve_types ti ON ti.type_id=ci.type_id WHERE ci.character_id=x.character_id AND ci.contract_id=x.contract_id),'') FROM character_contracts x JOIN characters c ON c.character_id=x.character_id LEFT JOIN location_cache ls ON ls.location_id=x.start_location_id LEFT JOIN location_cache le ON le.location_id=x.end_location_id WHERE c.enabled=1 ORDER BY x.date_expired").map_err(|e|e.to_string())?;
+    let mut stmt=conn.prepare("SELECT x.contract_id,x.character_id,c.name,x.title,x.contract_type,x.issuer_id,x.issuer_corporation_id,x.assignee_id,x.acceptor_id,x.availability,x.status,x.start_location_id,ls.display_name,x.end_location_id,le.display_name,x.price_isk,x.reward_isk,x.collateral_isk,x.buyout_isk,x.date_issued,x.date_expired,x.source,x.synced_at,x.date_accepted,x.date_completed,COALESCE(x.first_observed_at,x.synced_at),COALESCE(x.last_observed_at,x.synced_at),x.seen_at IS NOT NULL,COALESCE((SELECT group_concat(COALESCE(ti.name,'Type '||ci.type_id),' ') FROM character_contract_items ci LEFT JOIN eve_types ti ON ti.type_id=ci.type_id WHERE ci.character_id=x.character_id AND ci.contract_id=x.contract_id),'') FROM character_contracts x JOIN characters c ON c.character_id=x.character_id LEFT JOIN location_cache ls ON ls.location_id=x.start_location_id LEFT JOIN location_cache le ON le.location_id=x.end_location_id WHERE c.enabled=1 ORDER BY x.date_expired").map_err(|e|e.to_string())?;
     let mapped = stmt
         .query_map([], |r| {
             let cid: i64 = r.get(1)?;
@@ -1130,6 +1224,8 @@ pub fn contract_dashboard(
             let acceptor: i64 = r.get(8)?;
             let expires_at: String = r.get(20)?;
             let contract_id: i64 = r.get(0)?;
+            let status: String = r.get(10)?;
+            let remaining = remaining_seconds(&expires_at, now);
             Ok(ContractRow {
                 contract_id,
                 character_id: cid,
@@ -1154,7 +1250,7 @@ pub fn contract_dashboard(
                 }
                 .into(),
                 availability: r.get(9)?,
-                status: r.get(10)?,
+                status: status.clone(),
                 start_location_id: r.get(11)?,
                 start_location_name: r.get(12)?,
                 end_location_id: r.get(13)?,
@@ -1165,10 +1261,17 @@ pub fn contract_dashboard(
                 buyout_isk: r.get(18)?,
                 date_issued: r.get(19)?,
                 date_expired: expires_at.clone(),
-                remaining_seconds: remaining_seconds(&expires_at, now),
+                date_accepted: r.get(23)?,
+                date_completed: r.get(24)?,
+                remaining_seconds: remaining,
+                display_status: contract_display_status(&status, remaining),
+                activity_category: contract_activity_category(&status, remaining).into(),
+                first_observed_at: r.get(25)?,
+                last_observed_at: r.get(26)?,
+                seen: r.get::<_, i64>(27)? != 0,
                 source: r.get(21)?,
                 last_synced: r.get(22)?,
-                search_text: r.get(23)?,
+                search_text: r.get(28)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -1241,8 +1344,95 @@ pub fn contract_dashboard(
         rows.retain(|r| r.remaining_seconds < 0)
     }
     let summary = contract_summary(&rows, threshold);
-    Ok(ContractDashboard { rows, summary })
+    let metrics = contract_activity_metrics(&rows, now);
+    Ok(ContractDashboard {
+        rows,
+        summary,
+        metrics,
+    })
 }
+
+fn contract_activity_category(status: &str, remaining_seconds: i64) -> &'static str {
+    if status.starts_with("finished") {
+        "completed"
+    } else if matches!(
+        status,
+        "cancelled" | "rejected" | "failed" | "deleted" | "reversed"
+    ) {
+        "cancelled"
+    } else if status == "outstanding" && remaining_seconds < 0 {
+        "expired"
+    } else {
+        "active"
+    }
+}
+
+fn contract_display_status(status: &str, remaining_seconds: i64) -> String {
+    match contract_activity_category(status, remaining_seconds) {
+        "completed" => "Completed".into(),
+        "expired" => "Expired".into(),
+        _ => match status {
+            "outstanding" => "Outstanding",
+            "in_progress" => "In Progress",
+            "cancelled" => "Cancelled",
+            "rejected" => "Rejected",
+            "failed" => "Failed",
+            "deleted" => "Deleted",
+            "reversed" => "Reversed",
+            _ => status,
+        }
+        .into(),
+    }
+}
+
+fn same_utc_day(value: &str, now: DateTime<Utc>) -> bool {
+    parse_time(value)
+        .map(|timestamp| timestamp.date_naive() == now.date_naive())
+        .unwrap_or(false)
+}
+
+fn contract_activity_metrics(rows: &[ContractRow], now: DateTime<Utc>) -> ContractActivityMetrics {
+    ContractActivityMetrics {
+        outstanding_contracts: rows
+            .iter()
+            .filter(|row| row.activity_category == "active" && row.status == "outstanding")
+            .count() as i64,
+        completed_today: rows
+            .iter()
+            .filter(|row| {
+                row.activity_category == "completed"
+                    && row
+                        .date_completed
+                        .as_deref()
+                        .map(|value| same_utc_day(value, now))
+                        .unwrap_or(false)
+            })
+            .count() as i64,
+        cancelled_today: rows
+            .iter()
+            .filter(|row| {
+                row.activity_category == "cancelled" && same_utc_day(&row.first_observed_at, now)
+            })
+            .count() as i64,
+        expired_today: rows
+            .iter()
+            .filter(|row| {
+                row.activity_category == "expired" && same_utc_day(&row.first_observed_at, now)
+            })
+            .count() as i64,
+        contracts_awaiting_acceptance: rows
+            .iter()
+            .filter(|row| {
+                row.status == "outstanding" && row.assignee_id != 0 && row.acceptor_id == 0
+            })
+            .count() as i64,
+        new_contract_activity: rows
+            .iter()
+            .filter(|row| row.activity_category != "active" && !row.seen)
+            .count() as i64,
+    }
+}
+
 fn contract_summary(rows: &[ContractRow], threshold: i64) -> ContractSummary {
     let (mut outstanding, mut assigned, mut issued, mut progress, mut soon, mut finished) =
         (0, 0, 0, 0, 0, 0);
@@ -1660,6 +1850,8 @@ mod tests {
             .unwrap();
         c.execute_batch(include_str!("../migrations/0022_commerce_activity_center.sql"))
             .unwrap();
+        c.execute_batch(include_str!("../migrations/0023_contract_operations.sql"))
+            .unwrap();
         c
     }
     fn add(c: &Connection, id: i64, enabled: bool, scopes: &str) {
@@ -2027,6 +2219,58 @@ mod tests {
         );
         let values:(String,String,String,String)=c.query_row("SELECT price_isk,reward_isk,collateral_isk,buyout_isk FROM character_contracts WHERE character_id=1",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).unwrap();
         assert_eq!(values, ("40".into(), "50".into(), "30".into(), "20".into()))
+    }
+    #[test]
+    fn contract_activity_seen_state_survives_resync_and_terminal_rows_are_retained() {
+        let c = db();
+        add(&c, 1, true, CONTRACT_SCOPE);
+        let initial = Fake {
+            markets: HashMap::new(),
+            contracts: HashMap::from([(
+                1,
+                Ok((vec![contract(7001, "finished", "item_exchange")], 1)),
+            )]),
+        };
+        sync_contracts_one_with(&c, "x", 1, &initial).unwrap();
+        mark_contract_activity_seen(&c, 1, 7001).unwrap();
+        let empty = Fake {
+            markets: HashMap::new(),
+            contracts: HashMap::from([(1, Ok((Vec::new(), 1)))]),
+        };
+        sync_contracts_one_with(&c, "x", 1, &empty).unwrap();
+        let state = c
+            .query_row(
+                "SELECT COUNT(*),seen_at IS NOT NULL FROM character_contracts WHERE character_id=1 AND contract_id=7001",
+                [],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)? != 0)),
+            )
+            .unwrap();
+        assert_eq!(state, (1, true));
+        assert_eq!(contract_dashboard(&c, ContractFilter::default()).unwrap().metrics.new_contract_activity, 0);
+    }
+    #[test]
+    fn contract_activity_metrics_use_ccp_completion_and_local_observation_dates() {
+        let c = db();
+        add(&c, 1, true, CONTRACT_SCOPE);
+        let now = Utc::now().to_rfc3339();
+        let mut completed = contract(1, "finished", "item_exchange");
+        completed.date_completed = Some(now);
+        let cancelled = contract(2, "cancelled", "courier");
+        let mut expired = contract(3, "outstanding", "item_exchange");
+        expired.date_expired = "2020-01-01T00:00:00Z".into();
+        let awaiting = contract(4, "outstanding", "item_exchange");
+        let source = Fake {
+            markets: HashMap::new(),
+            contracts: HashMap::from([(1, Ok((vec![completed, cancelled, expired, awaiting], 1)))]),
+        };
+        sync_contracts_one_with(&c, "x", 1, &source).unwrap();
+        let dashboard = contract_dashboard(&c, ContractFilter::default()).unwrap();
+        assert_eq!(dashboard.metrics.completed_today, 1);
+        assert_eq!(dashboard.metrics.cancelled_today, 1);
+        assert_eq!(dashboard.metrics.expired_today, 1);
+        assert_eq!(dashboard.metrics.contracts_awaiting_acceptance, 2);
+        assert_eq!(dashboard.metrics.new_contract_activity, 3);
+        assert_eq!(dashboard.rows.iter().filter(|row| !row.seen).count(), 4);
     }
     #[test]
     fn failed_contract_sync_preserves_snapshot_and_missing_scope_is_precise() {
