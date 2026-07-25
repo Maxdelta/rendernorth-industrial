@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Panel } from "../components/Panel";
 import { getAuthenticationConfig } from "../lib/authentication";
 import {
@@ -100,6 +100,8 @@ export function CommercePage() {
   const [endLocation, setEndLocation] = useState("");
   const [advancedOrders, setAdvancedOrders] = useState(false);
   const [advancedContracts, setAdvancedContracts] = useState(false);
+  const detailModalRef = useRef<HTMLDivElement>(null);
+  const detailCloseRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     listCharacters().then(setCharacters).catch(value => setError(String(value)));
@@ -121,6 +123,52 @@ export function CommercePage() {
     getCommerceOverview(characterId, threshold).then(value => { if (active) setOverview(value); }).catch(value => { if (active) setError(String(value)); });
     return () => { active = false; };
   }, [characterId, threshold, refreshVersion]);
+  useEffect(() => {
+    if (detailTarget === null) return;
+    const routeOutlet = document.querySelector<HTMLElement>(".route-outlet");
+    const previousOverflow = routeOutlet?.style.overflowY ?? "";
+    const previousScrollbarGutter = routeOutlet?.style.scrollbarGutter ?? "";
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (routeOutlet) {
+      routeOutlet.style.scrollbarGutter = "stable";
+      routeOutlet.style.overflowY = "hidden";
+    }
+    detailCloseRef.current?.focus();
+    const handleModalKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDetail();
+        return;
+      }
+      if (event.key !== "Tab" || !detailModalRef.current) return;
+      const focusable = Array.from(detailModalRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter(element => !element.hasAttribute("hidden"));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        detailModalRef.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !detailModalRef.current.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleModalKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleModalKeyDown);
+      if (routeOutlet) {
+        routeOutlet.style.overflowY = previousOverflow;
+        routeOutlet.style.scrollbarGutter = previousScrollbarGutter;
+      }
+      previousFocus?.focus();
+    };
+  }, [detailTarget]);
 
   const charOptions = useMemo(() => characters.filter(value => value.enabled), [characters]);
   const syncAvailability = useMemo(() => commerceSyncAvailability(characters, characterId), [characters, characterId]);
@@ -210,6 +258,6 @@ export function CommercePage() {
       <Panel title="Personal Contracts" keel="coolant"><p className="data-source">CCP returns contracts where the character is issuer, acceptor, or assignee, limited to the last 30 days unless still in progress. Items and auction bids load only when viewed.</p>{contracts.rows.length === 0 ? <p className="empty-state">No personal contracts match these filters.</p> : <div className="commerce-table-wrap"><table className="commerce-table"><thead><tr><th>Title</th><th>Type</th><th>Character</th><th>Direction</th><th>Availability</th><th>Status</th><th>Start</th><th>End</th><th>Price</th><th>Reward</th><th>Collateral</th><th>Issued</th><th>Expires</th><th>Time / State</th><th>Last Synced</th><th></th></tr></thead><tbody>{contracts.rows.map(row => <tr key={`${row.characterId}-${row.contractId}`}><td><strong>{row.title}</strong><small>Contract {row.contractId}</small></td><td>{row.contractType.replaceAll("_", " ")}</td><td>{row.characterName}</td><td>{row.direction}</td><td>{row.availability}</td><td>{row.status.replaceAll("_", " ")}</td><td>{row.startLocationName ?? (row.startLocationId ? `Location ${row.startLocationId}` : "—")}</td><td>{row.endLocationName ?? (row.endLocationId ? `Location ${row.endLocationId}` : "—")}</td><td><IskAmount value={row.priceIsk}/></td><td><IskAmount value={row.rewardIsk}/></td><td><IskAmount value={row.collateralIsk}/></td><td>{date(row.dateIssued)}</td><td>{date(row.dateExpired)}</td><td>{contractState(row.status, row.remainingSeconds)}</td><td>{date(row.lastSynced)}</td><td><button className="target-select" onClick={() => openDetail(row.characterId, row.contractId)}>View Details</button></td></tr>)}</tbody></table></div>}</Panel>
     </section>}
 
-    {detailTarget !== null&&<div className="contract-detail-overlay" role="dialog" aria-modal="true" aria-label={`Contract ${detailTarget} details`}><div className="contract-detail-modal"><div className="contract-detail-head"><div><span className="panel-kicker">Contract Details</span><h2>Contract {detailTarget}</h2></div><button className="target-select" onClick={closeDetail}>Close</button></div>{detailLoading&&<div className="setup-feedback">Loading contract metadata, items, and applicable bids…</div>}{detailError&&<div className="sd-error"><div className="conflict-title">Unable to load contract details</div><div className="conflict-desc">{detailError}</div></div>}{detail&&<><div className="contract-detail-grid"><div><span>Title</span><strong>{detail.contract.title}</strong></div><div><span>Type</span><strong>{detail.contract.contractType}</strong></div><div><span>Direction</span><strong>{detail.contract.direction}</strong></div><div><span>Availability</span><strong>{detail.contract.availability}</strong></div><div><span>Status</span><strong>{detail.contract.status}</strong></div><div><span>Character</span><strong>{detail.contract.characterName}</strong></div><div><span>Issuer ID</span><strong>{detail.contract.issuerId}</strong></div><div><span>Issuer Corporation ID</span><strong>{detail.contract.issuerCorporationId}</strong></div><div><span>Assignee ID</span><strong>{detail.contract.assigneeId || "—"}</strong></div><div><span>Acceptor ID</span><strong>{detail.contract.acceptorId || "—"}</strong></div><div><span>Start</span><strong>{detail.contract.startLocationName ?? detail.contract.startLocationId ?? "—"}</strong></div><div><span>Destination</span><strong>{detail.contract.endLocationName ?? detail.contract.endLocationId ?? "—"}</strong></div><div><span>Price</span><strong><IskAmount value={detail.contract.priceIsk}/></strong></div><div><span>Reward</span><strong><IskAmount value={detail.contract.rewardIsk}/></strong></div><div><span>Collateral</span><strong><IskAmount value={detail.contract.collateralIsk}/></strong></div><div><span>Buyout</span><strong><IskAmount value={detail.contract.buyoutIsk}/></strong></div><div><span>Issued</span><strong>{date(detail.contract.dateIssued)}</strong></div><div><span>Expires</span><strong>{date(detail.contract.dateExpired)}</strong></div><div><span>Source</span><strong>{detail.contract.source}</strong></div><div><span>Last Synced</span><strong>{date(detail.contract.lastSynced)}</strong></div></div>{detail.itemsError&&<div className="sd-error">Items: {detail.itemsError}</div>}<div className="contract-items"><div><h3>Items Offered</h3>{detail.items.filter(item => item.included).length === 0 ? <p className="empty-state">No offered items returned.</p> : detail.items.filter(item => item.included).map(item => <p key={item.recordId}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div><div><h3>Items Requested</h3>{detail.items.filter(item => !item.included).length === 0 ? <p className="empty-state">No requested items returned.</p> : detail.items.filter(item => !item.included).map(item => <p key={item.recordId}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div></div>{detail.contract.contractType === "auction"&&<div><h3>Auction Bids</h3>{detail.bidsError&&<div className="sd-error">Bids: {detail.bidsError}</div>}{detail.bids.length === 0 ? <p className="empty-state">No bids returned.</p> : detail.bids.map(bid => <p key={bid.bidId}><IskAmount value={bid.amountIsk}/> · bidder {bid.bidderId} · {date(bid.dateBid)}</p>)}</div>}</>}</div></div>}
+    {detailTarget !== null&&<div className="contract-detail-overlay" role="dialog" aria-modal="true" aria-label={`Contract ${detailTarget} details`}><div className="contract-detail-modal" ref={detailModalRef} tabIndex={-1}><div className="contract-detail-head"><div><span className="panel-kicker">Contract Details</span><h2>Contract {detailTarget}</h2></div><button className="target-select" ref={detailCloseRef} onClick={closeDetail}>Close</button></div>{detailLoading&&<div className="setup-feedback">Loading contract metadata, items, and applicable bids…</div>}{detailError&&<div className="sd-error"><div className="conflict-title">Unable to load contract details</div><div className="conflict-desc">{detailError}</div></div>}{detail&&<><div className="contract-detail-grid"><div><span>Title</span><strong>{detail.contract.title}</strong></div><div><span>Type</span><strong>{detail.contract.contractType}</strong></div><div><span>Direction</span><strong>{detail.contract.direction}</strong></div><div><span>Availability</span><strong>{detail.contract.availability}</strong></div><div><span>Status</span><strong>{detail.contract.status}</strong></div><div><span>Character</span><strong>{detail.contract.characterName}</strong></div><div><span>Issuer ID</span><strong>{detail.contract.issuerId}</strong></div><div><span>Issuer Corporation ID</span><strong>{detail.contract.issuerCorporationId}</strong></div><div><span>Assignee ID</span><strong>{detail.contract.assigneeId || "—"}</strong></div><div><span>Acceptor ID</span><strong>{detail.contract.acceptorId || "—"}</strong></div><div><span>Start</span><strong>{detail.contract.startLocationName ?? detail.contract.startLocationId ?? "—"}</strong></div><div><span>Destination</span><strong>{detail.contract.endLocationName ?? detail.contract.endLocationId ?? "—"}</strong></div><div><span>Price</span><strong><IskAmount value={detail.contract.priceIsk}/></strong></div><div><span>Reward</span><strong><IskAmount value={detail.contract.rewardIsk}/></strong></div><div><span>Collateral</span><strong><IskAmount value={detail.contract.collateralIsk}/></strong></div><div><span>Buyout</span><strong><IskAmount value={detail.contract.buyoutIsk}/></strong></div><div><span>Issued</span><strong>{date(detail.contract.dateIssued)}</strong></div><div><span>Expires</span><strong>{date(detail.contract.dateExpired)}</strong></div><div><span>Source</span><strong>{detail.contract.source}</strong></div><div><span>Last Synced</span><strong>{date(detail.contract.lastSynced)}</strong></div></div>{detail.itemsError&&<div className="sd-error">Items: {detail.itemsError}</div>}<div className="contract-items"><div><h3>Items Offered</h3>{detail.items.filter(item => item.included).length === 0 ? <p className="empty-state">No offered items returned.</p> : detail.items.filter(item => item.included).map(item => <p key={item.recordId}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div><div><h3>Items Requested</h3>{detail.items.filter(item => !item.included).length === 0 ? <p className="empty-state">No requested items returned.</p> : detail.items.filter(item => !item.included).map(item => <p key={item.recordId}>{item.itemName} × {item.quantity.toLocaleString()}</p>)}</div></div>{detail.contract.contractType === "auction"&&<div><h3>Auction Bids</h3>{detail.bidsError&&<div className="sd-error">Bids: {detail.bidsError}</div>}{detail.bids.length === 0 ? <p className="empty-state">No bids returned.</p> : detail.bids.map(bid => <p key={bid.bidId}><IskAmount value={bid.amountIsk}/> · bidder {bid.bidderId} · {date(bid.dateBid)}</p>)}</div>}</>}</div></div>}
   </div>;
 }

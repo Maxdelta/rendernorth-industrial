@@ -82,3 +82,20 @@ test("Commerce sticky headers are paint-contained inside their table scroll regi
   assert.match(css, /\.commerce-table th\s*\{[^}]*position:sticky;[^}]*top:0;[^}]*z-index:1;/s);
   assert.match(css, /\.commerce-summary\s*\{[^}]*position:relative;/s);
 });
+
+test("Contract Details uses an opaque isolated surface and a blur-independent dark backdrop", () => {
+  const css = readFileSync(new URL("../styles/app.css", import.meta.url), "utf8");
+  assert.match(css, /\.contract-detail-overlay\s*\{[^}]*position:fixed;[^}]*inset:0;[^}]*z-index:2000;[^}]*background:rgba\(2,6,10,.9\);[^}]*backdrop-filter:blur\(8px\)/s);
+  assert.match(css, /\.contract-detail-modal\s*\{[^}]*overscroll-behavior:contain;[^}]*opacity:1;[^}]*background-color:#0d141d;/s);
+  assert.match(css, /@supports not \(\(-webkit-backdrop-filter:blur\(1px\)\) or \(backdrop-filter:blur\(1px\)\)\)\s*\{[^}]*background:rgba\(2,6,10,.95\);/s);
+});
+
+test("Contract Details locks background scrolling and preserves keyboard modal behavior", () => {
+  const source = readFileSync(new URL("../pages/Commerce.tsx", import.meta.url), "utf8");
+  assert.match(source, /routeOutlet\.style\.scrollbarGutter = "stable"/);
+  assert.match(source, /routeOutlet\.style\.overflowY = "hidden"/);
+  assert.match(source, /event\.key === "Escape"/);
+  assert.match(source, /event\.key !== "Tab"/);
+  assert.match(source, /detailCloseRef\.current\?\.focus\(\)/);
+  assert.match(source, /previousFocus\?\.focus\(\)/);
+});
