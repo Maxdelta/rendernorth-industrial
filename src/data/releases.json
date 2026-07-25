@@ -1,6 +1,52 @@
 {
-  "publicVersion": "0.1.6",
+  "publicVersion": "0.1.7",
   "releases": [
+    {
+      "version": "0.1.7",
+      "name": "RenderNorth Industrial Open Beta 0.1.7",
+      "date": "2026-07-25",
+      "channel": "Open Beta",
+      "summary": "Commerce now turns completed Market Orders and Contracts into durable operational activity so users can see what changed, what needs attention, and what has reached a terminal state.",
+      "added": [
+        "Completed Market Order activity with New and Seen states",
+        "Persistent Mark Read and Mark All Read controls with unread badges",
+        "Active and Activity Contract views",
+        "Completed, Cancelled, Expired, New Activity, and Seen Activity Contract filters",
+        "Nine interactive Contract KPI cards",
+        "Grouped Contract Details with Show Individual Items expansion",
+        "Contract lifecycle timelines using only CCP-supplied timestamps",
+        "Commerce metrics prepared for later Mission Control aggregation"
+      ],
+      "changed": [
+        "Active Market Orders show Remaining / Original quantity",
+        "Completed Market Orders use dynamic Bought and Sold wording",
+        "Contract KPI cards and manual filters remain synchronized",
+        "Character, direction, state, type, availability, location, date, and text filtering is expanded",
+        "Large Market Order and Contract histories use responsive client-side filtering and dedicated scroll regions",
+        "Market Orders and Contracts share one durable locally persisted Commerce activity architecture",
+        "Activity views reuse synchronized snapshots without duplicate ESI synchronization"
+      ],
+      "fixed": [
+        "Seen Market Order and Contract activity remains Seen after resynchronization",
+        "Contract Details uses an opaque isolated modal surface so Commerce content cannot bleed through",
+        "Sticky headers remain readable and stable while large activity tables scroll"
+      ],
+      "knownIssues": [
+        "Personal Market Orders and Contracts only; corporation Commerce is not supported",
+        "CCP Market Order history is limited to the history returned by CCP and lacks an authoritative terminal timestamp for every state",
+        "Contract history outside CCP's synchronization window cannot be reconstructed",
+        "Cancelled or expired daily Contract metrics may use RenderNorth's local first-observed time when CCP provides no terminal timestamp",
+        "Contract item-name search depends on locally synchronized Contract item details",
+        "Mission Control does not display the prepared Commerce metrics in this release"
+      ],
+      "security": [
+        "Commerce remains read-only and cannot create, modify, cancel, accept, or bid on EVE orders or Contracts",
+        "No new ESI scopes were added",
+        "Activity data remains local",
+        "Diagnostics continue to exclude private order and Contract contents, credentials, tokens, authorization codes, Client Secrets, and PKCE values"
+      ],
+      "internalCheckpoint": "BUG-005 3b06b7c; RNI-161 87b2834; RNI-162 7fbb823"
+    },
     {
       "version": "0.1.6",
       "name": "RenderNorth Industrial Open Beta 0.1.6",

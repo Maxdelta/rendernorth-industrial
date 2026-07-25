@@ -1,6 +1,6 @@
 [package]
 name = "rendernorth-industrial"
-version = "0.1.6"
+version = "0.1.7"
 description = "RenderNorth Industrial — EVE Online industrial command center (intelligence, not automation)"
 edition = "2021"
 rust-version = "1.77"

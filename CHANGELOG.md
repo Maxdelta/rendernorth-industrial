@@ -2,6 +2,71 @@
 
 All notable user-facing changes to RenderNorth Industrial are recorded here. Releases are listed newest first and use semantic versions.
 
+## [0.1.7] — 2026-07-25
+
+### RenderNorth Industrial Open Beta 0.1.7
+
+Commerce now turns completed Market Orders and Contracts into durable operational activity: users can see what changed, what needs attention, and what has reached a terminal state without losing local read history.
+
+### Highlights
+
+- Commerce Activity Center separates active Market Orders from completed activity.
+- Contract Operations separates active Contracts from completed, cancelled, expired, new, and seen activity.
+- Durable read/unread state survives navigation, restart, and resynchronization.
+- Contract Details groups identical items while preserving access to every synchronized CCP item record.
+
+### New
+
+- Completed Orders activity with New and Seen states.
+- Mark Read and Mark All Read controls with persistent unread badges.
+- Dynamic Bought and Sold wording with Remaining / Original quantity presentation.
+- Active and Activity Contract views.
+- Nine interactive Contract KPI cards with synchronized manual filters.
+- Contract lifecycle timelines using only timestamps supplied by CCP.
+- Grouped Contract Details with Show Individual Items expansion.
+- Contract metrics prepared for later Mission Control aggregation.
+
+### Improved
+
+- Character, direction, state, type, availability, location, date, and text filtering.
+- Large Market Order and Contract histories render in dedicated scroll regions with stable headers.
+- KPI cards toggle filters cleanly and remain synchronized with manual filter changes.
+- Contract states use clearer operational wording.
+
+### Architecture
+
+- Market Orders and Contracts share one durable Commerce activity architecture.
+- Migrations 0022 and 0023 preserve first-observed, last-observed, and seen state locally.
+- Activity views reuse synchronized snapshots and do not issue duplicate ESI synchronization requests.
+- Mission Control-ready metrics remain owned by Commerce rather than duplicating Commerce business logic.
+
+### Performance
+
+- Client-side filtering supports thousands of synchronized records.
+- Activity and Contract filtering reuse local snapshots with no row-level ESI requests.
+- Dedicated table scrolling keeps large histories responsive.
+
+### Bug Fixes
+
+- Seen Market Order and Contract activity no longer becomes New again after resynchronization.
+- Contract Details now uses an opaque, isolated modal surface so Commerce content cannot bleed through it.
+- Sticky headers remain readable and stable while large activity tables scroll.
+
+### Known Limitations
+
+- Personal Market Orders and Contracts only; corporation Commerce is not supported.
+- CCP Market Order history is limited to the history returned by CCP and lacks an authoritative terminal timestamp for every state.
+- Contract history outside CCP’s synchronization window cannot be reconstructed.
+- Cancelled or expired daily Contract metrics may use RenderNorth’s local first-observed time when CCP provides no terminal timestamp.
+- Contract item-name search depends on locally synchronized Contract item details.
+- Mission Control does not display the prepared Commerce metrics in this release.
+
+### Security & Privacy
+
+- Commerce remains read-only and cannot create, modify, cancel, accept, or bid on EVE orders or Contracts.
+- No new ESI scopes were added.
+- Activity data remains local and diagnostics continue to exclude private order and Contract contents, credentials, tokens, authorization codes, Client Secrets, and PKCE values.
+
 ## [0.1.6] — 2026-07-20
 
 ### RenderNorth Industrial Open Beta 0.1.6
