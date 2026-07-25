@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { commerceKpiActive, commerceSyncAvailability, commerceTabAttributes, switchCommerceTab, toggleCommerceKpiFilter } from "./commerceUiState.js";
+import { activeOrderQuantityLabel, commerceKpiActive, commerceSyncAvailability, commerceTabAttributes, completedOrderActivityLabel, filterCompletedOrders, switchCommerceTab, toggleCommerceKpiFilter } from "./commerceUiState.js";
 
 test("active Commerce tab exposes selected and keyboard state", () => {
   assert.deepEqual(commerceTabAttributes("orders", "orders"), { "aria-selected": true, tabIndex: 0 });
@@ -79,7 +79,7 @@ test("Commerce page exposes all three existing-command sync controls", () => {
 test("Commerce sticky headers are paint-contained inside their table scroll region", () => {
   const css = readFileSync(new URL("../styles/app.css", import.meta.url), "utf8");
   assert.match(css, /\.commerce-table-wrap\s*\{[^}]*isolation:isolate;[^}]*contain:paint;/s);
-  assert.match(css, /\.commerce-table th\s*\{[^}]*position:sticky;[^}]*top:0;[^}]*z-index:1;/s);
+  assert.match(css, /\.commerce-table th\s*\{[^}]*position:sticky;[^}]*top:0;[^}]*z-index:4;[^}]*background-color:#0d141d;[^}]*background-clip:padding-box;/s);
   assert.match(css, /\.commerce-summary\s*\{[^}]*position:relative;/s);
 });
 
@@ -98,4 +98,51 @@ test("Contract Details locks background scrolling and preserves keyboard modal b
   assert.match(source, /event\.key !== "Tab"/);
   assert.match(source, /detailCloseRef\.current\?\.focus\(\)/);
   assert.match(source, /previousFocus\?\.focus\(\)/);
+});
+
+test("active quantity uses unambiguous remaining / original wording", () => {
+  assert.equal(activeOrderQuantityLabel({ volumeRemain: 1250, volumeTotal: 4000 }), "1,250 / 4,000");
+});
+
+test("completed activity uses Sold, Bought, and Completed wording deterministically", () => {
+  assert.equal(completedOrderActivityLabel({ side: "Sell", volumeRemain: 2, volumeTotal: 10 }), "Sold 8");
+  assert.equal(completedOrderActivityLabel({ side: "Buy", volumeRemain: 2, volumeTotal: 10 }), "Bought 8");
+  assert.equal(completedOrderActivityLabel({ side: "Sell", volumeRemain: 10, volumeTotal: 10 }), "Completed");
+});
+
+test("completed order filters combine character, side/state, date, item, and location", () => {
+  const now = Date.parse("2026-07-25T12:00:00Z");
+  const rows = [
+    { characterId: 1, characterName: "Maxdelta", itemName: "Tritanium", locationName: "Jita 4-4", side: "Sell", esiState: "expired", volumeRemain: 0, volumeTotal: 10, firstSeenAt: "2026-07-25T10:00:00Z" },
+    { characterId: 2, characterName: "Sabre side", itemName: "Pyerite", locationName: "Amarr", side: "Buy", esiState: "cancelled", volumeRemain: 5, volumeTotal: 10, firstSeenAt: "2026-07-01T10:00:00Z" },
+  ];
+  assert.equal(filterCompletedOrders(rows, { character: 1, activity: "sold", search: "trit", location: "jita", days: 1 }, now).length, 1);
+  assert.equal(filterCompletedOrders(rows, { activity: "cancelled" }, now)[0].characterId, 2);
+  assert.equal(filterCompletedOrders(rows, { activity: "bought", days: 7 }, now).length, 0);
+});
+
+test("completed order client filtering remains deterministic for 2,500 records", () => {
+  const rows = Array.from({ length: 2500 }, (_, index) => ({
+    characterId: index % 2,
+    characterName: `Pilot ${index % 2}`,
+    itemName: index % 5 === 0 ? "Tritanium" : "Pyerite",
+    locationName: index % 3 === 0 ? "Jita" : "Amarr",
+    side: index % 2 === 0 ? "Sell" : "Buy",
+    esiState: index % 4 === 0 ? "cancelled" : "expired",
+    volumeRemain: 0,
+    volumeTotal: 10,
+    firstSeenAt: "2026-07-25T10:00:00Z",
+  }));
+  const filtered = filterCompletedOrders(rows, { activity: "sold", search: "trit", location: "jita" }, Date.parse("2026-07-25T12:00:00Z"));
+  assert.equal(filtered.length, 84);
+});
+
+test("Completed Orders exposes unread badge and local read controls", () => {
+  const source = readFileSync(new URL("../pages/Commerce.tsx", import.meta.url), "utf8");
+  assert.match(source, /Completed Orders/);
+  assert.match(source, /history\.summary\.newOrders > 0/);
+  assert.match(source, /commerce-new-badge/);
+  assert.match(source, /markMarketOrderHistorySeen/);
+  assert.match(source, /markAllMarketOrderHistorySeen/);
+  assert.match(source, /Mark All Read/);
 });

@@ -181,6 +181,22 @@ Migration 0021 is additive and does not alter personal/corporation inventory,
 Production, Quartermaster, Procurement, pricing, reservations, or operation
 tables. Commerce ownership remains personal and isolated by character.
 
+### Commerce Activity Center (migration 0022, live now)
+
+- **character_market_order_history_sync_state** — per-character history
+  synchronization status, last attempt/success, retained record count, page
+  count, and safe error state.
+- **character_market_order_history** — locally retained, read-only personal
+  market-order history keyed by character and order ID. CCP's `cancelled` and
+  `expired` states are stored without reinterpretation. `first_seen_at` and
+  `seen_at` are explicitly local Activity Center state; repeat synchronization
+  preserves them.
+
+Migration 0022 is additive. History does not alter active-order snapshots,
+contracts, wallet data, Production, Quartermaster, Procurement, or any CCP
+resource. Orders that later fall outside CCP's 90-day history window remain in
+the local activity ledger after RenderNorth has observed them.
+
 ### Sync layer (Sprint 003a–004a)
 - **esi_tokens**(character_id PK, access_token_enc, refresh_token_enc, expires_at, scopes)
 - **sync_state**(resource, character_id, etag, last_success_at, next_allowed_at, last_error, PRIMARY KEY(resource, character_id))

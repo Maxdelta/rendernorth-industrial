@@ -13,3 +13,6 @@ export function commerceKpiActive(state: CommerceKpiState, filterId: CommerceKpi
 export function toggleCommerceKpiFilter(state: CommerceKpiState, filterId: CommerceKpiFilterId): CommerceKpiState;
 export interface CommerceSyncCharacter { characterId: number; enabled: boolean; marketOrderScopeGranted: boolean; contractScopeGranted: boolean; }
 export function commerceSyncAvailability(characters: CommerceSyncCharacter[], selectedCharacterId?: number | null): { marketOrders: boolean; contracts: boolean; commerce: boolean };
+export function activeOrderQuantityLabel(row: { volumeRemain: number; volumeTotal: number }): string;
+export function completedOrderActivityLabel(row: { side: string; volumeRemain: number; volumeTotal: number }): string;
+export function filterCompletedOrders<T extends { characterId: number; characterName: string; itemName: string; locationName: string; side: string; esiState: string; volumeRemain: number; volumeTotal: number; firstSeenAt: string }>(rows: T[], filters: { character?: string | number; activity?: string; search?: string; location?: string; days?: number }, nowMs?: number): T[];

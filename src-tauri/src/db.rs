@@ -71,6 +71,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("../migrations/0020_corporation_asset_sync.sql"),
     ),
     (21, include_str!("../migrations/0021_personal_commerce.sql")),
+    (
+        22,
+        include_str!("../migrations/0022_commerce_activity_center.sql"),
+    ),
 ];
 
 pub struct Db {
@@ -626,6 +630,33 @@ mod tests {
             conn.query_row("SELECT COUNT(*) FROM character_contracts", [], |row| row
                 .get::<_, i64>(0))
                 .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn migration_0022_is_additive_and_preserves_commerce_snapshots() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        for (_, sql) in MIGRATIONS.iter().filter(|(version, _)| *version <= 21) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO characters(character_id,name,is_demo,scopes_granted,enabled,authorization_status) VALUES(42,'Pilot',0,'esi-markets.read_character_orders.v1',1,'authorized')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO character_market_orders(character_id,order_id,type_id,is_buy_order,is_corporation,location_id,region_id,price_isk,volume_total,volume_remain,issued_at,duration_days,order_range,source,synced_at) VALUES(42,9001,34,0,0,60003760,10000002,'10.00',100,25,'2026-07-01T00:00:00Z',30,'station','ESI Character Market Orders','2026-07-25T00:00:00Z')",
+            [],
+        ).unwrap();
+        conn.execute_batch(include_str!("../migrations/0022_commerce_activity_center.sql"))
+            .unwrap();
+        assert_eq!(
+            conn.query_row("SELECT volume_remain FROM character_market_orders WHERE order_id=9001", [], |row| row.get::<_, i64>(0)).unwrap(),
+            25
+        );
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM character_market_order_history", [], |row| row.get::<_, i64>(0)).unwrap(),
             0
         );
     }

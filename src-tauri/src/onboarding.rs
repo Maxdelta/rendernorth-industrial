@@ -550,6 +550,7 @@ mod tests {
              CREATE TABLE market_refresh_state(profile_id INTEGER,status TEXT,fetched_at TEXT,expires_at TEXT,order_count INTEGER,page_count INTEGER,last_error TEXT);
              CREATE TABLE sde_imports(id INTEGER,source_build TEXT,imported_at TEXT,status TEXT,type_count INTEGER,blueprint_count INTEGER);
              CREATE TABLE character_market_order_sync_state(character_id INTEGER PRIMARY KEY,status TEXT,order_count INTEGER,page_count INTEGER,last_success_at TEXT,last_error TEXT);
+             CREATE TABLE character_market_order_history_sync_state(character_id INTEGER PRIMARY KEY,status TEXT,history_count INTEGER,page_count INTEGER,last_success_at TEXT,last_error TEXT);
              CREATE TABLE character_contract_sync_state(character_id INTEGER PRIMARY KEY,status TEXT,contract_count INTEGER,page_count INTEGER,last_success_at TEXT,last_error TEXT);
              INSERT INTO characters VALUES(1,'Pilot',1,'authorized','esi-assets.read_assets.v1',0);"
         ).unwrap();

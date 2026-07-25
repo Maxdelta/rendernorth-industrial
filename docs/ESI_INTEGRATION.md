@@ -143,6 +143,23 @@ That personal snapshot remains separate from the later corporation snapshot.
 - Commerce data is display-only and remains outside Production, Quartermaster,
   Procurement, Inventory ownership, reservations, and market pricing caches.
 
+### Commerce Activity Center (RNI-161)
+
+- Completed activity uses
+  `GET /characters/{character_id}/orders/history` with the existing
+  `esi-markets.read_character_orders.v1` scope.
+- The official CCP specification describes up to 90 days of cancelled and
+  expired orders, a 3,600-second cache, `page` pagination, and `X-Pages`.
+  RenderNorth fetches every page sequentially.
+- The only authoritative ESI history states are `cancelled` and `expired`.
+  RenderNorth never invents a `sold` state. Sold/bought quantity is derived as
+  `volume_total - volume_remain`, with order side determining the wording.
+- ESI supplies no order-close timestamp. Activity Center "today" and "week"
+  summaries use the local `first_seen_at` discovery time and label that
+  limitation in the UI.
+- New/Seen is local presentation state. Mark Read and Mark All Read update only
+  the local database and never call a CCP write endpoint.
+
 - **Per-resource fetchers** with a shared client: `assets`, `blueprints`, `industry_jobs`, `wallet`, `orders`.
 - **Cadence:** driven by ESI's own `expires` header per endpoint — never poll faster than the cache timer. Manual "Sync now" respects the same limits (button disabled until `next_allowed_at`).
 - **ETags:** stored in `sync_state`; `304 Not Modified` costs no error budget and no DB write.

@@ -13,6 +13,7 @@ pub const CONTRACT_SCOPE: &str = "esi-contracts.read_character_contracts.v1";
 const ESI_BASE: &str = "https://esi.evetech.net";
 const COMPATIBILITY_DATE: &str = "2026-07-18";
 const SOURCE_ORDERS: &str = "ESI Character Market Orders";
+const SOURCE_ORDER_HISTORY: &str = "ESI Character Market Order History";
 const SOURCE_CONTRACTS: &str = "ESI Character Contracts";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -29,6 +30,26 @@ pub struct EsiMarketOrder {
     pub price: Number,
     pub range: String,
     pub region_id: i64,
+    pub type_id: i64,
+    pub volume_remain: i64,
+    pub volume_total: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EsiMarketOrderHistory {
+    pub duration: i64,
+    pub escrow: Option<Number>,
+    #[serde(default)]
+    pub is_buy_order: bool,
+    pub is_corporation: bool,
+    pub issued: String,
+    pub location_id: i64,
+    pub min_volume: Option<i64>,
+    pub order_id: i64,
+    pub price: Number,
+    pub range: String,
+    pub region_id: i64,
+    pub state: String,
     pub type_id: i64,
     pub volume_remain: i64,
     pub volume_total: i64,
@@ -96,6 +117,13 @@ pub trait CommerceSource {
         character_id: i64,
         etag: Option<&str>,
     ) -> Result<MarketFetch, String>;
+    fn market_order_history(
+        &self,
+        _client_id: &str,
+        _character_id: i64,
+    ) -> Result<(Vec<EsiMarketOrderHistory>, u32), String> {
+        Ok((Vec::new(), 1))
+    }
     fn contracts(
         &self,
         client_id: &str,
@@ -180,6 +208,40 @@ impl CommerceSource for LiveCommerceSource {
                 .map(str::to_owned),
         })
     }
+    fn market_order_history(
+        &self,
+        client_id: &str,
+        character_id: i64,
+    ) -> Result<(Vec<EsiMarketOrderHistory>, u32), String> {
+        let (http, token) = refreshed(client_id, character_id)?;
+        let mut rows = Vec::new();
+        let mut page = 1;
+        let pages = loop {
+            let (_, headers, body) = send(
+                &http,
+                format!("{ESI_BASE}/characters/{character_id}/orders/history?page={page}"),
+                &token,
+                None,
+                &format!("character market order history page {page}"),
+            )?;
+            let mut batch: Vec<EsiMarketOrderHistory> = serde_json::from_str(&body)
+                .map_err(|e| {
+                    format!("failed to parse character market order history page {page}: {e}")
+                })?;
+            rows.append(&mut batch);
+            let total = headers
+                .get("x-pages")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u32>().ok())
+                .unwrap_or(1)
+                .max(1);
+            if page >= total {
+                break total;
+            }
+            page += 1;
+        };
+        Ok((rows, pages))
+    }
     fn contracts(
         &self,
         client_id: &str,
@@ -243,7 +305,7 @@ pub fn sync_market_one(
     client_id: &str,
     character_id: i64,
 ) -> Result<SyncResult, String> {
-    sync_market_one_with(conn, client_id, character_id, &LiveCommerceSource)
+    sync_market_bundle_one_with(conn, client_id, character_id, &LiveCommerceSource)
 }
 pub fn sync_contracts_one(
     conn: &Connection,
@@ -253,7 +315,21 @@ pub fn sync_contracts_one(
     sync_contracts_one_with(conn, client_id, character_id, &LiveCommerceSource)
 }
 pub fn sync_market_all(conn: &Connection, client_id: &str) -> Result<Vec<SyncResult>, String> {
-    sync_all(conn, client_id, true, &LiveCommerceSource)
+    let source = LiveCommerceSource;
+    let mut statement = conn
+        .prepare(
+            "SELECT character_id FROM characters WHERE enabled=1 AND is_demo=0 ORDER BY character_id",
+        )
+        .map_err(|error| error.to_string())?;
+    let character_ids = statement
+        .query_map([], |row| row.get::<_, i64>(0))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    character_ids
+        .into_iter()
+        .map(|character_id| sync_market_bundle_one_with(conn, client_id, character_id, &source))
+        .collect()
 }
 pub fn sync_contracts_all(conn: &Connection, client_id: &str) -> Result<Vec<SyncResult>, String> {
     sync_all(conn, client_id, false, &LiveCommerceSource)
@@ -262,6 +338,144 @@ pub fn sync_all_commerce(conn: &Connection, client_id: &str) -> Result<Vec<SyncR
     let mut out = sync_market_all(conn, client_id)?;
     out.extend(sync_contracts_all(conn, client_id)?);
     Ok(out)
+}
+
+fn sync_market_bundle_one_with<S: CommerceSource>(
+    conn: &Connection,
+    client_id: &str,
+    character_id: i64,
+    source: &S,
+) -> Result<SyncResult, String> {
+    let active = sync_market_one_with(conn, client_id, character_id, source)?;
+    if active.error.is_some() {
+        return Ok(active);
+    }
+    let history = sync_market_history_one_with(conn, client_id, character_id, source)?;
+    if history.error.is_some() {
+        return Ok(history);
+    }
+    Ok(active)
+}
+
+pub fn sync_market_history_one_with<S: CommerceSource>(
+    conn: &Connection,
+    client_id: &str,
+    character_id: i64,
+    source: &S,
+) -> Result<SyncResult, String> {
+    if !has_scope(conn, character_id, MARKET_SCOPE)? {
+        return state_error(
+            conn,
+            "character_market_order_history_sync_state",
+            character_id,
+            format!(
+                "reauthorization required: Add / Reauthorize Character must grant {MARKET_SCOPE}"
+            ),
+        );
+    }
+    conn.execute(
+        "INSERT INTO character_market_order_history_sync_state(character_id,status,last_attempt_at,last_error) VALUES(?1,'syncing',strftime('%Y-%m-%dT%H:%M:%SZ','now'),NULL) ON CONFLICT(character_id) DO UPDATE SET status='syncing',last_attempt_at=excluded.last_attempt_at,last_error=NULL",
+        [character_id],
+    )
+    .map_err(|error| error.to_string())?;
+    let (rows, pages) = match source.market_order_history(client_id, character_id) {
+        Ok(value) => value,
+        Err(error) => {
+            return state_error(
+                conn,
+                "character_market_order_history_sync_state",
+                character_id,
+                error,
+            )
+        }
+    };
+    let rows = rows
+        .into_iter()
+        .filter(|row| !row.is_corporation)
+        .collect::<Vec<_>>();
+    conn.execute_batch("BEGIN IMMEDIATE;")
+        .map_err(|error| error.to_string())?;
+    let result = (|| -> Result<(), String> {
+        for row in &rows {
+            if row.state != "cancelled" && row.state != "expired" {
+                return Err(format!(
+                    "unsupported CCP market-order history state '{}' for order {}",
+                    row.state, row.order_id
+                ));
+            }
+            conn.execute(
+                "INSERT INTO character_market_order_history(character_id,order_id,type_id,is_buy_order,is_corporation,location_id,region_id,price_isk,volume_total,volume_remain,min_volume,issued_at,duration_days,order_range,escrow_isk,esi_state,first_seen_at,last_observed_at,seen_at,source) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,strftime('%Y-%m-%dT%H:%M:%SZ','now'),strftime('%Y-%m-%dT%H:%M:%SZ','now'),NULL,?17) ON CONFLICT(character_id,order_id) DO UPDATE SET type_id=excluded.type_id,is_buy_order=excluded.is_buy_order,is_corporation=excluded.is_corporation,location_id=excluded.location_id,region_id=excluded.region_id,price_isk=excluded.price_isk,volume_total=excluded.volume_total,volume_remain=excluded.volume_remain,min_volume=excluded.min_volume,issued_at=excluded.issued_at,duration_days=excluded.duration_days,order_range=excluded.order_range,escrow_isk=excluded.escrow_isk,esi_state=excluded.esi_state,last_observed_at=excluded.last_observed_at,source=excluded.source",
+                params![
+                    character_id,
+                    row.order_id,
+                    row.type_id,
+                    row.is_buy_order as i64,
+                    row.is_corporation as i64,
+                    row.location_id,
+                    row.region_id,
+                    row.price.to_string(),
+                    row.volume_total,
+                    row.volume_remain,
+                    row.min_volume,
+                    &row.issued,
+                    row.duration,
+                    &row.range,
+                    decimal(row.escrow.as_ref()),
+                    &row.state,
+                    SOURCE_ORDER_HISTORY
+                ],
+            )
+            .map_err(|error| {
+                format!(
+                    "failed to persist market-order history {}: {error}",
+                    row.order_id
+                )
+            })?;
+        }
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM character_market_order_history WHERE character_id=?1",
+                [character_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        conn.execute(
+            "UPDATE character_market_order_history_sync_state SET status=?2,last_success_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),history_count=?3,page_count=?4,last_error=NULL WHERE character_id=?1",
+            params![
+                character_id,
+                if count == 0 { "empty" } else { "success" },
+                count,
+                pages as i64
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        let _ = conn.execute_batch("ROLLBACK;");
+        return state_error(
+            conn,
+            "character_market_order_history_sync_state",
+            character_id,
+            error,
+        );
+    }
+    conn.execute_batch("COMMIT;")
+        .map_err(|error| error.to_string())?;
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM character_market_order_history WHERE character_id=?1",
+            [character_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(SyncResult {
+        character_id,
+        status: if count == 0 { "empty" } else { "success" }.into(),
+        count,
+        page_count: pages as i64,
+        error: None,
+    })
 }
 
 pub fn sync_market_one_with<S: CommerceSource>(
@@ -410,10 +624,10 @@ fn state_error(
     character_id: i64,
     error: String,
 ) -> Result<SyncResult, String> {
-    let count_column = if table == "character_market_order_sync_state" {
-        "order_count"
-    } else {
-        "contract_count"
+    let count_column = match table {
+        "character_market_order_sync_state" => "order_count",
+        "character_market_order_history_sync_state" => "history_count",
+        _ => "contract_count",
     };
     let sql=format!("INSERT INTO {table}(character_id,status,last_attempt_at,last_error) VALUES(?1,'error',strftime('%Y-%m-%dT%H:%M:%SZ','now'),?2) ON CONFLICT(character_id) DO UPDATE SET status='error',last_attempt_at=excluded.last_attempt_at,last_error=excluded.last_error");
     conn.execute(&sql, params![character_id, &error])
@@ -687,6 +901,156 @@ fn market_summary(rows: &[MarketOrderRow], threshold: i64) -> MarketSummary {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketOrderHistoryRow {
+    pub order_id: i64,
+    pub character_id: i64,
+    pub character_name: String,
+    pub type_id: i64,
+    pub item_name: String,
+    pub side: String,
+    pub location_id: i64,
+    pub location_name: String,
+    pub solar_system_name: Option<String>,
+    pub region_name: Option<String>,
+    pub price_isk: String,
+    pub volume_total: i64,
+    pub volume_remain: i64,
+    pub completed_quantity: i64,
+    pub completion_label: String,
+    pub esi_state: String,
+    pub issued_at: String,
+    pub expires_at: String,
+    pub first_seen_at: String,
+    pub last_observed_at: String,
+    pub seen: bool,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketOrderHistorySummary {
+    pub new_orders: i64,
+    pub completed_today: i64,
+    pub completed_this_week: i64,
+    pub cancelled: i64,
+    pub expired: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketOrderHistoryDashboard {
+    pub rows: Vec<MarketOrderHistoryRow>,
+    pub summary: MarketOrderHistorySummary,
+}
+
+fn completion_label(is_buy: bool, completed: i64) -> String {
+    if completed <= 0 {
+        "Completed".into()
+    } else if is_buy {
+        format!("Bought {completed}")
+    } else {
+        format!("Sold {completed}")
+    }
+}
+
+pub fn market_order_history_dashboard(
+    conn: &Connection,
+) -> Result<MarketOrderHistoryDashboard, String> {
+    let mut statement = conn.prepare(
+        "SELECT h.order_id,h.character_id,c.name,h.type_id,COALESCE(t.name,'Type '||h.type_id),h.is_buy_order,h.location_id,COALESCE(l.display_name,'Unresolved Location (ID '||h.location_id||')'),l.solar_system_name,COALESCE(l.region_name,r.display_name),h.price_isk,h.volume_total,h.volume_remain,h.esi_state,h.issued_at,h.duration_days,h.first_seen_at,h.last_observed_at,h.seen_at IS NOT NULL,h.source FROM character_market_order_history h JOIN characters c ON c.character_id=h.character_id LEFT JOIN eve_types t ON t.type_id=h.type_id LEFT JOIN location_cache l ON l.location_id=h.location_id LEFT JOIN location_cache r ON r.location_id=h.region_id WHERE c.enabled=1 AND c.is_demo=0 ORDER BY h.first_seen_at DESC,h.order_id DESC",
+    ).map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            let is_buy = row.get::<_, i64>(5)? != 0;
+            let total = row.get::<_, i64>(11)?;
+            let remain = row.get::<_, i64>(12)?;
+            let completed = filled(total, remain);
+            let issued = row.get::<_, String>(14)?;
+            let duration = row.get::<_, i64>(15)?;
+            Ok(MarketOrderHistoryRow {
+                order_id: row.get(0)?,
+                character_id: row.get(1)?,
+                character_name: row.get(2)?,
+                type_id: row.get(3)?,
+                item_name: row.get(4)?,
+                side: if is_buy { "Buy" } else { "Sell" }.into(),
+                location_id: row.get(6)?,
+                location_name: row.get(7)?,
+                solar_system_name: row.get(8)?,
+                region_name: row.get(9)?,
+                price_isk: row.get(10)?,
+                volume_total: total,
+                volume_remain: remain,
+                completed_quantity: completed,
+                completion_label: completion_label(is_buy, completed),
+                esi_state: row.get(13)?,
+                issued_at: issued.clone(),
+                expires_at: expires(&issued, duration).unwrap_or(issued),
+                first_seen_at: row.get(16)?,
+                last_observed_at: row.get(17)?,
+                seen: row.get::<_, i64>(18)? != 0,
+                source: row.get(19)?,
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let now = Utc::now();
+    let week_ago = now - Duration::days(7);
+    let summary = MarketOrderHistorySummary {
+        new_orders: rows.iter().filter(|row| !row.seen).count() as i64,
+        completed_today: rows
+            .iter()
+            .filter(|row| {
+                parse_time(&row.first_seen_at)
+                    .map(|value| value.date_naive() == now.date_naive())
+                    .unwrap_or(false)
+            })
+            .count() as i64,
+        completed_this_week: rows
+            .iter()
+            .filter(|row| {
+                parse_time(&row.first_seen_at)
+                    .map(|value| value >= week_ago)
+                    .unwrap_or(false)
+            })
+            .count() as i64,
+        cancelled: rows.iter().filter(|row| row.esi_state == "cancelled").count() as i64,
+        expired: rows.iter().filter(|row| row.esi_state == "expired").count() as i64,
+    };
+    Ok(MarketOrderHistoryDashboard { rows, summary })
+}
+
+pub fn mark_market_order_history_seen(
+    conn: &Connection,
+    character_id: i64,
+    order_id: i64,
+) -> Result<(), String> {
+    let changed = conn
+        .execute(
+            "UPDATE character_market_order_history SET seen_at=COALESCE(seen_at,strftime('%Y-%m-%dT%H:%M:%SZ','now')) WHERE character_id=?1 AND order_id=?2",
+            params![character_id, order_id],
+        )
+        .map_err(|error| error.to_string())?;
+    if changed == 0 {
+        return Err(format!(
+            "market-order history {order_id} is not synchronized for character {character_id}"
+        ));
+    }
+    Ok(())
+}
+
+pub fn mark_all_market_order_history_seen(conn: &Connection) -> Result<i64, String> {
+    conn.execute(
+        "UPDATE character_market_order_history SET seen_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE seen_at IS NULL AND character_id IN (SELECT character_id FROM characters WHERE enabled=1 AND is_demo=0)",
+        [],
+    )
+    .map(|count| count as i64)
+    .map_err(|error| error.to_string())
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ContractFilter {
@@ -945,6 +1309,7 @@ pub struct CommerceOverview {
     pub collateral_exposure_isk: String,
     pub total_commerce_exposure_isk: String,
     pub market_orders_sync: CommerceSyncOverview,
+    pub market_history_sync: CommerceSyncOverview,
     pub contracts_sync: CommerceSyncOverview,
 }
 
@@ -1060,6 +1425,11 @@ pub fn commerce_overview(
         market_orders_sync: aggregate_sync_state(
             conn,
             "character_market_order_sync_state",
+            character_id,
+        )?,
+        market_history_sync: aggregate_sync_state(
+            conn,
+            "character_market_order_history_sync_state",
             character_id,
         )?,
         contracts_sync: aggregate_sync_state(
@@ -1273,7 +1643,7 @@ pub fn contract_detail(
 }
 
 pub fn safe_diagnostics(conn: &Connection) -> Result<serde_json::Value, String> {
-    let rows=conn.prepare("SELECT c.character_id,ms.status,ms.order_count,ms.page_count,ms.last_success_at,ms.last_error IS NOT NULL,cs.status,cs.contract_count,cs.page_count,cs.last_success_at,cs.last_error IS NOT NULL FROM characters c LEFT JOIN character_market_order_sync_state ms ON ms.character_id=c.character_id LEFT JOIN character_contract_sync_state cs ON cs.character_id=c.character_id WHERE c.is_demo=0 ORDER BY c.character_id").map_err(|e|e.to_string())?.query_map([],|r|Ok(serde_json::json!({"characterId":r.get::<_,i64>(0)?,"marketOrders":{"status":r.get::<_,Option<String>>(1)?,"count":r.get::<_,Option<i64>>(2)?.unwrap_or(0),"pages":r.get::<_,Option<i64>>(3)?.unwrap_or(0),"lastSync":r.get::<_,Option<String>>(4)?,"hasError":r.get::<_,i64>(5)?!=0},"contracts":{"status":r.get::<_,Option<String>>(6)?,"count":r.get::<_,Option<i64>>(7)?.unwrap_or(0),"pages":r.get::<_,Option<i64>>(8)?.unwrap_or(0),"lastSync":r.get::<_,Option<String>>(9)?,"hasError":r.get::<_,i64>(10)?!=0}}))).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;
+    let rows=conn.prepare("SELECT c.character_id,ms.status,ms.order_count,ms.page_count,ms.last_success_at,ms.last_error IS NOT NULL,hs.status,hs.history_count,hs.page_count,hs.last_success_at,hs.last_error IS NOT NULL,cs.status,cs.contract_count,cs.page_count,cs.last_success_at,cs.last_error IS NOT NULL FROM characters c LEFT JOIN character_market_order_sync_state ms ON ms.character_id=c.character_id LEFT JOIN character_market_order_history_sync_state hs ON hs.character_id=c.character_id LEFT JOIN character_contract_sync_state cs ON cs.character_id=c.character_id WHERE c.is_demo=0 ORDER BY c.character_id").map_err(|e|e.to_string())?.query_map([],|r|Ok(serde_json::json!({"characterId":r.get::<_,i64>(0)?,"marketOrders":{"status":r.get::<_,Option<String>>(1)?,"count":r.get::<_,Option<i64>>(2)?.unwrap_or(0),"pages":r.get::<_,Option<i64>>(3)?.unwrap_or(0),"lastSync":r.get::<_,Option<String>>(4)?,"hasError":r.get::<_,i64>(5)?!=0},"marketOrderHistory":{"status":r.get::<_,Option<String>>(6)?,"count":r.get::<_,Option<i64>>(7)?.unwrap_or(0),"pages":r.get::<_,Option<i64>>(8)?.unwrap_or(0),"lastSync":r.get::<_,Option<String>>(9)?,"hasError":r.get::<_,i64>(10)?!=0},"contracts":{"status":r.get::<_,Option<String>>(11)?,"count":r.get::<_,Option<i64>>(12)?.unwrap_or(0),"pages":r.get::<_,Option<i64>>(13)?.unwrap_or(0),"lastSync":r.get::<_,Option<String>>(14)?,"hasError":r.get::<_,i64>(15)?!=0}}))).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;
     Ok(
         serde_json::json!({"capabilities":[MARKET_SCOPE,CONTRACT_SCOPE],"characters":rows,"privacy":"No order rows, contract contents, counterparties, items, prices, rewards, collateral, locations, raw errors, tokens, or credentials are exported."}),
     )
@@ -1287,6 +1657,8 @@ mod tests {
         let c = Connection::open_in_memory().unwrap();
         c.execute_batch("PRAGMA foreign_keys=ON;CREATE TABLE characters(character_id INTEGER PRIMARY KEY,name TEXT,is_demo INTEGER,scopes_granted TEXT,enabled INTEGER);CREATE TABLE eve_types(type_id INTEGER PRIMARY KEY,name TEXT);CREATE TABLE location_cache(location_id INTEGER PRIMARY KEY,display_name TEXT,solar_system_name TEXT,region_name TEXT);INSERT INTO eve_types VALUES(34,'Tritanium');INSERT INTO location_cache VALUES(600,'Jita 4-4','Jita','The Forge');INSERT INTO location_cache VALUES(601,'Perimeter Trade Hub','Perimeter','The Forge');").unwrap();
         c.execute_batch(include_str!("../migrations/0021_personal_commerce.sql"))
+            .unwrap();
+        c.execute_batch(include_str!("../migrations/0022_commerce_activity_center.sql"))
             .unwrap();
         c
     }
@@ -1310,6 +1682,31 @@ mod tests {
             price: Number::from(10),
             range: "station".into(),
             region_id: 10,
+            type_id: 34,
+            volume_remain: remain,
+            volume_total: total,
+        }
+    }
+    fn history_order(
+        id: i64,
+        buy: bool,
+        total: i64,
+        remain: i64,
+        state: &str,
+    ) -> EsiMarketOrderHistory {
+        EsiMarketOrderHistory {
+            duration: 30,
+            escrow: if buy { Some(Number::from(500)) } else { None },
+            is_buy_order: buy,
+            is_corporation: false,
+            issued: "2026-07-01T00:00:00Z".into(),
+            location_id: 600,
+            min_volume: Some(1),
+            order_id: id,
+            price: Number::from(10),
+            range: "station".into(),
+            region_id: 10,
+            state: state.into(),
             type_id: 34,
             volume_remain: remain,
             volume_total: total,
@@ -1352,6 +1749,122 @@ mod tests {
         fn contracts(&self, _: &str, id: i64) -> Result<(Vec<EsiContract>, u32), String> {
             self.contracts.get(&id).unwrap().clone()
         }
+    }
+    struct HistoryFake {
+        result: Result<(Vec<EsiMarketOrderHistory>, u32), String>,
+    }
+    impl CommerceSource for HistoryFake {
+        fn market_orders(
+            &self,
+            _: &str,
+            _: i64,
+            _: Option<&str>,
+        ) -> Result<MarketFetch, String> {
+            unreachable!()
+        }
+        fn market_order_history(
+            &self,
+            _: &str,
+            _: i64,
+        ) -> Result<(Vec<EsiMarketOrderHistory>, u32), String> {
+            self.result.clone()
+        }
+        fn contracts(&self, _: &str, _: i64) -> Result<(Vec<EsiContract>, u32), String> {
+            unreachable!()
+        }
+    }
+    #[test]
+    fn market_history_sync_fetches_all_pages_and_marks_first_seen_rows_new() {
+        let c = db();
+        add(&c, 1, true, MARKET_SCOPE);
+        let source = HistoryFake {
+            result: Ok((
+                vec![
+                    history_order(10, false, 10, 0, "expired"),
+                    history_order(11, true, 20, 5, "cancelled"),
+                ],
+                3,
+            )),
+        };
+        let result = sync_market_history_one_with(&c, "x", 1, &source).unwrap();
+        assert_eq!((result.count, result.page_count), (2, 3));
+        let dashboard = market_order_history_dashboard(&c).unwrap();
+        assert_eq!(dashboard.summary.new_orders, 2);
+        assert_eq!(
+            (
+                dashboard.summary.cancelled,
+                dashboard.summary.expired,
+                dashboard.rows[0].completed_quantity
+                    + dashboard.rows[0].volume_remain
+            ),
+            (1, 1, dashboard.rows[0].volume_total)
+        );
+    }
+    #[test]
+    fn market_history_seen_state_survives_resynchronization() {
+        let c = db();
+        add(&c, 1, true, MARKET_SCOPE);
+        let source = HistoryFake {
+            result: Ok((vec![history_order(10, false, 10, 0, "expired")], 1)),
+        };
+        sync_market_history_one_with(&c, "x", 1, &source).unwrap();
+        mark_market_order_history_seen(&c, 1, 10).unwrap();
+        sync_market_history_one_with(&c, "x", 1, &source).unwrap();
+        let dashboard = market_order_history_dashboard(&c).unwrap();
+        assert!(dashboard.rows[0].seen);
+        assert_eq!(dashboard.summary.new_orders, 0);
+    }
+    #[test]
+    fn mark_all_read_changes_only_enabled_personal_history() {
+        let c = db();
+        add(&c, 1, true, MARKET_SCOPE);
+        add(&c, 2, false, MARKET_SCOPE);
+        let source = HistoryFake {
+            result: Ok((vec![history_order(10, false, 10, 0, "expired")], 1)),
+        };
+        sync_market_history_one_with(&c, "x", 1, &source).unwrap();
+        sync_market_history_one_with(&c, "x", 2, &source).unwrap();
+        assert_eq!(mark_all_market_order_history_seen(&c).unwrap(), 1);
+        assert_eq!(
+            c.query_row(
+                "SELECT COUNT(*) FROM character_market_order_history WHERE seen_at IS NULL",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+    }
+    #[test]
+    fn failed_market_history_sync_preserves_previous_activity() {
+        let c = db();
+        add(&c, 1, true, MARKET_SCOPE);
+        sync_market_history_one_with(
+            &c,
+            "x",
+            1,
+            &HistoryFake {
+                result: Ok((vec![history_order(10, false, 10, 0, "expired")], 1)),
+            },
+        )
+        .unwrap();
+        let failed = sync_market_history_one_with(
+            &c,
+            "x",
+            1,
+            &HistoryFake {
+                result: Err("offline".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(failed.status, "error");
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM character_market_order_history", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .unwrap(),
+            1
+        );
     }
     #[test]
     fn market_orders_remain_separate_by_character_and_side() {
